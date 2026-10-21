@@ -1,0 +1,20 @@
+'Log files:
+D:\Program\Kuliah\SMT 5\PPK\example\.npm-cache\_logs\2026-10-21T13_22_03_026Z-debug-0.log
+
+# npm resolution error report
+
+While resolving: example@1.0.0
+Found: expo-router@57.0.28
+node_modules/expo-router
+  expo-router@"~58.0.24" from the root project
+
+Could not resolve dependency:
+expo-router@"~58.0.24" from the root project
+
+Conflicting peer dependency: expo-symbols@58.0.4
+node_modules/expo-symbols
+  peerOptional expo-symbols@"^58.0.4" from expo-router@58.0.24
+  node_modules/expo-router
+    expo-router@"~58.0.24" from the root project
+
+Fix the upstream dependency conflict, or retry this command with --force or --legacy-peer-deps to accept an incorrect (and potentially broken) dependency resolution.
