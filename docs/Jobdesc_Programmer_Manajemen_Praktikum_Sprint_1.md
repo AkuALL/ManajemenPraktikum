@@ -15,10 +15,10 @@
 | Anggota | Peran | Ownership |
 |---|---|---|
 | AL | PM | Kontrak integrasi, Expo Router shell, koordinasi, review, acceptance/demo |
-| Abhi | Programmer | Jadwal, detail sesi, fixture sesi kanonis |
+| Abhi | Programmer | Jadwal, detail sesi, fixture sesi kanonis, rekap presensi demo |
 | Galang | Programmer | Identitas dummy, pemilihan peran dan identitas |
 | Jesica | Programmer | Presensi Praktikan, anti-duplikasi, riwayat pribadi |
-| Kaka | Programmer | Aksi buka/tutup sesi Asisten dan rekap demo |
+| Kaka | Programmer | Aksi buka/tutup sesi Asisten |
 
 ## 3. Kontrak Data Minimum
 
@@ -51,7 +51,7 @@ Kontrak ini hanya tipe data demo, bukan skema database. Disepakati sebelum integ
 - Abhi memiliki fixture jadwal/sesi kanonis. Kaka meneruskan buka/tutup melalui callback yang disepakati; jangan membuat salinan jadwal/status kedua.
 - Galang memiliki identitas aktif dan mengembalikan role, userId, displayName.
 - Jesica memiliki riwayat presensi Praktikan; kunci unik lokal `studentId + sessionId`.
-- Kaka memiliki dataset rekap Asisten demo yang dapat terpisah dari riwayat Praktikan.
+- Abhi memiliki fixture rekap presensi demo per sesi. Dataset ini dapat terpisah dari riwayat Praktikan dan dikelola sebagai bagian data sesi.
 - Sinkronisasi presensi kedua peran tidak dijanjikan dan bukan acceptance criterion.
 - Jika tim ingin satu demo memakai catatan presensi yang sama lintas peran, sepakati store bersama sebagai keputusan tambahan sebelum implementasi; jangan mengasumsikannya.
 
@@ -79,11 +79,13 @@ Kontrak ini hanya tipe data demo, bukan skema database. Disepakati sebelum integ
 - **AB-02 — Schedule List:** daftar jadwal, urutan konsisten, ringkasan status, dan empty state.
 - **AB-03 — Session Detail:** tampilkan semua informasi sesi dan status terkini dari sumber state yang dipakai.
 - **AB-04 — Selection Boundary:** ekspor callback pemilihan sesi/komponen yang tidak mengunci navigasi domain lain.
-- **AB-05 — Domain QA:** cek fixture lengkap/kosong, tampilan status, layout mobile, dan pembaruan status dari callback.
+- **AB-05 — Attendance Fixture:** sediakan data rekap presensi dummy per sesi berisi identitas/nama dan waktu kehadiran; data ini tidak perlu terhubung dengan state presensi Praktikan.
+- **AB-06 — Session Summary:** tampilkan rekap per sesi dari fixture, termasuk empty state jika belum ada catatan.
+- **AB-07 — Domain QA:** cek fixture jadwal/rekap lengkap dan kosong, tampilan status, layout mobile, serta pembaruan status dari callback.
 
-**Dependency:** AB-01 menjadi dasar AB-02/03. Aksi status dimiliki Kaka dan disalurkan melalui callback.
+**Dependency:** AB-01 menjadi dasar AB-02/03/05/06. Aksi status dimiliki Kaka dan disalurkan melalui callback.
 
-**Batas scope:** tidak memiliki picker identitas, presensi, rekap, atau tombol buka/tutup.
+**Batas scope:** tidak memiliki picker identitas, pencatatan presensi Praktikan, atau tombol buka/tutup.
 
 ### 4.3 Galang — Pemilihan Identitas Demo
 
@@ -109,23 +111,21 @@ Kontrak ini hanya tipe data demo, bukan skema database. Disepakati sebelum integ
 - **JE-04 — My Attendance:** daftar riwayat identitas aktif dengan nama sesi, waktu, dan empty state.
 - **JE-05 — Domain QA:** cek berhasil, duplikasi, status tidak valid, pergantian identitas, empty state, dan layout mobile.
 
-**Dependency:** JE-01 dapat memakai fixture kontrak; JE-02/03 memerlukan sessionId/status dan identitas melalui props. Tidak menunggu rekap Kaka.
+**Dependency:** JE-01 dapat memakai fixture kontrak; JE-02/03 memerlukan sessionId/status dan identitas melalui props. Tidak bergantung pada fixture rekap Abhi.
 
 **Batas scope:** tidak mengubah jadwal/status atau membuat rekap Asisten; tidak mengklaim sinkronisasi.
 
-### 4.5 Kaka — Aksi Sesi dan Rekap Asisten
+### 4.5 Kaka — Aksi Sesi Asisten
 
 **Task**
 
 - **KA-01 — Session Actions:** aksi buka untuk `upcoming`, tutup untuk `open`, dengan konfirmasi modal/bottom sheet.
 - **KA-02 — Status Callback:** kirim transisi ke state sesi kanonis; perubahan harus terlihat di daftar/detail terkait.
-- **KA-03 — Attendance Summary:** rekap sesi berisi identitas/nama dan waktu hadir dari dataset demo Asisten.
-- **KA-04 — State & Empty UX:** tampilan belum dibuka, berlangsung, selesai, rekap kosong/terisi; cegah aksi salah peran/status.
-- **KA-05 — Domain QA:** cek konfirmasi batal, buka/tutup, rekap, status, serta layout mobile.
+- **KA-03 — Action State & Domain QA:** tampilkan kontrol yang sesuai status, dan cek konfirmasi batal, transisi buka/tutup, peran/status, serta layout mobile.
 
-**Dependency:** KA-01/03 dapat dibuat memakai fixture kontrak sementara. KA-02 memerlukan callback status dari boundary Abhi/AL. Rekap tidak menunggu Jesica.
+**Dependency:** KA-01 dapat dibuat memakai fixture kontrak sementara. KA-02 memerlukan callback status dari boundary Abhi/AL.
 
-**Batas scope:** tidak membuat ulang jadwal, mencatat presensi Praktikan, atau mengubah riwayat Praktikan.
+**Batas scope:** tidak membuat ulang jadwal, menampilkan rekap, mencatat presensi Praktikan, atau mengubah riwayat Praktikan.
 
 ## 5. Pemetaan FR Sistem ke Programmer
 
@@ -135,12 +135,12 @@ Kontrak ini hanya tipe data demo, bukan skema database. Disepakati sebelum integ
 |---|---|---|---|
 | FR-01 | Pemilihan peran dan identitas demo | Galang | GA-01–GA-04 |
 | FR-02 | Navigasi dan layout mobile | AL (shell/integrasi); semua programmer (screen domain) | AL-03–AL-04; seluruh owner pada screen domain |
-| FR-03 | Daftar jadwal | Abhi | AB-01–AB-02, AB-05 |
-| FR-04 | Detail sesi/status terkini | Abhi; integrasi status bersama Kaka dan AL | AB-03–AB-05, KA-02, AL-04 |
-| FR-05 | Asisten membuka sesi | Kaka; perubahan state kanonis dikoordinasikan dengan Abhi/AL | KA-01–KA-02, AB-05, AL-04 |
-| FR-06 | Asisten menutup sesi | Kaka; perubahan state kanonis dikoordinasikan dengan Abhi/AL | KA-01–KA-02, AB-05, AL-04 |
+| FR-03 | Daftar jadwal | Abhi | AB-01–AB-02, AB-07 |
+| FR-04 | Detail sesi/status terkini | Abhi; integrasi status bersama Kaka dan AL | AB-03–AB-04, AB-07, KA-02, AL-04 |
+| FR-05 | Asisten membuka sesi | Kaka; perubahan state kanonis dikoordinasikan dengan Abhi/AL | KA-01–KA-03, AB-07, AL-04 |
+| FR-06 | Asisten menutup sesi | Kaka; perubahan state kanonis dikoordinasikan dengan Abhi/AL | KA-01–KA-03, AB-07, AL-04 |
 | FR-07 | Presensi Praktikan, waktu, feedback, anti-duplikasi | Jesica | JE-01–JE-03, JE-05 |
-| FR-08 | Rekap Asisten dan waktu presensi | Kaka | KA-03–KA-05 |
+| FR-08 | Rekap Asisten dan waktu presensi | Abhi | AB-05–AB-07 |
 | FR-09 | Riwayat kehadiran Praktikan | Jesica | JE-01, JE-04–JE-05 |
 
 | Kode NFR sistem | Requirement lintas fitur | Penanggung jawab |
@@ -163,7 +163,8 @@ AL mengunci tipe data minimum, props/callback, dan ownership file bersama. Setel
 - Abhi: fixture jadwal, list/detail.
 - Galang: identitas dan picker.
 - Jesica: state presensi, validasi status, riwayat.
-- Kaka: aksi sesi, konfirmasi, rekap fixture.
+- Kaka: aksi buka/tutup sesi dan konfirmasi.
+- Abhi: fixture jadwal serta rekap presensi demo.
 - AL: router shell dan acceptance checklist.
 
 ### Tahap 3 — Integrasi Terbatas
@@ -205,7 +206,7 @@ Semua screen Expo Router tetap di `src/app/`. Komponen, hooks, fixtures, dan uti
 | Abhi | tidak ada input domain eksternal | Abhi | tidak terblokir |
 | Galang | tidak ada input domain eksternal | Galang | tidak terblokir |
 | Shell AL | screen exports dan picker result | semua owner | siapkan shell; tautkan setelah signature tersedia |
-| Rekap Kaka | fixture kehadiran demo | Kaka | tidak menunggu Jesica |
+| Rekap sesi | fixture kehadiran demo | Abhi | tidak menunggu Jesica; dataset rekap dapat terpisah |
 
 ## 9. Definition of Done
 
@@ -224,7 +225,7 @@ AL      → PM, kontrak, Expo Router shell, integrasi dan acceptance
 Abhi    → jadwal dan detail sesi
 Galang  → pemilihan peran dan identitas
 Jesica  → presensi Praktikan dan riwayat
-Kaka    → buka/tutup sesi dan rekap Asisten
+Kaka    → aksi buka/tutup sesi Asisten
 ```
 
 Keempat programmer dapat mengerjakan domain inti secara paralel setelah kontrak tipe disepakati. Dependency silang hanya pada input/callback yang jelas. Sinkronisasi rekap dan riwayat tidak termasuk kriteria sprint.
