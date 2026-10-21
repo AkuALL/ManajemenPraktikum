@@ -129,7 +129,7 @@ Susunan dapat disederhanakan jika semua FR tetap tercapai.
 
 ## 9. Non-Functional Requirements
 
-Kode kebutuhan non-fungsional pada traceability/jobdesc menggunakan pola `SRS-NFR-XX`, berpadanan satu-ke-satu dengan `NFR-XX` di daftar ini.
+Kode kebutuhan non-fungsional yang dipakai lintas dokumen adalah `NFR-XX` di daftar ini.
 
 - **NFR-01 Mobile-first:** kontrol mudah disentuh dan konten terbaca pada layar mobile.
 - **NFR-02 Responsive:** Flexbox dan layout tidak terikat satu ukuran layar.
@@ -167,25 +167,25 @@ Versi proyek yang diperiksa: `expo ~57.0.30`, `expo-router ~57.0.28`, dan `react
 
 ## 11. Traceability
 
-Kode kebutuhan berbentuk `SRS-FR-XX` untuk kebutuhan fungsional; `XX` sama dengan nomor FR terkait. Kode ini menjadi rujukan konsisten pada jobdesc.
+Kode kebutuhan fungsional sistem adalah `FR-XX` dan berdiri sendiri sebagai penanda requirement umum pada SRS. Kode ini digunakan konsisten pada jobdesc. Kode task programmer (misalnya `AB-01` atau `JE-03`) adalah penomoran pekerjaan internal, bukan kode requirement sistem.
 
-| Kode SRS | Kode FR | Kebutuhan |
-|---|---|---|
-| SRS-FR-01 | FR-01 | Pemilihan peran dan identitas |
-| SRS-FR-02 | FR-02 | Navigasi dan layout |
-| SRS-FR-03 | FR-03 | Daftar jadwal |
-| SRS-FR-04 | FR-04 | Detail sesi |
-| SRS-FR-05 | FR-05 | Asisten membuka sesi |
-| SRS-FR-06 | FR-06 | Asisten menutup sesi |
-| SRS-FR-07 | FR-07 | Presensi, waktu, feedback, anti-duplikasi |
-| SRS-FR-08 | FR-08 | Rekap demo Asisten beserta waktu |
-| SRS-FR-09 | FR-09 | Riwayat kehadiran Praktikan |
-
-| Kebutuhan user story | Kode SRS/FR atau bagian terkait |
+| Kode FR | Kebutuhan |
 |---|---|
-| Form/pilihan/modal/bottom sheet | SRS-FR-01, SRS-FR-05–SRS-FR-07, bagian 8 |
-| Data lokal, state, navigasi, Flexbox | SRS-FR-02, NFR-01, NFR-02, NFR-07 |
-| Empty state/sesi tertutup/presensi tercatat | SRS-FR-03, SRS-FR-07–SRS-FR-09, bagian 7 |
+| FR-01 | Pemilihan peran dan identitas |
+| FR-02 | Navigasi dan layout |
+| FR-03 | Daftar jadwal |
+| FR-04 | Detail sesi |
+| FR-05 | Asisten membuka sesi |
+| FR-06 | Asisten menutup sesi |
+| FR-07 | Presensi, waktu, feedback, anti-duplikasi |
+| FR-08 | Rekap demo Asisten beserta waktu |
+| FR-09 | Riwayat kehadiran Praktikan |
+
+| Kebutuhan user story | Kode FR umum atau bagian terkait |
+|---|---|
+| Form/pilihan/modal/bottom sheet | FR-01, FR-05–FR-07, bagian 8 |
+| Data lokal, state, navigasi, Flexbox | FR-02, NFR-01, NFR-02, NFR-07 |
+| Empty state/sesi tertutup/presensi tercatat | FR-03, FR-07–FR-09, bagian 7 |
 | Tidak wajib sinkron antarperan | Bagian 1.4 dan 4 |
 
 ## 12. Kriteria Penerimaan Sprint

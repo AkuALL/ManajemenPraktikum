@@ -127,30 +127,30 @@ Kontrak ini hanya tipe data demo, bukan skema database. Disepakati sebelum integ
 
 **Batas scope:** tidak membuat ulang jadwal, mencatat presensi Praktikan, atau mengubah riwayat Praktikan.
 
-## 5. Mapping Requirement ke Owner
+## 5. Pemetaan FR Sistem ke Programmer
 
-Kode SRS di bawah merujuk `SRS-FR-XX` pada SRS; `FR-XX` adalah kode functional requirement yang sama nomor. Kepemilikan FR berarti programmer bertanggung jawab atas implementasi domain tersebut. Requirement integrasi dibagi sesuai catatan pada tabel.
+`FR-XX` adalah kode functional requirement umum milik sistem dan merujuk langsung ke FR di SRS. `AL-XX`, `AB-XX`, `GA-XX`, `JE-XX`, dan `KA-XX` adalah kode task internal milik masing-masing anggota; kode tersebut tidak menggantikan atau menjadi awalan kode FR. Kolom task menunjukkan pekerjaan internal yang berkontribusi pada FR terkait.
 
-| Kode SRS | Kode FR | Ringkasan requirement | Programmer/owner |
+| Kode FR sistem | Ringkasan requirement | Programmer/owner | Kode task internal terkait |
 |---|---|---|---|
-| SRS-FR-01 | FR-01 | Pemilihan peran dan identitas demo | Galang |
-| SRS-FR-02 | FR-02 | Navigasi dan layout mobile | AL (shell/integrasi); semua programmer (screen domain) |
-| SRS-FR-03 | FR-03 | Daftar jadwal | Abhi |
-| SRS-FR-04 | FR-04 | Detail sesi/status terkini | Abhi; integrasi status bersama Kaka dan AL |
-| SRS-FR-05 | FR-05 | Asisten membuka sesi | Kaka; perubahan state kanonis dikoordinasikan dengan Abhi/AL |
-| SRS-FR-06 | FR-06 | Asisten menutup sesi | Kaka; perubahan state kanonis dikoordinasikan dengan Abhi/AL |
-| SRS-FR-07 | FR-07 | Presensi Praktikan, waktu, feedback, anti-duplikasi | Jesica |
-| SRS-FR-08 | FR-08 | Rekap Asisten dan waktu presensi | Kaka |
-| SRS-FR-09 | FR-09 | Riwayat kehadiran Praktikan | Jesica |
+| FR-01 | Pemilihan peran dan identitas demo | Galang | GA-01–GA-04 |
+| FR-02 | Navigasi dan layout mobile | AL (shell/integrasi); semua programmer (screen domain) | AL-03–AL-04; seluruh owner pada screen domain |
+| FR-03 | Daftar jadwal | Abhi | AB-01–AB-02, AB-05 |
+| FR-04 | Detail sesi/status terkini | Abhi; integrasi status bersama Kaka dan AL | AB-03–AB-05, KA-02, AL-04 |
+| FR-05 | Asisten membuka sesi | Kaka; perubahan state kanonis dikoordinasikan dengan Abhi/AL | KA-01–KA-02, AB-05, AL-04 |
+| FR-06 | Asisten menutup sesi | Kaka; perubahan state kanonis dikoordinasikan dengan Abhi/AL | KA-01–KA-02, AB-05, AL-04 |
+| FR-07 | Presensi Praktikan, waktu, feedback, anti-duplikasi | Jesica | JE-01–JE-03, JE-05 |
+| FR-08 | Rekap Asisten dan waktu presensi | Kaka | KA-03–KA-05 |
+| FR-09 | Riwayat kehadiran Praktikan | Jesica | JE-01, JE-04–JE-05 |
 
-| Kode SRS | Requirement lintas fitur | Penanggung jawab |
+| Kode NFR sistem | Requirement lintas fitur | Penanggung jawab |
 |---|---|---|
-| SRS-NFR-01–04 | Mobile-first, responsive, usability, performance | Semua programmer pada domain masing-masing; AL meninjau integrasi |
-| SRS-NFR-05 | Kompatibilitas Expo/React Native dan dependensi | AL mengoordinasikan konfigurasi; semua programmer menjaga kompatibilitas kode |
-| SRS-NFR-06 | Maintainability dan batas domain | Semua programmer; AL menjaga kontrak/file bersama |
-| SRS-NFR-07 | Data dummy, sementara, tanpa sinkronisasi | Semua programmer; AL memeriksa batas scope |
+| NFR-01–04 | Mobile-first, responsive, usability, performance | Semua programmer pada domain masing-masing; AL meninjau integrasi |
+| NFR-05 | Kompatibilitas Expo/React Native dan dependensi | AL mengoordinasikan konfigurasi; semua programmer menjaga kompatibilitas kode |
+| NFR-06 | Maintainability dan batas domain | Semua programmer; AL menjaga kontrak/file bersama |
+| NFR-07 | Data dummy, sementara, tanpa sinkronisasi | Semua programmer; AL memeriksa batas scope |
 
-FR-01 sampai FR-09 masing-masing memiliki kode SRS-FR berpadanan satu-ke-satu. Kebutuhan UX/empty/error/success pada SRS berlaku bagi owner FR terkait, bukan hanya AL.
+FR-01 sampai FR-09 adalah kode requirement sistem yang umum dan mandiri. Kode AL/AB/GA/JE/KA hanya melacak task milik individu. Kebutuhan UX/empty/error/success pada SRS berlaku bagi owner FR terkait, bukan hanya AL.
 
 ## 6. Urutan Implementasi dan Dependency Rendah
 
