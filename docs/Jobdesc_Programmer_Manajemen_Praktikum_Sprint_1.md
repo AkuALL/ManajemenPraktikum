@@ -14,7 +14,7 @@
 
 | Anggota | Peran | Ownership |
 |---|---|---|
-| AL | PM | Kontrak integrasi, Expo Router shell, koordinasi, review, acceptance/demo |
+| AL | PM | Scope, koordinasi kontrak, review, acceptance/demo; tidak mengimplementasikan kode |
 | Abhi | Programmer | Jadwal, detail sesi, fixture sesi kanonis, rekap presensi demo |
 | Galang | Programmer | Identitas dummy, pemilihan peran dan identitas |
 | Jesica | Programmer | Presensi Praktikan, anti-duplikasi, riwayat pribadi |
@@ -62,12 +62,12 @@ Kontrak ini hanya tipe data demo, bukan skema database. Disepakati sebelum integ
 **Task**
 
 - **AL-01 — Scope & Acceptance:** menjaga daftar FR dan acceptance criteria sesuai SRS.
-- **AL-02 — Contract Coordination:** menyepakati tipe data, props/callback, route ownership, dan keputusan integrasi bersama programmer.
-- **AL-03 — Router Shell:** memiliki `src/app/_layout.tsx` dan navigasi role-aware; menghubungkan route yang diekspor owner domain.
+- **AL-02 — Contract Coordination:** memfasilitasi kesepakatan tipe data, props/callback, route ownership, dan keputusan integrasi bersama programmer.
+- **AL-03 — Navigation Coordination:** memastikan programmer owner navigasi memahami route dan alur peran sesuai SRS; tidak mengubah atau menulis file kode.
 - **AL-04 — Integration Review:** memeriksa role, status, empty state, navigasi, konsistensi UI, dan melaporkan defect kepada owner domain.
 - **AL-05 — Demo Coordination:** menyiapkan skenario penerimaan dan mencatat blocker/hasil aktual.
 
-**Dependency:** AL-01/02 mulai lebih dahulu; AL-03 dapat dibuat sebagai shell. Integrasi akhir menunggu screen/contract tersedia.
+**Dependency:** AL-01/02 mulai lebih dahulu. AL-03/04/05 berjalan melalui koordinasi dan review, tanpa implementasi kode oleh PM.
 
 **Batas scope:** tidak mengambil alih state bisnis jadwal, identitas, presensi, atau rekap.
 
@@ -87,7 +87,7 @@ Kontrak ini hanya tipe data demo, bukan skema database. Disepakati sebelum integ
 
 **Batas scope:** tidak memiliki picker identitas, pencatatan presensi Praktikan, atau tombol buka/tutup.
 
-### 4.3 Galang — Pemilihan Identitas Demo
+### 4.3 Galang — Identitas Demo dan Navigasi
 
 **Task**
 
@@ -95,9 +95,10 @@ Kontrak ini hanya tipe data demo, bukan skema database. Disepakati sebelum integ
 - **GA-02 — Role Picker:** pilihan peran dan state belum dipilih.
 - **GA-03 — Identity Picker:** pilihan identitas sesuai peran dan callback hasil `role`, `userId`, `displayName`.
 - **GA-04 — Switch Identity:** cara mengganti peran/identitas tanpa mengubah data internal domain lain.
-- **GA-05 — Domain QA:** cek daftar kosong, pilihan/pergantian, label aktif, dan layout mobile.
+- **GA-05 — Expo Router Navigation:** memiliki `src/app/_layout.tsx` dan navigasi berbasis peran; hubungkan route screen domain serta alur perpindahan dari/ke pemilihan identitas.
+- **GA-06 — Domain QA:** cek daftar kosong, pilihan/pergantian, label aktif, navigasi peran, dan layout mobile.
 
-**Dependency:** GA-02–04 bergantung pada fixture GA-01; domain lain memakai callback hasil picker.
+**Dependency:** GA-02–04 bergantung pada fixture GA-01; GA-05 memakai route exports/signature yang disediakan owner screen. Programmer domain bertanggung jawab menyediakan screen route-nya sesuai kontrak navigasi.
 
 **Batas scope:** tidak membuat autentikasi nyata, RBAC backend, jadwal, sesi, atau presensi.
 
@@ -134,7 +135,7 @@ Kontrak ini hanya tipe data demo, bukan skema database. Disepakati sebelum integ
 | Kode FR sistem | Ringkasan requirement | Programmer/owner | Kode task internal terkait |
 |---|---|---|---|
 | FR-01 | Pemilihan peran dan identitas demo | Galang | GA-01–GA-04 |
-| FR-02 | Navigasi dan layout mobile | AL (shell/integrasi); semua programmer (screen domain) | AL-03–AL-04; seluruh owner pada screen domain |
+| FR-02 | Navigasi dan layout mobile | Galang (Expo Router dan alur peran); setiap programmer (layout screen domain) | GA-05–GA-06; seluruh owner menjaga layout screen masing-masing |
 | FR-03 | Daftar jadwal | Abhi | AB-01–AB-02, AB-07 |
 | FR-04 | Detail sesi/status terkini | Abhi; integrasi status bersama Kaka dan AL | AB-03–AB-04, AB-07, KA-02, AL-04 |
 | FR-05 | Asisten membuka sesi | Kaka; perubahan state kanonis dikoordinasikan dengan Abhi/AL | KA-01–KA-03, AB-07, AL-04 |
@@ -156,7 +157,7 @@ FR-01 sampai FR-09 adalah kode requirement sistem yang umum dan mandiri. Kode AL
 
 ### Tahap 1 — Kontrak Bersama
 
-AL mengunci tipe data minimum, props/callback, dan ownership file bersama. Setelah itu setiap programmer dapat memakai fixture lokal yang sesuai kontrak.
+AL memfasilitasi kesepakatan tipe data minimum, props/callback, dan ownership file bersama. Galang menetapkan struktur route sesuai kesepakatan; setiap programmer dapat memakai fixture lokal yang sesuai kontrak.
 
 ### Tahap 2 — Implementasi Paralel
 
@@ -165,11 +166,13 @@ AL mengunci tipe data minimum, props/callback, dan ownership file bersama. Setel
 - Jesica: state presensi, validasi status, riwayat.
 - Kaka: aksi buka/tutup sesi dan konfirmasi.
 - Abhi: fixture jadwal serta rekap presensi demo.
-- AL: router shell dan acceptance checklist.
+- Galang: Expo Router shell dan navigasi role-aware.
+- AL: acceptance checklist dan koordinasi kontrak.
 
 ### Tahap 3 — Integrasi Terbatas
 
-- AL menghubungkan picker ke shell dan screen ke navigasi.
+- Galang menghubungkan picker ke shell dan menautkan screen sesuai route contract.
+- AL meninjau hasil integrasi dan memastikan alur acceptance terpenuhi tanpa mengubah kode.
 - Status sesi kanonis Abhi disambungkan dengan aksi Kaka serta tampilan jadwal/detail.
 - Input identitas dan sesi disalurkan ke alur Jesica.
 - Dataset presensi peran tetap dapat terpisah; jangan menambah sinkronisasi tanpa keputusan tim.
@@ -186,14 +189,15 @@ Path berikut usulan sesuai aturan proyek; cocokkan dengan struktur nyata sebelum
 
 | File/area | Owner |
 |---|---|
-| `src/app/_layout.tsx`, route shell/tab/stack | AL |
+| `src/app/_layout.tsx`, route shell/tab/stack | Galang |
 | Route daftar/detail/jadwal dan modul `schedule` | Abhi |
 | Komponen/data picker identitas di luar route shell | Galang |
 | Route/komponen Praktikan | Jesica |
 | Route/komponen Asisten | Kaka |
-| `src/types/` kontrak lintas-domain | AL mengkurasi; perubahan field disetujui bersama |
-| Tema global/config/`package.json` | AL; perubahan melalui koordinasi |
-| `eas.json` dan konfigurasi EAS | AL; build profile disepakati tim |
+| `src/types/` kontrak lintas-domain | Galang mengelola berkas; perubahan field disepakati bersama dan difasilitasi AL |
+| Tema global | Galang mengelola berkas tema; perubahan visual domain dikoordinasikan |
+| `package.json` | Programmer yang memerlukan dependency mengajukan perubahan; AL mengoordinasikan, owner terkait menerapkan |
+| `eas.json` dan konfigurasi EAS | Programmer teknis yang ditunjuk tim; AL mengoordinasikan build profile dan jadwal build |
 
 Semua screen Expo Router tetap di `src/app/`. Komponen, hooks, fixtures, dan utilitas berada di luar `src/app/`. Programmer dapat membuat route domainnya sendiri tetapi tidak mengubah root layout bersama tanpa koordinasi.
 
@@ -205,7 +209,7 @@ Semua screen Expo Router tetap di `src/app/`. Komponen, hooks, fixtures, dan uti
 | Kaka | sesi kanonis dan callback transisi | Abhi/AL | UI/konfirmasi/recoverable callback dikerjakan mandiri |
 | Abhi | tidak ada input domain eksternal | Abhi | tidak terblokir |
 | Galang | tidak ada input domain eksternal | Galang | tidak terblokir |
-| Shell AL | screen exports dan picker result | semua owner | siapkan shell; tautkan setelah signature tersedia |
+| Expo Router shell | screen exports dan picker result | Galang | siapkan route contract; tautkan setelah signature tersedia |
 | Rekap sesi | fixture kehadiran demo | Abhi | tidak menunggu Jesica; dataset rekap dapat terpisah |
 
 ## 9. Definition of Done
@@ -221,9 +225,9 @@ Semua screen Expo Router tetap di `src/app/`. Komponen, hooks, fixtures, dan uti
 ## 10. Ringkasan
 
 ```text
-AL      → PM, kontrak, Expo Router shell, integrasi dan acceptance
-Abhi    → jadwal dan detail sesi
-Galang  → pemilihan peran dan identitas
+AL      → PM, koordinasi kontrak, review dan acceptance (tanpa coding)
+Abhi    → jadwal, detail sesi dan rekap demo
+Galang  → pemilihan peran/identitas dan Expo Router navigation
 Jesica  → presensi Praktikan dan riwayat
 Kaka    → aksi buka/tutup sesi Asisten
 ```
@@ -242,6 +246,6 @@ Tabel ini berlaku untuk semua domain. Owner tetap bertanggung jawab menerapkan p
 | Modal | Konfirmasi yang butuh respons pengguna dan informasi pendukung | [React Native: Modal](https://reactnative.dev/docs/modal) |
 | StyleSheet | Definisi style pada JavaScript dengan konvensi React Native | [React Native: Style](https://reactnative.dev/docs/style) |
 | Navigation | Navigasi stack/tab dan aturan file route Expo Router | [Expo: Add navigation](https://docs.expo.dev/tutorial/add-navigation/) |
-| Expo EAS | Build cloud untuk binary Android/iOS; AL mengoordinasikan konfigurasi `eas.json` | [Expo: EAS Build](https://docs.expo.dev/build/introduction/), [EAS JSON](https://docs.expo.dev/build/eas-json/) |
+| Expo EAS | Build cloud untuk binary Android/iOS; AL mengoordinasikan jadwal, programmer teknis mengelola konfigurasi | [Expo: EAS Build](https://docs.expo.dev/build/introduction/), [EAS JSON](https://docs.expo.dev/build/eas-json/) |
 
 Versi dependency proyek yang menjadi acuan saat dokumen ini diperbarui: Expo SDK `~57.0.30`, Expo Router `~57.0.28`, React Native `0.86.3`. Cek versi proyek dan dokumentasi yang cocok sebelum menggunakan API yang berubah antarversi.
