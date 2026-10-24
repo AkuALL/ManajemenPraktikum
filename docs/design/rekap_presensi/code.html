@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+
+<html lang="id"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_tab" name="shell-type"/><title>Rekap Asisten - Praktikum</title><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400..600,0..1,0" rel="stylesheet"/><script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script><script id="tailwind-config">
+tailwind.config = {
+  darkMode: "class",
+  theme: {
+    extend: {
+      "colors": {
+        "surface-dim": "#dbdad9",
+        "tertiary-fixed": "#e6e2df",
+        "text-primary": "#171717",
+        "on-primary-container": "#858383",
+        "disabled-surface": "#E5E5E5",
+        "on-surface-variant": "#444748",
+        "error-container": "#ffdad6",
+        "on-background": "#1b1c1c",
+        "inverse-on-surface": "#f2f0f0",
+        "border-subtle": "#D2D2D2",
+        "surface-container-highest": "#e4e2e2",
+        "surface-container-low": "#f5f3f3",
+        "surface-container-lowest": "#ffffff",
+        "action-secondary": "#FFFFFF",
+        "surface-container-high": "#eae8e7",
+        "text-secondary": "#555555",
+        "secondary-container": "#e5e2e1",
+        "surface": "#fbf9f8",
+        "primary-fixed-dim": "#c8c6c5",
+        "secondary-fixed": "#e5e2e1",
+        "on-tertiary-fixed": "#1c1b1a",
+        "surface-container": "#efeded",
+        "on-tertiary-container": "#868382",
+        "surface-bright": "#fbf9f8",
+        "on-tertiary": "#ffffff",
+        "on-primary-fixed": "#1c1b1b",
+        "surface-variant": "#e4e2e2",
+        "background-canvas": "#F7F7F7",
+        "secondary-fixed-dim": "#c9c6c5",
+        "surface-tint": "#5f5e5e",
+        "on-error": "#ffffff",
+        "on-primary-fixed-variant": "#474746",
+        "inverse-primary": "#c8c6c5",
+        "primary-container": "#1c1b1b",
+        "secondary": "#5f5e5e",
+        "on-secondary": "#ffffff",
+        "action-primary": "#171717",
+        "outline": "#747878",
+        "on-secondary-fixed": "#1c1b1b",
+        "primary-fixed": "#e5e2e1",
+        "background": "#fbf9f8",
+        "error": "#ba1a1a",
+        "on-secondary-container": "#656464",
+        "on-secondary-fixed-variant": "#474646",
+        "on-surface": "#1b1c1c",
+        "on-primary": "#ffffff",
+        "tertiary-fixed-dim": "#cac6c4",
+        "outline-variant": "#c4c7c7",
+        "primary": "#000000",
+        "inverse-surface": "#303030",
+        "disabled-text": "#555555",
+        "tertiary-container": "#1c1b1a",
+        "tertiary": "#000000",
+        "on-error-container": "#93000a",
+        "surface-muted": "#EEEEEE",
+        "surface-card": "#FFFFFF",
+        "on-tertiary-fixed-variant": "#484645"
+      },
+      "borderRadius": {
+        "DEFAULT": "0.25rem",
+        "lg": "0.5rem",
+        "xl": "0.75rem",
+        "full": "9999px"
+      },
+      "spacing": {
+        "space-xl": "1.5rem",
+        "space-md": "0.75rem",
+        "space-xs": "0.25rem",
+        "space-lg": "1rem",
+        "gutter": "1rem",
+        "space-sm": "0.5rem",
+        "margin": "1rem"
+      },
+      "fontFamily": {
+        "label-lg": ["Inter", "sans-serif"],
+        "label-md": ["Inter", "sans-serif"],
+        "body-sm": ["Inter", "sans-serif"],
+        "body-lg": ["Inter", "sans-serif"],
+        "headline-md": ["Inter", "sans-serif"],
+        "body-md": ["Inter", "sans-serif"],
+        "headline-lg": ["Inter", "sans-serif"]
+      },
+      "fontSize": {
+        "label-lg": ["14px", { "lineHeight": "20px", "fontWeight": "600" }],
+        "label-md": ["12px", { "lineHeight": "16px", "fontWeight": "600" }],
+        "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+        "headline-md": ["18px", { "lineHeight": "24px", "fontWeight": "600" }],
+        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+        "headline-lg": ["24px", { "lineHeight": "30px", "fontWeight": "600" }]
+      }
+    }
+  }
+}
+</script><style>
+@layer base {
+  html, body {
+    width: 100vw;
+    margin: 0;
+    padding: 0;
+    background-color: #fbf9f8;
+    overflow-x: hidden;
+  }
+  body {
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+  main > :first-child { margin-top: 0 !important; }
+  main > :last-child { margin-bottom: 0 !important; }
+}
+::-webkit-scrollbar { display: none; }
+
+/* Staggered entrance animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.anim-stagger-1 { animation: fadeInUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both; }
+.anim-stagger-2 { animation: fadeInUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.12s both; }
+.anim-stagger-3 { animation: fadeInUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.20s both; }
+.anim-stagger-4 { animation: fadeInUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.28s both; }
+
+/* Subtle pulse glow for active status badge */
+@keyframes softRadar {
+  0% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(2.2); opacity: 0; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.live-radar-ring {
+  animation: softRadar 2.2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+}
+
+/* Checkmark spring bounce */
+@keyframes checkBounce {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.22); }
+  70% { transform: scale(0.92); }
+  100% { transform: scale(1); }
+}
+.group:hover .badge-check,
+.attendee-row:active .badge-check {
+  animation: checkBounce 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Shake / rotate for danger lock icon */
+@keyframes lockWiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-10deg); }
+  75% { transform: rotate(10deg); }
+}
+.danger-btn:hover .lock-icon,
+.danger-btn:active .lock-icon {
+  animation: lockWiggle 0.35s ease-in-out;
+}
+
+/* Bottom sheet transition styling */
+.sheet-backdrop {
+  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.sheet-content {
+  transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+}
+.sheet-hidden {
+  pointer-events: none;
+  opacity: 0;
+}
+.sheet-hidden .sheet-content {
+  transform: translateY(100%);
+  opacity: 0.5;
+}
+
+/* Active tab micro bounce */
+@keyframes tabBounce {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+.tab-bounce {
+  animation: tabBounce 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+</style></head><body class="bg-surface text-text-primary font-body-md min-h-screen flex flex-col antialiased selection:bg-surface-muted"><header class="fixed top-0 w-full z-40 pt-safe bg-surface/90 backdrop-blur-xl border-b border-black/[0.04] transition-all"><div class="h-16 px-margin flex items-center justify-between gap-space-sm"><div class="flex items-center gap-space-sm min-w-0"><img alt="Praktikum Logo" class="h-8 w-auto object-contain transition-transform active:scale-95 duration-150" src="https://lh3.googleusercontent.com/aida/AEtjO1XA-eZYfnqEKuq8ezK8moA59F8zpdfEfSJHYTdoYWhBeoaAfyqWIqCsppMjUekh1OToIg2VI0Zdyrp3JeQVakopSqLWBkFOOXs_3pM39bPKAY-e_vCuSAsUrWRKfuQMzUxfypr-Xaz3wWNthRWhToxNXtNutTN3ORJ8gdte7iqzJFaZD3zGaOExB9R6d9FUDkoiHt7SjwG4v8PtZqErZRcN44Frgon2EJblB4GmpLkWr6l_TrMnwgcDjADW"/><div class="flex flex-col min-w-0"><span class="font-label-lg text-label-lg tracking-tight text-text-primary uppercase truncate">Praktikum</span><span class="font-body-sm text-body-sm text-text-secondary truncate">Rekap Asisten</span></div></div><div class="flex items-center gap-space-sm"><button aria-label="Menu profil Nadia" class="flex items-center gap-space-xs px-2.5 py-1.5 rounded-lg bg-surface-muted hover:bg-surface-variant active:scale-95 transition-all min-h-[40px] focus:outline-none" type="button"><span class="font-label-md text-label-md text-text-primary">Nadia</span><span class="material-symbols-outlined text-text-secondary text-[16px] transition-transform duration-200">expand_more</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0 ring-2 ring-transparent active:ring-primary/20 transition-all cursor-pointer"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex flex-col relative w-full px-margin pt-20 pb-28 bg-surface min-h-screen"><div class="flex flex-col w-full pb-4">
+<!-- Sub-Header Navigasi -->
+<div class="flex items-center justify-between py-space-sm mb-2 anim-stagger-1">
+<button aria-label="Kembali ke Jadwal" class="flex items-center gap-1 text-text-primary hover:text-text-secondary active:scale-95 transition-all py-1 min-h-[44px] min-w-[44px] focus:outline-none -ml-1 group" type="button">
+<span class="material-symbols-outlined text-[20px] transition-transform group-hover:-translate-x-0.5">chevron_left</span>
+<span class="font-label-lg text-label-lg">Jadwal</span>
+</button>
+<h1 class="font-headline-md text-headline-md text-text-primary tracking-tight">Rekap presensi</h1>
+<div class="w-10"></div>
+</div>
+<!-- Kartu Info Sesi Praktikum -->
+<section class="bg-surface-card rounded-2xl p-space-lg shadow-sm border border-black/[0.04] mb-space-lg flex flex-col gap-space-md anim-stagger-2 transition-shadow hover:shadow-md duration-300">
+<div class="flex items-start justify-between gap-space-sm">
+<div class="flex flex-col min-w-0">
+<span class="font-headline-md text-headline-md text-text-primary truncate">Basis Data · Kelas B</span>
+<span class="font-body-md text-body-md text-text-secondary mt-0.5">27 Okt 2026 · 13.00–15.00</span>
+</div>
+<!-- Live Radar Beacon Badge -->
+<div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/90 shrink-0 text-xs font-semibold shadow-xs select-none">
+<span class="relative flex h-2 w-2">
+<span class="live-radar-ring absolute inline-flex h-full w-full rounded-full bg-emerald-500"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-600 shadow-sm"></span>
+</span>
+<span class="tracking-tight">Berlangsung</span>
+</div>
+</div>
+<!-- Ringkasan Statistik Monokrom & Progress Ratio -->
+<div class="flex flex-col gap-2 pt-space-sm bg-surface-muted/50 rounded-xl p-space-md border border-black/[0.03]">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-text-secondary text-[20px]">group</span>
+<span class="font-body-md text-body-md text-text-primary font-medium">Kehadiran mahasiswa</span>
+</div>
+<!-- Live Counter Badge -->
+<div class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-action-primary text-on-primary shadow-xs transition-transform active:scale-95 duration-150 cursor-default" title="2 dari 30 mahasiswa telah hadir">
+<span class="font-label-md text-label-md tabular-nums font-semibold" id="counter-hadir">2</span>
+<span class="font-body-sm text-body-sm text-white/80">/ 30 hadir</span>
+</div>
+</div>
+<!-- Live Attendance Mini Progress Bar -->
+<div class="w-full bg-surface-container-high h-1.5 rounded-full overflow-hidden mt-1">
+<div class="bg-action-primary h-full rounded-full transition-all duration-700 ease-out" style="width: 6.7%;"></div>
+</div>
+</div>
+</section>
+<!-- Daftar Presensi Section -->
+<section class="flex flex-col bg-surface-card rounded-2xl p-space-lg shadow-sm border border-black/[0.04] mb-space-lg anim-stagger-3">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 gap-2 border-b border-surface-variant">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-text-secondary text-[18px]">list_alt</span>
+<h2 class="font-label-lg text-label-lg text-text-primary uppercase tracking-wider">Daftar Kehadiran</h2>
+</div>
+<!-- Interactive Filter / Sort Chips -->
+<div class="flex items-center gap-1 p-0.5 bg-surface-muted/70 rounded-lg self-start sm:self-auto text-xs" id="sort-filters" role="tablist">
+<button class="filter-chip active-filter px-2.5 py-1 rounded-md font-medium text-text-primary bg-surface-card shadow-xs transition-all duration-200" data-sort="time" type="button">Urut Waktu</button>
+<button class="filter-chip px-2.5 py-1 rounded-md font-medium text-text-secondary hover:text-text-primary transition-all duration-200" data-sort="name" type="button">Nama A-Z</button>
+<button class="filter-chip px-2.5 py-1 rounded-md font-medium text-text-secondary hover:text-text-primary transition-all duration-200" data-sort="all" type="button">Semua (2)</button>
+</div>
+</div>
+<div class="flex flex-col divide-y divide-surface-variant" id="attendee-list">
+<!-- Item Praktikan 1 -->
+<div class="attendee-row group flex items-center justify-between py-space-md -mx-2 px-2 rounded-xl transition-all duration-200 hover:bg-surface-muted/50 active:scale-[0.99] cursor-pointer" data-name="Nadia Putri" data-time="13:02">
+<div class="flex items-center gap-3 min-w-0 pr-space-sm">
+<div class="w-8 h-8 rounded-full bg-surface-muted text-text-secondary font-label-md flex items-center justify-center shrink-0 border border-black/[0.04] group-hover:bg-action-primary group-hover:text-white transition-colors duration-200">
+          NP
+        </div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-lg text-label-lg text-text-primary truncate group-hover:text-black">Nadia Putri</span>
+<span class="font-body-sm text-body-sm text-text-secondary tabular-nums mt-0.5">NIM 23.11.0123</span>
+</div>
+</div>
+<div class="flex items-center gap-2 sm:gap-space-md shrink-0">
+<div class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface-muted group-hover:bg-white text-text-primary border border-black/[0.03] transition-colors" title="Waktu Scan Presensi">
+<span class="material-symbols-outlined text-[14px] text-text-secondary">schedule</span>
+<span class="font-label-md text-label-md tabular-nums">13.02</span>
+</div>
+<div class="inline-flex items-center gap-1 text-emerald-600 bg-emerald-50/70 sm:bg-transparent px-1.5 py-0.5 sm:p-0 rounded-md">
+<svg class="w-5 h-5 text-emerald-600 badge-check transition-transform" fill="currentColor" viewbox="0 0 24 24">
+<path clip-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" fill-rule="evenodd"></path>
+</svg>
+<span class="font-label-md text-label-md hidden sm:inline text-emerald-700">Terverifikasi</span>
+</div>
+</div>
+</div>
+<!-- Item Praktikan 2 -->
+<div class="attendee-row group flex items-center justify-between py-space-md -mx-2 px-2 rounded-xl transition-all duration-200 hover:bg-surface-muted/50 active:scale-[0.99] cursor-pointer" data-name="Rafi Pratama" data-time="13:08">
+<div class="flex items-center gap-3 min-w-0 pr-space-sm">
+<div class="w-8 h-8 rounded-full bg-surface-muted text-text-secondary font-label-md flex items-center justify-center shrink-0 border border-black/[0.04] group-hover:bg-action-primary group-hover:text-white transition-colors duration-200">
+          RP
+        </div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-lg text-label-lg text-text-primary truncate group-hover:text-black">Rafi Pratama</span>
+<span class="font-body-sm text-body-sm text-text-secondary tabular-nums mt-0.5">NIM 23.11.0147</span>
+</div>
+</div>
+<div class="flex items-center gap-2 sm:gap-space-md shrink-0">
+<div class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface-muted group-hover:bg-white text-text-primary border border-black/[0.03] transition-colors" title="Waktu Scan Presensi">
+<span class="material-symbols-outlined text-[14px] text-text-secondary">schedule</span>
+<span class="font-label-md text-label-md tabular-nums">13.08</span>
+</div>
+<div class="inline-flex items-center gap-1 text-emerald-600 bg-emerald-50/70 sm:bg-transparent px-1.5 py-0.5 sm:p-0 rounded-md">
+<svg class="w-5 h-5 text-emerald-600 badge-check transition-transform" fill="currentColor" viewbox="0 0 24 24">
+<path clip-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" fill-rule="evenodd"></path>
+</svg>
+<span class="font-label-md text-label-md hidden sm:inline text-emerald-700">Terverifikasi</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Aksi Asisten (Danger Button) -->
+<div class="flex flex-col gap-space-sm anim-stagger-4">
+<button class="danger-btn relative w-full flex items-center justify-center gap-2.5 min-h-[50px] px-5 rounded-xl bg-red-600 hover:bg-red-700 active:scale-[0.98] text-white font-semibold transition-all duration-200 shadow-sm hover:shadow-[0_4px_16px_rgba(220,38,38,0.35)] focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 overflow-hidden" id="btn-tutup-sesi" type="button">
+<svg class="lock-icon w-5 h-5 fill-current transition-transform duration-200 shrink-0" viewbox="0 0 24 24">
+<path clip-rule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" fill-rule="evenodd"></path>
+</svg>
+<span class="font-label-lg text-label-lg tracking-wide text-white">Tutup sesi praktikum</span>
+</button>
+<p class="font-body-sm text-body-sm text-text-secondary text-center px-2">Menutup sesi akan mengunci presensi dan mencatat rekapitulasi akhir.</p>
+</div>
+<!-- Interactive Confirmation Bottom Sheet / Modal -->
+<div aria-labelledby="modal-title" aria-modal="true" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sheet-backdrop sheet-hidden bg-black/40 backdrop-blur-sm" id="modal-konfirmasi" role="dialog">
+<!-- Backdrop click area -->
+<div class="absolute inset-0" id="backdrop-overlay"></div>
+<!-- Sheet Dialog Content -->
+<div class="sheet-content relative bg-surface-card rounded-t-3xl sm:rounded-2xl p-6 sm:p-7 max-w-sm w-full flex flex-col gap-5 shadow-2xl z-10 border border-black/[0.06] mb-safe sm:mb-0">
+<!-- Drag pill indicator for mobile feel -->
+<div class="w-10 h-1 bg-surface-variant rounded-full mx-auto sm:hidden -mt-1 mb-1"></div>
+<div class="flex items-start gap-4">
+<div class="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center shrink-0 border border-red-100 shadow-xs">
+<span class="material-symbols-outlined text-[26px]">lock_reset</span>
+</div>
+<div class="flex flex-col gap-1">
+<h3 class="font-headline-md text-headline-md text-text-primary leading-tight" id="modal-title">Tutup Sesi Praktikum?</h3>
+<p class="font-body-md text-body-md text-text-secondary leading-snug">Praktikan tidak dapat melakukan presensi baru setelah sesi ini ditutup dan dikunci.</p>
+</div>
+</div>
+<!-- Sesi ringkas info di dalam modal -->
+<div class="bg-surface-muted/60 p-3 rounded-xl flex items-center justify-between text-xs text-text-secondary border border-black/[0.02]">
+<span>Basis Data · Kelas B</span>
+<span class="font-semibold text-text-primary">2 Hadir Terkunci</span>
+</div>
+<div class="flex flex-col gap-2.5 pt-1">
+<button class="w-full min-h-[48px] rounded-xl bg-red-600 hover:bg-red-700 active:scale-[0.98] text-white font-label-lg text-label-lg transition-all duration-150 flex items-center justify-center shadow-xs font-semibold focus:outline-none" id="btn-konfirmasi-selesai" type="button">
+        Tutup Sesi Sekarang
+      </button>
+<button class="w-full min-h-[46px] rounded-xl bg-surface-muted hover:bg-surface-variant active:scale-[0.98] text-text-primary font-label-lg text-label-lg transition-all duration-150 flex items-center justify-center focus:outline-none" id="btn-batal-tutup" type="button">
+        Batal
+      </button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Navigation with dynamic active indicator & bounce micro-interaction -->
+<nav class="fixed bottom-0 w-full z-40 pb-safe bg-surface/90 backdrop-blur-xl border-t border-black/[0.04] shadow-[0_-1px_12px_rgba(0,0,0,0.03)]" data-active-classes="text-text-primary font-label-md">
+<div class="flex justify-around items-center h-16 px-space-sm" id="nav-tabs">
+<a class="nav-item flex flex-col items-center justify-center gap-1 min-w-[48px] min-h-[48px] py-1 px-space-xs text-text-secondary hover:text-text-primary transition-all duration-150 active:scale-95" data-path="jadwal-praktikum" href="#">
+<span class="material-symbols-outlined text-[20px] transition-transform">calendar_today</span>
+<span class="font-label-md text-label-md">Jadwal</span>
+</a>
+<a class="nav-item flex flex-col items-center justify-center gap-1 min-w-[48px] min-h-[48px] py-1 px-space-xs text-text-secondary hover:text-text-primary transition-all duration-150 active:scale-95" data-path="kehadiran-saya" href="#">
+<span class="material-symbols-outlined text-[20px] transition-transform">how_to_reg</span>
+<span class="font-label-md text-label-md">Kehadiran</span>
+</a>
+<a aria-current="page" class="nav-item flex flex-col items-center justify-center gap-1 min-w-[48px] min-h-[48px] py-1 px-space-xs transition-all duration-150 text-text-primary font-label-md active:scale-95" data-path="rekap-asisten" href="#">
+<span class="material-symbols-outlined text-[20px] text-text-primary transition-transform">analytics</span>
+<span class="font-label-md text-label-md font-semibold text-text-primary">Rekap</span>
+</a>
+<a class="nav-item flex flex-col items-center justify-center gap-1 min-w-[48px] min-h-[48px] py-1 px-space-xs text-text-secondary hover:text-text-primary transition-all duration-150 active:scale-95" data-path="tugas-dan-nilai" href="#">
+<span class="material-symbols-outlined text-[20px] transition-transform">fact_check</span>
+<span class="font-label-md text-label-md">Nilai</span>
+</a>
+</div>
+</nav>
+<script>
+  (function() {
+    // 1. Modal / Bottom Sheet Handling with Transitions
+    const btnTutup = document.getElementById('btn-tutup-sesi');
+    const modal = document.getElementById('modal-konfirmasi');
+    const overlay = document.getElementById('backdrop-overlay');
+    const btnBatal = document.getElementById('btn-batal-tutup');
+    const btnKonfirmasi = document.getElementById('btn-konfirmasi-selesai');
+
+    function openModal() {
+      if (!modal) return;
+      modal.classList.remove('sheet-hidden');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+      if (!modal) return;
+      modal.classList.add('sheet-hidden');
+      document.body.style.overflow = '';
+    }
+
+    if (btnTutup && modal) {
+      btnTutup.addEventListener('click', openModal);
+    }
+    if (btnBatal) {
+      btnBatal.addEventListener('click', closeModal);
+    }
+    if (overlay) {
+      overlay.addEventListener('click', closeModal);
+    }
+
+    // Escape key listener for accessibility
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal && !modal.classList.contains('sheet-hidden')) {
+        closeModal();
+      }
+    });
+
+    if (btnKonfirmasi && btnTutup) {
+      btnKonfirmasi.addEventListener('click', () => {
+        closeModal();
+        // Update button state gracefully
+        btnTutup.classList.remove('bg-red-600', 'hover:bg-red-700', 'hover:shadow-[0_4px_16px_rgba(220,38,38,0.35)]', 'danger-btn');
+        btnTutup.classList.add('bg-surface-muted', 'text-disabled-text', 'cursor-not-allowed', 'border', 'border-border-subtle/40');
+        btnTutup.setAttribute('disabled', 'true');
+        btnTutup.innerHTML = `
+          <span class="material-symbols-outlined text-[20px] text-emerald-600">check_circle</span>
+          <span class="font-label-lg text-label-lg text-text-secondary">Sesi praktikum telah ditutup</span>
+        `;
+        
+        // Change status badge to 'Selesai'
+        const badge = document.querySelector('.live-radar-ring');
+        if (badge && badge.parentElement && badge.parentElement.parentElement) {
+          const badgeContainer = badge.parentElement.parentElement;
+          badgeContainer.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-muted text-text-secondary border border-border-subtle shrink-0 text-xs font-semibold';
+          badgeContainer.innerHTML = '<span class="h-2 w-2 rounded-full bg-text-secondary"></span><span>Selesai</span>';
+        }
+      });
+    }
+
+    // 2. Interactive Sort & Filter Chips
+    const filterChips = document.querySelectorAll('.filter-chip');
+    const attendeeList = document.getElementById('attendee-list');
+    
+    if (filterChips.length && attendeeList) {
+      filterChips.forEach(chip => {
+        chip.addEventListener('click', function() {
+          filterChips.forEach(c => {
+            c.classList.remove('active-filter', 'bg-surface-card', 'text-text-primary', 'shadow-xs');
+            c.classList.add('text-text-secondary');
+          });
+          this.classList.add('active-filter', 'bg-surface-card', 'text-text-primary', 'shadow-xs');
+          this.classList.remove('text-text-secondary');
+
+          const sortType = this.getAttribute('data-sort');
+          const rows = Array.from(attendeeList.querySelectorAll('.attendee-row'));
+
+          if (sortType === 'name') {
+            rows.sort((a, b) => a.getAttribute('data-name').localeCompare(b.getAttribute('data-name')));
+          } else {
+            // default order by time
+            rows.sort((a, b) => a.getAttribute('data-time').localeCompare(b.getAttribute('data-time')));
+          }
+
+          // Trigger smooth re-flow animation
+          attendeeList.innerHTML = '';
+          rows.forEach((row, idx) => {
+            row.style.animation = `fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) ${idx * 0.06}s both`;
+            attendeeList.appendChild(row);
+          });
+        });
+      });
+    }
+
+    // 3. Tab Navigation Bounce Micro-Interaction
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems.forEach(item => {
+      item.addEventListener('click', function(e) {
+        navItems.forEach(t => {
+          t.removeAttribute('aria-current');
+          t.classList.remove('text-text-primary', 'font-semibold');
+          t.classList.add('text-text-secondary');
+          const icon = t.querySelector('.material-symbols-outlined');
+          if (icon) icon.classList.remove('tab-bounce', 'text-text-primary');
+        });
+
+        this.setAttribute('aria-current', 'page');
+        this.classList.remove('text-text-secondary');
+        this.classList.add('text-text-primary', 'font-semibold');
+
+        const currentIcon = this.querySelector('.material-symbols-outlined');
+        if (currentIcon) {
+          currentIcon.classList.add('tab-bounce', 'text-text-primary');
+          setTimeout(() => currentIcon.classList.remove('tab-bounce'), 350);
+        }
+      });
+    });
+  })();
+</script></body></html>

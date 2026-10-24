@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+
+<html lang="id" style=""><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_blank" name="shell-type"/><title>Pilih Peran Demo - Praktikum</title><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "on-surface-variant": "#444748", "inverse-primary": "#c8c6c5", "primary-fixed": "#e5e2e1", "on-secondary-fixed": "#1c1b1b", "surface-container-low": "#f5f3f3", "secondary-container": "#e5e2e1", "surface-muted": "#EEEEEE", "outline": "#747878", "error-container": "#ffdad6", "on-secondary-fixed-variant": "#474646", "surface-card": "#FFFFFF", "on-background": "#1b1c1c", "action-primary": "#171717", "primary": "#000000", "surface-tint": "#5f5e5e", "on-primary-fixed": "#1c1b1b", "primary-fixed-dim": "#c8c6c5", "surface-variant": "#e4e2e2", "surface-container-lowest": "#ffffff", "on-secondary-container": "#656464", "on-primary-fixed-variant": "#474746", "on-tertiary-fixed": "#1c1b1a", "border-subtle": "#D2D2D2", "inverse-surface": "#303030", "on-secondary": "#ffffff", "surface-container-high": "#eae8e7", "surface-container": "#efeded", "on-tertiary-fixed-variant": "#484645", "outline-variant": "#c4c7c7", "surface-container-highest": "#e4e2e2", "on-primary-container": "#858383", "primary-container": "#1c1b1b", "secondary": "#5f5e5e", "tertiary-fixed-dim": "#cac6c4", "secondary-fixed": "#e5e2e1", "on-surface": "#1b1c1c", "background": "#fbf9f8", "action-secondary": "#FFFFFF", "secondary-fixed-dim": "#c9c6c5", "inverse-on-surface": "#f2f0f0", "tertiary-fixed": "#e6e2df", "tertiary-container": "#1c1b1a", "on-primary": "#ffffff", "on-error-container": "#93000a", "tertiary": "#000000", "on-error": "#ffffff", "surface-bright": "#fbf9f8", "surface": "#fbf9f8", "on-tertiary-container": "#868382", "error": "#ba1a1a", "disabled-surface": "#E5E5E5", "on-tertiary": "#ffffff", "text-primary": "#171717", "surface-dim": "#dbdad9", "background-canvas": "#F7F7F7", "text-secondary": "#555555", "disabled-text": "#555555" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "space-xl": "1.5rem", "space-md": "0.75rem", "space-xs": "0.25rem", "space-lg": "1rem", "gutter": "1rem", "space-sm": "0.5rem", "margin": "1rem" }, "fontFamily": { "label-lg": ["Inter"], "label-md": ["Inter"], "body-sm": ["Inter"], "body-lg": ["Inter"], "headline-md": ["Inter"], "body-md": ["Inter"], "headline-lg": ["Inter"] }, "fontSize": { "label-lg": ["14px", { "lineHeight": "20px", "fontWeight": "600" }], "label-md": ["12px", { "lineHeight": "16px", "fontWeight": "600" }], "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }], "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }], "headline-md": ["18px", { "lineHeight": "24px", "fontWeight": "600" }], "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }], "headline-lg": ["24px", { "lineHeight": "30px", "fontWeight": "600" }] } } } }</script><style>@layer base{html,body{width:100vw;margin:0;padding:0;background-color:#fbf9f8;}body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-surface text-text-primary font-body-md min-h-screen flex flex-col antialiased selection:bg-surface-muted"><main class="flex flex-col relative w-full pt-safe pb-safe px-margin bg-surface min-h-screen"><div class="flex flex-col w-full pb-8">
+<div class="flex flex-col gap-5">
+<!-- Top Progress & Context Meta -->
+<div class="flex items-center justify-between transition-all duration-300">
+<div class="flex items-center gap-2">
+<span class="inline-flex items-center justify-center px-2 py-0.5 rounded text-label-md font-label-md bg-surface-muted text-text-primary tracking-wide">
+          LANGKAH 01 / 02
+        </span>
+<span class="text-body-sm font-body-sm text-text-secondary">Sesi Simulasi</span>
+</div>
+<div class="flex items-center gap-1.5">
+<div class="w-6 h-1 rounded-full bg-action-primary"></div>
+<div class="w-6 h-1 rounded-full bg-surface-muted"></div>
+</div>
+</div>
+<!-- Header Block -->
+<div class="flex flex-col gap-1">
+<h1 class="text-headline-lg font-headline-lg text-text-primary tracking-tight">Pilih Peran Demo</h1>
+<p class="text-body-md font-body-md text-text-secondary">
+        Tentukan profil kerja untuk menguji alur validasi presensi dan rekap penilaian laboratorium.
+      </p>
+</div>
+<!-- Role Switcher Segmented Control -->
+<div class="flex flex-col gap-2">
+<span class="text-label-md font-label-md text-text-secondary">PERAN AKADEMIK</span>
+<div class="relative flex p-1 rounded-lg bg-surface-muted select-none">
+<!-- Animated Background Pill -->
+<div class="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-md bg-surface-card shadow-sm transition-all duration-300 ease-out left-1" id="role-pill"></div>
+<button class="relative flex-1 flex items-center justify-center gap-2 py-2.5 z-10 transition-colors duration-200 text-text-primary font-label-lg text-label-lg" id="tab-praktikan" onclick="setRole('praktikan')" type="button">
+<span class="material-symbols-outlined text-[18px]">school</span>
+<span>Praktikan</span>
+</button>
+<button class="relative flex-1 flex items-center justify-center gap-2 py-2.5 z-10 transition-colors duration-200 text-text-secondary font-label-lg text-label-lg" id="tab-asisten" onclick="setRole('asisten')" type="button">
+<span class="material-symbols-outlined text-[18px]">badge</span>
+<span>Asisten Lab</span>
+</button>
+</div>
+</div>
+<!-- Context Info Notice Banner -->
+<div class="flex items-start gap-3 p-3.5 rounded-lg bg-surface-container-low transition-all duration-300" id="role-notice">
+<span class="material-symbols-outlined text-text-primary text-[20px] mt-0.5">info</span>
+<div class="flex flex-col gap-0.5">
+<p class="text-label-md font-label-md text-text-primary" id="notice-title">Akses Mode Praktikan</p>
+<p class="text-body-sm font-body-sm text-text-secondary" id="notice-desc">
+          Diberi hak untuk scan QR presensi masuk, mengunggah draft modul laporan, dan memantau status checklist tugas.
+        </p>
+</div>
+</div>
+<!-- Identity Selection List -->
+<div class="flex flex-col gap-2.5 pt-1">
+<div class="flex items-center justify-between">
+<span class="text-label-md font-label-md text-text-secondary">PROFIL TERSEDIA</span>
+<span class="text-body-sm font-body-sm text-text-secondary" id="role-count">2 profil aktif</span>
+</div>
+<div class="flex flex-col gap-3 transition-opacity duration-200" id="identity-list">
+<!-- Rendered via JS -->
+</div>
+</div>
+<!-- CTA Interaction Area -->
+<div class="flex flex-col gap-3 pt-4">
+<button class="group relative flex items-center justify-center w-full min-h-[48px] px-4 py-3 rounded-lg bg-action-primary text-on-primary transition-all duration-200 active:scale-[0.98]" id="btn-submit" onclick="handleContinue()" type="button">
+<div class="flex items-center gap-2 font-label-lg text-label-lg" id="btn-content">
+<span>Lanjutkan ke Dasbor</span>
+<span class="material-symbols-outlined text-[18px] transition-transform duration-200 group-hover:translate-x-1">arrow_forward</span>
+</div>
+<div class="hidden items-center gap-2 font-label-lg text-label-lg" id="btn-spinner">
+<svg class="animate-spin h-4 w-4 text-white" fill="none" viewbox="0 0 24 24">
+<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+<path class="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor"></path>
+</svg>
+<span>Memuat Lingkungan...</span>
+</div>
+</button>
+<div class="flex items-center justify-center gap-1.5 text-center">
+<span class="material-symbols-outlined text-[14px] text-text-secondary">lock_outline</span>
+<span class="text-body-sm font-body-sm text-text-secondary">Data simulasi diisolasi pada memori sesi lokal.</span>
+</div>
+</div>
+</div>
+<!-- Interactive Feedback Toast -->
+<div class="fixed bottom-6 left-4 right-4 max-w-sm mx-auto p-3.5 rounded-lg bg-inverse-surface text-inverse-on-surface shadow-xl flex items-center justify-between gap-3 pointer-events-none opacity-0 translate-y-3 transition-all duration-300 z-50" id="toast">
+<div class="flex items-center gap-2.5">
+<span class="material-symbols-outlined text-[18px]">check_circle</span>
+<span class="text-body-sm font-body-sm" id="toast-message">Profil berhasil diaktifkan.</span>
+</div>
+<span class="text-label-md font-label-md uppercase tracking-wider opacity-70">Demo</span>
+</div>
+</div>
+<script>
+  const profilesData = {
+    praktikan: {
+      title: "Akses Mode Praktikan",
+      desc: "Diberi hak untuk scan QR presensi masuk, mengunggah draft modul laporan, dan memantau status checklist tugas.",
+      items: [
+        {
+          id: "p1",
+          name: "Nadia Putri",
+          roleTag: "Praktikan Reguler",
+          identifier: "NIM. 21/478901/PA/20912",
+          metaPrimary: "Lab Jaringan & Sistem Terdistribusi",
+          metaSecondary: "Kelompok 04 • Shift C",
+          statusChip: "Aktif",
+          statusType: "normal"
+        },
+        {
+          id: "p2",
+          name: "Rafi Pratama",
+          roleTag: "Praktikan Susulan",
+          identifier: "NIM. 21/481233/PA/20945",
+          metaPrimary: "Lab Rekayasa Perangkat Lunak",
+          metaSecondary: "Kelompok 01 • Shift A",
+          statusChip: "Pending Check-in",
+          statusType: "pending"
+        }
+      ]
+    },
+    asisten: {
+      title: "Akses Asisten & Penguji",
+      desc: "Diberi otorisasi penuh membuka generator token presensi, validasi berkas penilaian, dan kurasi berita acara praktikum.",
+      items: [
+        {
+          id: "a1",
+          name: "Dimas Setiawan",
+          roleTag: "Koordinator Asisten",
+          identifier: "NIP. 199804122022031002",
+          metaPrimary: "Koordinator Lab Sistem Basis Data",
+          metaSecondary: "Ruang Lab 301 • Penanggung Jawab",
+          statusChip: "Koordinator",
+          statusType: "highlight"
+        },
+        {
+          id: "a2",
+          name: "Alya Zahra",
+          roleTag: "Asisten Lab",
+          identifier: "NIP. 199908242023012004",
+          metaPrimary: "Asisten Lab Jaringan Komputer",
+          metaSecondary: "Sesi Validasi Modul 03",
+          statusChip: "Penilai Aktif",
+          statusType: "normal"
+        }
+      ]
+    }
+  };
+
+  let currentRole = "praktikan";
+  let selectedId = "p1";
+
+  function setRole(role) {
+    if (currentRole === role) return;
+    currentRole = role;
+
+    const pill = document.getElementById("role-pill");
+    const tabPraktikan = document.getElementById("tab-praktikan");
+    const tabAsisten = document.getElementById("tab-asisten");
+    const noticeTitle = document.getElementById("notice-title");
+    const noticeDesc = document.getElementById("notice-desc");
+    const noticeBox = document.getElementById("role-notice");
+
+    if (role === "praktikan") {
+      pill.style.transform = "translateX(0%)";
+      tabPraktikan.className = "relative flex-1 flex items-center justify-center gap-2 py-2.5 z-10 transition-colors duration-200 text-text-primary font-label-lg text-label-lg";
+      tabAsisten.className = "relative flex-1 flex items-center justify-center gap-2 py-2.5 z-10 transition-colors duration-200 text-text-secondary font-label-lg text-label-lg";
+    } else {
+      pill.style.transform = "translateX(100%)";
+      tabAsisten.className = "relative flex-1 flex items-center justify-center gap-2 py-2.5 z-10 transition-colors duration-200 text-text-primary font-label-lg text-label-lg";
+      tabPraktikan.className = "relative flex-1 flex items-center justify-center gap-2 py-2.5 z-10 transition-colors duration-200 text-text-secondary font-label-lg text-label-lg";
+    }
+
+    // Notice micro-transition
+    noticeBox.style.opacity = "0.4";
+    noticeBox.style.transform = "translateY(2px)";
+    setTimeout(() => {
+      noticeTitle.textContent = profilesData[role].title;
+      noticeDesc.textContent = profilesData[role].desc;
+      noticeBox.style.opacity = "1";
+      noticeBox.style.transform = "translateY(0)";
+    }, 120);
+
+    // Default select first item of current role
+    selectedId = profilesData[role].items[0].id;
+    renderCards(true);
+  }
+
+  function selectProfile(id) {
+    selectedId = id;
+    renderCards(false);
+  }
+
+  function renderCards(animateContainer) {
+    const listContainer = document.getElementById("identity-list");
+    const profiles = profilesData[currentRole].items;
+
+    if (animateContainer) {
+      listContainer.style.opacity = "0";
+      listContainer.style.transform = "translateY(4px)";
+    }
+
+    setTimeout(() => {
+      listContainer.innerHTML = profiles.map((p) => {
+        const isSelected = p.id === selectedId;
+        const activeContainerBg = isSelected ? "bg-surface-card shadow-sm" : "bg-surface-container-low";
+        const radioInner = isSelected 
+          ? '<span class="w-2.5 h-2.5 rounded-full bg-text-primary scale-100 transition-transform duration-200 ease-out"></span>'
+          : '';
+        const activeIndicator = isSelected
+          ? '<span class="material-symbols-outlined text-[18px] text-text-primary">check</span>'
+          : '<span class="text-[11px] font-label-md text-text-secondary">PILIH</span>';
+
+        return `
+          <div onclick="selectProfile('${p.id}')" class="cursor-pointer group flex flex-col p-4 rounded-xl transition-all duration-200 ${activeContainerBg} active:scale-[0.99]">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <div class="w-5 h-5 rounded-full bg-surface-muted flex items-center justify-center transition-all duration-200">
+                  ${radioInner}
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-headline-md font-headline-md text-text-primary leading-tight">${p.name}</span>
+                  <span class="text-body-sm font-body-sm text-text-secondary">${p.identifier}</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-muted text-text-primary">
+                ${activeIndicator}
+              </div>
+            </div>
+
+            <div class="mt-3 pt-3 flex flex-col gap-1 bg-surface-muted/60 p-2.5 rounded-lg">
+              <div class="flex items-center justify-between">
+                <span class="text-label-md font-label-md text-text-primary">${p.roleTag}</span>
+                <span class="text-body-sm font-body-sm text-text-secondary">${p.statusChip}</span>
+              </div>
+              <p class="text-body-sm font-body-sm text-text-secondary truncate">${p.metaPrimary}</p>
+              <p class="text-body-sm font-body-sm text-text-secondary truncate">${p.metaSecondary}</p>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      if (animateContainer) {
+        listContainer.style.opacity = "1";
+        listContainer.style.transform = "translateY(0)";
+      }
+    }, animateContainer ? 100 : 0);
+  }
+
+  function handleContinue() {
+    const btnSubmit = document.getElementById("btn-submit");
+    const btnContent = document.getElementById("btn-content");
+    const btnSpinner = document.getElementById("btn-spinner");
+    const toast = document.getElementById("toast");
+    const toastMsg = document.getElementById("toast-message");
+
+    const currentProfile = profilesData[currentRole].items.find(i => i.id === selectedId);
+
+    btnSubmit.disabled = true;
+    btnContent.classList.add("hidden");
+    btnSpinner.classList.remove("hidden");
+    btnSpinner.classList.add("flex");
+
+    setTimeout(() => {
+      btnContent.classList.remove("hidden");
+      btnSpinner.classList.remove("flex");
+      btnSpinner.classList.add("hidden");
+      btnSubmit.disabled = false;
+
+      toastMsg.textContent = `${currentProfile.name} (${currentProfile.roleTag}) aktif`;
+      toast.classList.remove("opacity-0", "translate-y-3", "pointer-events-none");
+      toast.classList.add("opacity-100", "translate-y-0");
+
+      setTimeout(() => {
+        toast.classList.add("opacity-0", "translate-y-3", "pointer-events-none");
+        toast.classList.remove("opacity-100", "translate-y-0");
+      }, 2600);
+    }, 700);
+  }
+
+  // Initial setup
+  renderCards(false);
+</script></main>
+</body></html>
