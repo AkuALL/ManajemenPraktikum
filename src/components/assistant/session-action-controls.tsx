@@ -120,7 +120,10 @@ export function AssistantSessionActionControls({
             </Text>
 
             <Pressable
-              onPress={requestOpenSession}
+              onPress={(e) => {
+                e?.stopPropagation?.();
+                requestOpenSession();
+              }}
               accessibilityRole="button"
               accessibilityLabel="Buka sesi praktikum"
               style={({ pressed }) => [
@@ -165,7 +168,10 @@ export function AssistantSessionActionControls({
             </Text>
 
             <Pressable
-              onPress={requestCloseSession}
+              onPress={(e) => {
+                e?.stopPropagation?.();
+                requestCloseSession();
+              }}
               accessibilityRole="button"
               accessibilityLabel="Tutup sesi praktikum"
               style={({ pressed }) => [

@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -48,19 +49,42 @@ export function ConfirmSessionModal({
       transparent
       visible={visible}
       animationType="fade"
-      onRequestClose={onCancel}
+      onRequestClose={() => {
+        // Hanya picu onRequestClose untuk tombol back perangkat (bukan saat web auto-trigger)
+        if (Platform.OS !== 'web' && !loading) {
+          onCancel();
+        }
+      }}
       statusBarTranslucent>
-      <Pressable
-        style={styles.backdrop}
-        onPress={loading ? undefined : onCancel}
-        accessibilityRole="button"
-        accessibilityLabel="Tutup dialog konfirmasi">
+      <View style={styles.modalOverlay}>
+        {/* Backdrop Pressable terpisah — hanya menutup jika area gelap di luar modal disentuh */}
         <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={(e) => {
+            e?.stopPropagation?.();
+            if (!loading) {
+              onCancel();
+            }
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Tutup dialog konfirmasi">
+          <View style={styles.backdropBackground} />
+        </Pressable>
+
+        {/* Modal Card Container — Event sentuhan/klik dihentikan agar tidak tembus ke backdrop */}
+        <View
           style={[
             styles.card,
             isDark ? styles.cardDark : styles.cardLight,
           ]}
-          onPress={(e) => e.stopPropagation()}>
+          onStartShouldSetResponder={() => true}
+          onResponderTerminationRequest={() => false}
+          onTouchEnd={(e) => e?.stopPropagation?.()}
+          {...({
+            onClick: (e: any) => e?.stopPropagation?.(),
+            onMouseDown: (e: any) => e?.stopPropagation?.(),
+            onMouseUp: (e: any) => e?.stopPropagation?.(),
+          } as any)}>
           {/* Header & Icon */}
           <View style={styles.headerRow}>
             <View
@@ -178,7 +202,12 @@ export function ConfirmSessionModal({
           <View style={styles.actionRow}>
             <Pressable
               disabled={loading}
-              onPress={onCancel}
+              onPress={(e) => {
+                e?.stopPropagation?.();
+                if (!loading) {
+                  onCancel();
+                }
+              }}
               accessibilityRole="button"
               accessibilityLabel="Batal konfirmasi"
               style={({ pressed }) => [
@@ -198,7 +227,12 @@ export function ConfirmSessionModal({
 
             <Pressable
               disabled={loading}
-              onPress={onConfirm}
+              onPress={(e) => {
+                e?.stopPropagation?.();
+                if (!loading) {
+                  onConfirm();
+                }
+              }}
               accessibilityRole="button"
               accessibilityLabel={confirmButtonLabel}
               style={({ pressed }) => [
@@ -238,19 +272,22 @@ export function ConfirmSessionModal({
               )}
             </Pressable>
           </View>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
+  modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+  },
+  backdropBackground: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
   },
   card: {
     width: '100%',
