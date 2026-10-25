@@ -1,12 +1,17 @@
-import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { ScheduleList, useSchedule } from '@/features/schedule';
+import { AssistantSessionActionControls } from '@/components/assistant';
+import { StudentAttendanceForm } from '@/features/attendance';
+import { useIdentity } from '@/features/identity';
+import { ScheduleList, SessionDetailBottomSheet, useSchedule } from '@/features/schedule';
 
 export default function ScheduleScreen() {
-  const router = useRouter();
-  const { sessions } = useSchedule();
+  const { activeIdentity } = useIdentity();
+  const { getSessionById, sessions, updateSessionStatus } = useSchedule();
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const selectedSession = selectedSessionId ? getSessionById(selectedSessionId) ?? null : null;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -19,11 +24,24 @@ export default function ScheduleScreen() {
         </View>
         <ScheduleList
           sessions={sessions}
-          onSelectSession={(session) =>
-            router.push({ pathname: '/schedule/[sessionId]', params: { sessionId: session.id } })
-          }
+          onSelectSession={(session) => setSelectedSessionId(session.id)}
         />
       </ScrollView>
+
+      <SessionDetailBottomSheet
+        onClose={() => setSelectedSessionId(null)}
+        session={selectedSession}
+        visible={selectedSession !== null}>
+        {selectedSession && activeIdentity?.role === 'assistant' ? (
+          <AssistantSessionActionControls
+            role="assistant"
+            session={selectedSession}
+            onStatusChange={updateSessionStatus}
+          />
+        ) : selectedSession ? (
+          <StudentAttendanceForm session={selectedSession} />
+        ) : null}
+      </SessionDetailBottomSheet>
     </SafeAreaView>
   );
 }

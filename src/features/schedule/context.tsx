@@ -72,7 +72,7 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
     attendanceRef.current = nextAttendance;
     setAttendance(nextAttendance);
     return { ok: true, record } as const;
-  }, [activeIdentity, attendance, sessions]);
+  }, [activeIdentity, sessions]);
 
   const value = useMemo(
     () => ({ sessions, attendance, getSessionById, getAttendanceForStudent, updateSessionStatus, recordAttendance }),
