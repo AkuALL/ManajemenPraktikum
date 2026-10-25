@@ -3,6 +3,7 @@ import { useColorScheme, SafeAreaView, StyleSheet, View } from 'react-native';
 
 import { IdentityProvider, IdentitySelectionModal, IdentityBar, useIdentity } from '@/features/identity';
 import { RoleTabBar } from '@/features/navigation';
+import { AttendanceProvider } from '@/features/attendance';
 import { ScheduleProvider } from '@/features/schedule';
 import { Colors } from '@/constants/theme';
 
@@ -15,7 +16,9 @@ export default function RootLayout() {
     <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
       <IdentityProvider>
         <ScheduleProvider>
-          <RoleAwareApp backgroundColor={colors.background} />
+          <AttendanceProvider>
+            <RoleAwareApp backgroundColor={colors.background} />
+          </AttendanceProvider>
         </ScheduleProvider>
       </IdentityProvider>
     </ThemeProvider>
