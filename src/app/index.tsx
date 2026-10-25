@@ -1,165 +1,92 @@
-import React, { useState } from 'react';
-import * as Device from 'expo-device';
-import { Link } from 'expo-router';
-import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-
-import { AnimatedIcon } from '@/components/animated-icon';
+import { useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AssistantSessionActionControls } from '@/components/assistant';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { Colors, MaxContentWidth } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useIdentity } from '@/features/identity';
 import { LabSession } from '@/types';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+const INITIAL_SESSION: LabSession = {
+  id: 'ses-01', practicumName: 'Basis Data', courseClass: 'Kelas B',
+  location: 'Lab Komputer 2', date: '27 Okt 2026', startsAt: '13.00', endsAt: '15.00', status: 'upcoming',
+};
+
+export default function HomeScreen() {
+  const [session, setSession] = useState(INITIAL_SESSION);
+  const { activeIdentity } = useIdentity();
+  const isDark = useColorScheme() === 'dark';
+  const colors = isDark ? Colors.dark : Colors.light;
+  const isAssistant = activeIdentity?.role === 'assistant';
+
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
+    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.content}>
+      <View style={styles.heading}>
+        <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>{isAssistant ? 'RUANG ASISTEN' : 'RUANG PRAKTIKAN'}</Text>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>Jadwal praktikum</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          {isAssistant ? 'Kelola sesi dan lihat rekap kegiatan.' : 'Lihat jadwal dan catatan kehadiran Anda.'}
+        </Text>
+      </View>
+
+      <View style={[styles.session, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.sessionTop}>
+          <View>
+            <Text style={[styles.course, { color: colors.textSecondary }]}>{session.courseClass}</Text>
+            <Text style={[styles.sessionTitle, { color: colors.textPrimary }]}>{session.practicumName}</Text>
+          </View>
+          <Text style={[styles.status, { color: colors.textPrimary, backgroundColor: colors.surfaceMuted }]}>
+            {session.status === 'upcoming' ? 'Belum dibuka' : session.status === 'open' ? 'Berlangsung' : 'Selesai'}
+          </Text>
+        </View>
+        <View style={[styles.rule, { backgroundColor: colors.border }]} />
+        <View style={styles.details}>
+          <Detail label="Tanggal" value={session.date ?? '—'} color={colors.textPrimary} muted={colors.textSecondary} />
+          <Detail label="Waktu" value={`${session.startsAt}–${session.endsAt}`} color={colors.textPrimary} muted={colors.textSecondary} />
+          <Detail label="Lokasi" value={session.location} color={colors.textPrimary} muted={colors.textSecondary} />
+        </View>
+        {isAssistant ? (
+          <AssistantSessionActionControls role="assistant" session={session} onStatusChange={(_, status) => setSession((current) => ({ ...current, status }))} />
+        ) : (
+          <View style={[styles.notice, { backgroundColor: colors.surfaceMuted }]}>
+            <Text style={[styles.noticeTitle, { color: colors.textPrimary }]}>
+              {session.status === 'open' ? 'Presensi tersedia' : 'Informasi sesi'}
+            </Text>
+            <Text style={[styles.noticeText, { color: colors.textSecondary }]}>
+              {session.status === 'open' ? 'Sesi sedang berlangsung. Catat kehadiran melalui menu Kehadiran saya.' : 'Presensi dapat dilakukan saat sesi dibuka oleh asisten.'}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.accessSection}>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Akses {isAssistant ? 'asisten' : 'praktikan'}</Text>
+        <AccessRow title={isAssistant ? 'Kelola sesi' : 'Jadwal praktikum'} description={isAssistant ? 'Buka atau tutup sesi sesuai waktu kegiatan.' : 'Periksa kelas, waktu, dan lokasi praktikum.'} color={colors.textPrimary} muted={colors.textSecondary} border={colors.border} />
+        <AccessRow title={isAssistant ? 'Rekap kehadiran' : 'Kehadiran saya'} description={isAssistant ? 'Tinjau catatan kehadiran peserta.' : 'Lihat riwayat kehadiran Anda.'} color={colors.textPrimary} muted={colors.textSecondary} border={colors.border} />
+      </View>
+      <Text style={[styles.disclaimer, { color: colors.textSecondary }]}>Data tersimpan sementara pada perangkat ini.</Text>
+    </ScrollView>
   );
 }
 
-export default function HomeScreen() {
-  const [session, setSession] = useState<LabSession>({
-    id: 'ses-live-01',
-    practicumName: 'Basis Data',
-    courseClass: 'Kelas B',
-    location: 'Lab Komputer 2',
-    startsAt: '13.00',
-    endsAt: '15.00',
-    status: 'upcoming',
-  });
+function Detail({ label, value, color, muted }: { label: string; value: string; color: string; muted: string }) {
+  return <View style={styles.detail}><Text style={[styles.detailLabel, { color: muted }]}>{label}</Text><Text style={[styles.detailValue, { color }]}>{value}</Text></View>;
+}
 
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView
-          style={{ width: '100%' }}
-          contentContainerStyle={{ alignItems: 'center', gap: Spacing.three, paddingBottom: BottomTabInset + Spacing.four }}
-          showsVerticalScrollIndicator={false}>
-          <ThemedView style={styles.heroSection}>
-            <AnimatedIcon />
-            <ThemedText type="title" style={styles.title}>
-              Manajemen Praktikum
-            </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
-              Sprint 1 · Domain Kaka (Merdeka Dewa Zuliyanto)
-            </ThemedText>
-          </ThemedView>
-
-          {/* Interactive Live Assistant Action Component on Home */}
-          <ThemedView type="backgroundElement" style={styles.liveCardContainer}>
-            <ThemedText type="smallBold" style={{ marginBottom: 4 }}>
-              ⚡ Live Test: Kontrol Sesi Asisten
-            </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" style={{ marginBottom: 8 }}>
-              Status Sesi: {session.status.toUpperCase()} ({session.practicumName})
-            </ThemedText>
-            <AssistantSessionActionControls
-              role="assistant"
-              session={session}
-              onStatusChange={(_, newStatus) => {
-                setSession((prev) => ({ ...prev, status: newStatus }));
-              }}
-              hideWhenStudent={false}
-            />
-          </ThemedView>
-
-          {/* Akses Cepat ke Layar Demo Lengkap */}
-          <Link href="/assistant-actions-demo" asChild>
-            <Pressable style={styles.featureButton}>
-              <ThemedView type="backgroundElement" style={styles.featureCard}>
-                <ThemedText type="smallBold">
-                  📱 Buka Layar Demo Lengkap (/assistant-actions-demo) ›
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Simulasi 3 Sesi Kanonis, Switch Peran Praktikan & Guard
-                </ThemedText>
-              </ThemedView>
-            </Pressable>
-          </Link>
-
-          <ThemedView type="backgroundElement" style={styles.stepContainer}>
-            <HintRow
-              title="Fitur Kaka"
-              hint={<ThemedText type="code">src/components/assistant/</ThemedText>}
-            />
-            <HintRow
-              title="Tab Navigasi"
-              hint={<ThemedText type="code">Aksi Asisten</ThemedText>}
-            />
-            <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          </ThemedView>
-
-          {Platform.OS === 'web' && <WebBadge />}
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
-  );
+function AccessRow({ title, description, color, muted, border }: { title: string; description: string; color: string; muted: string; border: string }) {
+  return <View style={[styles.accessRow, { borderBottomColor: border }]}><Text style={[styles.accessTitle, { color }]}>{title}</Text><Text style={[styles.accessDescription, { color: muted }]}>{description}</Text></View>;
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-  },
-  featureButton: {
-    alignSelf: 'stretch',
-  },
-  featureCard: {
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: '#D2D2D2',
-  },
-  liveCardContainer: {
-    alignSelf: 'stretch',
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
-    borderWidth: 1,
-    borderColor: '#D2D2D2',
-  },
+  content: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', padding: 24, paddingBottom: 40, gap: 24 },
+  heading: { gap: 8, paddingTop: 12 }, eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1.2 },
+  title: { fontSize: 30, lineHeight: 36, fontWeight: '700', letterSpacing: -0.5 }, subtitle: { fontSize: 15, lineHeight: 22 },
+  session: { borderWidth: 1, padding: 18, borderRadius: 12 }, sessionTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
+  course: { fontSize: 13, fontWeight: '600' }, sessionTitle: { fontSize: 21, fontWeight: '700', marginTop: 4 },
+  status: { overflow: 'hidden', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, fontWeight: '600' },
+  rule: { height: 1, marginVertical: 16 }, details: { flexDirection: 'row', flexWrap: 'wrap', gap: 18 }, detail: { minWidth: '28%', flexGrow: 1, gap: 4 },
+  detailLabel: { fontSize: 12 }, detailValue: { fontSize: 14, fontWeight: '600' },
+  notice: { marginTop: 20, padding: 14, borderRadius: 8, gap: 4 }, noticeTitle: { fontSize: 14, fontWeight: '700' }, noticeText: { fontSize: 13, lineHeight: 19 },
+  accessSection: { gap: 0 }, sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 4 },
+  accessRow: { paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, gap: 4 }, accessTitle: { fontSize: 15, fontWeight: '600' }, accessDescription: { fontSize: 13, lineHeight: 19 },
+  disclaimer: { fontSize: 12, lineHeight: 18 },
 });

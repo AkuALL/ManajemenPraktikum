@@ -15,7 +15,7 @@ export function RoleTabBar() {
   const isDark = scheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
 
-  // Jika belum memilih identitas atau berada di layar detail sesi, jangan tampilkan bottom tab
+  // Tab mengikuti peran identitas aktif.
   if (!activeIdentity || pathname?.includes('/detail') || pathname?.includes('/session')) {
     return null;
   }
