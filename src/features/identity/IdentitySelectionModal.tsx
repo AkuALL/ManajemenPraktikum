@@ -117,10 +117,10 @@ export function IdentitySelectionModal() {
             {/* Title & Subtitle */}
             <View style={styles.titleSection}>
               <Text style={[styles.heading, { color: colors.textPrimary }]}>
-                Siapa yang menggunakan demo?
+                Pilih peran Anda
               </Text>
               <Text style={[styles.subheading, { color: colors.textSecondary }]}>
-                Pilih peran, lalu identitas.
+                Pilih peran dan identitas untuk melanjutkan.
               </Text>
             </View>
 
