@@ -4,32 +4,41 @@ import { LabSession } from '@/types';
 
 import { getStatusPresentation } from './status';
 
-export function SessionDetail({ session }: { session: LabSession }) {
+type SessionDetailProps = {
+  session: LabSession;
+  showHeader?: boolean;
+};
+
+export function SessionDetail({ session, showHeader = true }: SessionDetailProps) {
   const status = getStatusPresentation(session.status);
 
   return (
     <View style={styles.card}>
-      <View style={styles.header}>
-        <View style={styles.titleGroup}>
-          <Text style={styles.eyebrow}>DETAIL SESI</Text>
-          <Text style={styles.title}>{session.practicumName}</Text>
-          <Text style={styles.className}>{session.courseClass ?? 'Kelas praktikum'}</Text>
-        </View>
-        <View
-          style={[
-            styles.statusBadge,
-            {
-              backgroundColor: status.backgroundColor,
-              borderColor: status.borderColor,
-            },
-          ]}>
-          <Text style={[styles.statusText, { color: status.textColor }]}>
-            {status.icon} {status.label}
-          </Text>
-        </View>
-      </View>
+      {showHeader && (
+        <>
+          <View style={styles.header}>
+            <View style={styles.titleGroup}>
+              <Text style={styles.eyebrow}>DETAIL SESI</Text>
+              <Text style={styles.title}>{session.practicumName}</Text>
+              <Text style={styles.className}>{session.courseClass ?? 'Kelas praktikum'}</Text>
+            </View>
+            <View
+              style={[
+                styles.statusBadge,
+                {
+                  backgroundColor: status.backgroundColor,
+                  borderColor: status.borderColor,
+                },
+              ]}>
+              <Text style={[styles.statusText, { color: status.textColor }]}>
+                {status.icon} {status.label}
+              </Text>
+            </View>
+          </View>
 
-      <View style={styles.divider} />
+          <View style={styles.divider} />
+        </>
+      )}
       <DetailRow label="Tanggal" value={session.date ?? 'Belum ditentukan'} />
       <DetailRow label="Waktu" value={`${session.startsAt}–${session.endsAt}`} />
       <DetailRow label="Lokasi" value={session.location} />
