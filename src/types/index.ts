@@ -4,8 +4,6 @@
  * Referensi: Jobdesc Programmer Sprint 1 Bagian 3
  */
 
-import type { UserRole } from './session';
-
 export * from './session';
 
 export interface UserIdentity {
