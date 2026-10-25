@@ -6,15 +6,15 @@ import {
   Pressable,
   useColorScheme,
 } from 'react-native';
-import { LabSession, SessionStatus, UserRole } from '@/types';
+import { LabSession, UserRole } from '@/types';
 import { ConfirmSessionModal } from './confirm-session-modal';
 import { AssistantActionFeedback } from './assistant-action-feedback';
-import { useSessionActions } from '@/hooks/use-session-actions';
+import { useSessionActions, StatusChangeCallback } from '@/hooks/use-session-actions';
 
 export interface AssistantSessionActionControlsProps {
   role: UserRole;
   session: LabSession;
-  onStatusChange?: (sessionId: string, newStatus: SessionStatus) => void;
+  onStatusChange?: StatusChangeCallback;
   hideWhenStudent?: boolean;
 }
 

@@ -41,6 +41,8 @@ export function AssistantActionFeedback({
   }
 
   const isSuccess = feedback.type === 'success';
+  const isError = feedback.type === 'error';
+  const feedbackIcon = isSuccess ? '✓' : isError ? '✕' : 'ℹ';
 
   return (
     <View
@@ -52,7 +54,13 @@ export function AssistantActionFeedback({
       accessibilityLiveRegion="polite">
       <View style={styles.contentRow}>
         <View style={styles.iconCircle}>
-          <View style={[styles.indicator, isSuccess ? styles.successIndicator : styles.infoIndicator]} accessibilityElementsHidden />
+          <Text
+            style={[
+              styles.iconText,
+              isDark ? styles.textPrimaryDark : styles.textPrimaryLight,
+            ]}>
+            {feedbackIcon}
+          </Text>
         </View>
         <View style={styles.textColumn}>
           <Text
@@ -126,6 +134,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#EEEEEE',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  iconText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   indicator: { width: 8, height: 8, borderRadius: 4 },
   successIndicator: { backgroundColor: '#171717' },
