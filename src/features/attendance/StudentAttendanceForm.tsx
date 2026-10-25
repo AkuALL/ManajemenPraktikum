@@ -12,12 +12,11 @@ import {
 import { LabSession, SessionStatus } from '@/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useAttendance } from './context';
+import { useIdentity } from '@/features/identity';
+import { useSchedule } from '@/features/schedule';
 
 export interface StudentAttendanceFormProps {
   session: LabSession;
-  studentId: string;
-  studentName: string;
 }
 
 type FeedbackState =
@@ -38,19 +37,22 @@ function statusLabel(status: SessionStatus): string {
 
 export function StudentAttendanceForm({
   session,
-  studentId,
-  studentName,
 }: StudentAttendanceFormProps) {
   const isDark = useColorScheme() === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
 
-  const { recordAttendance, getRecord } = useAttendance();
+  const { activeIdentity } = useIdentity();
+  const { recordAttendance, getAttendanceForStudent } = useSchedule();
 
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
 
-  const existingRecord = getRecord(studentId, session.id);
+  const existingRecord = activeIdentity
+    ? getAttendanceForStudent(activeIdentity.userId).find(
+        (record) => record.sessionId === session.id
+      )
+    : undefined;
   const isOpen = session.status === 'open';
 
   // Sudah tercatat → tampilkan status berhasil tanpa tombol
@@ -69,7 +71,12 @@ export function StudentAttendanceForm({
               Presensi tercatat
             </Text>
             <Text style={[styles.cardBody, { color: colors.textSecondary }]}>
-              Kehadiran Anda pada sesi ini telah tercatat pukul {existingRecord.attendedAt}.
+              Kehadiran Anda pada sesi ini telah tercatat pukul{' '}
+              {new Date(existingRecord.attendedAt).toLocaleTimeString('id-ID', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+              })}.
             </Text>
           </View>
         </View>
@@ -106,29 +113,39 @@ export function StudentAttendanceForm({
   // Sesi open dan belum presensi → tombol konfirmasi (JE-03)
   const handleConfirm = () => {
     setSubmitting(true);
-    const result = recordAttendance({
-      sessionId: session.id,
-      studentId,
-      studentName,
-      sessionName: session.practicumName,
-      sessionClass: session.courseClass,
-    });
+    const result = recordAttendance(session.id);
 
     setSubmitting(false);
     setConfirmVisible(false);
 
-    if (result === 'recorded') {
-      const now = new Date();
-      const time = now.toLocaleTimeString('id-ID', {
+    if (result.ok) {
+      const time = new Date(result.record.attendedAt).toLocaleTimeString('id-ID', {
         hour: '2-digit',
         minute: '2-digit',
         hour12: false,
       });
       setFeedback({ type: 'success', time });
-    } else {
+    } else if (result.reason === 'duplicate') {
       // Duplikat — ini edge case jika race condition
-      const rec = getRecord(studentId, session.id);
-      setFeedback({ type: 'duplicate', time: rec?.attendedAt ?? '-' });
+      const record = getAttendanceForStudent(activeIdentity?.userId ?? '').find(
+        (item) => item.sessionId === session.id
+      );
+      const time = record
+        ? new Date(record.attendedAt).toLocaleTimeString('id-ID', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+          })
+        : '-';
+      setFeedback({ type: 'duplicate', time });
+    } else {
+      setFeedback({
+        type: 'ineligible',
+        reason:
+          result.reason === 'status'
+            ? 'Presensi hanya tersedia saat sesi berlangsung.'
+            : 'Presensi tidak dapat dicatat.',
+      });
     }
   };
 
@@ -145,12 +162,18 @@ export function StudentAttendanceForm({
           ]}
         >
           <Text style={[styles.feedbackTitle, { color: colors.textPrimary }]}>
-            {feedback.type === 'success' ? '✓ Presensi berhasil dicatat' : 'ℹ Presensi sudah tercatat'}
+            {feedback.type === 'success'
+              ? '✓ Presensi berhasil dicatat'
+              : feedback.type === 'duplicate'
+                ? 'ℹ Presensi sudah tercatat'
+                : 'Presensi tidak dapat dicatat'}
           </Text>
           <Text style={[styles.feedbackBody, { color: colors.textSecondary }]}>
             {feedback.type === 'success'
               ? `Kehadiran Anda dicatat pukul ${feedback.time}.`
-              : `Kehadiran Anda pada sesi ini sudah tercatat pukul ${feedback.type === 'duplicate' ? feedback.time : ''}.`}
+              : feedback.type === 'duplicate'
+                ? `Kehadiran Anda pada sesi ini sudah tercatat pukul ${feedback.time}.`
+                : feedback.reason}
           </Text>
           <Pressable
             onPress={() => setFeedback(null)}
@@ -224,7 +247,9 @@ export function StudentAttendanceForm({
             </Text>
             <Text style={[styles.modalBody, { color: colors.textSecondary }]}>
               Anda akan mencatat kehadiran sebagai{' '}
-              <Text style={{ fontWeight: '700', color: colors.textPrimary }}>{studentName}</Text>{' '}
+              <Text style={{ fontWeight: '700', color: colors.textPrimary }}>
+                {activeIdentity?.displayName}
+              </Text>{' '}
               pada sesi{' '}
               <Text style={{ fontWeight: '700', color: colors.textPrimary }}>
                 {session.practicumName}
@@ -369,7 +394,11 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.52)',
   },
   modalCard: {

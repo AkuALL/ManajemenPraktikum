@@ -17,12 +17,12 @@ import {
 import { Colors, MaxContentWidth } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useIdentity } from '@/features/identity';
-import { useAttendance } from '@/features/attendance';
-import type { LocalAttendanceRecord } from '@/features/attendance';
+import { useSchedule } from '@/features/schedule';
+import type { AttendanceRecord } from '@/types';
 
 export default function AttendanceScreen() {
   const { activeIdentity } = useIdentity();
-  const { getRecordsByStudent } = useAttendance();
+  const { attendance, sessions } = useSchedule();
   const isDark = useColorScheme() === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
   const [sortAsc, setSortAsc] = useState(false); // false = terbaru dulu
@@ -41,7 +41,16 @@ export default function AttendanceScreen() {
     );
   }
 
-  const allRecords = getRecordsByStudent(activeIdentity.userId);
+  const allRecords = attendance
+    .filter((record) => record.studentId === activeIdentity.userId)
+    .map((record) => {
+      const session = sessions.find((item) => item.id === record.sessionId);
+      return {
+        ...record,
+        sessionName: session?.practicumName ?? record.sessionId,
+        sessionClass: session?.courseClass,
+      };
+    });
   const sorted = useMemo(() => {
     const copy = [...allRecords];
     return sortAsc ? copy.reverse() : copy;
@@ -200,7 +209,7 @@ function AttendanceCard({
   record,
   colors,
 }: {
-  record: LocalAttendanceRecord;
+  record: AttendanceRecord & { sessionName: string; sessionClass?: string };
   colors: ReturnType<typeof getColors>;
 }) {
   return (

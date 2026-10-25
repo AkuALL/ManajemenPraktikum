@@ -9,45 +9,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { LabSession, SessionStatus, UserRole } from '@/types';
+import { SessionStatus } from '@/types';
 import { AssistantSessionActionControls } from '@/components/assistant';
-
-// Data dummy sesi kanonis sesuai dokumen SRS & Desain Mockup
-const INITIAL_SESSIONS: LabSession[] = [
-  {
-    id: 'ses-01',
-    practicumName: 'Basis Data',
-    courseClass: 'Kelas B',
-    location: 'Lab Komputer 2',
-    date: '27 Okt 2026',
-    startsAt: '13.00',
-    endsAt: '15.00',
-    status: 'upcoming',
-    assistantName: 'Bayu Pratama, S.Kom.',
-  },
-  {
-    id: 'ses-02',
-    practicumName: 'Dasar Pemrograman',
-    courseClass: 'Kelas A',
-    location: 'Lab RPL 1',
-    date: '28 Okt 2026',
-    startsAt: '08.00',
-    endsAt: '10.00',
-    status: 'open',
-    assistantName: 'Bayu Pratama, S.Kom.',
-  },
-  {
-    id: 'ses-03',
-    practicumName: 'Jaringan Komputer',
-    courseClass: 'Kelas A',
-    location: 'Lab Jaringan',
-    date: '26 Okt 2026',
-    startsAt: '09.00',
-    endsAt: '11.00',
-    status: 'closed',
-    assistantName: 'Bayu Pratama, S.Kom.',
-  },
-];
+import { useIdentity } from '@/features/identity';
+import { useSchedule } from '@/features/schedule';
 
 const STATUS_LABELS: Record<SessionStatus, { icon: string; label: string }> = {
   upcoming: { icon: '◷', label: 'Belum dibuka' },
@@ -59,39 +24,12 @@ export default function AssistantActionsDemoScreen() {
   const router = useRouter();
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
-
-  const [currentRole, setCurrentRole] = useState<UserRole>('assistant');
-  const [sessions, setSessions] = useState<LabSession[]>(INITIAL_SESSIONS);
-  const [selectedSessionId, setSelectedSessionId] = useState<string>('ses-01');
+  const { activeIdentity, openIdentitySelector } = useIdentity();
+  const { sessions, updateSessionStatus } = useSchedule();
+  const [selectedSessionId, setSelectedSessionId] = useState('session-basis-data-01');
 
   const currentSession =
     sessions.find((s) => s.id === selectedSessionId) || sessions[0];
-
-  /**
-   * Callback transisi status kanonis (KA-02).
-   * Mengembalikan true jika transisi valid, false jika ditolak.
-   */
-  const handleStatusChange = (
-    sessionId: string,
-    newStatus: SessionStatus,
-  ): boolean => {
-    const target = sessions.find((s) => s.id === sessionId);
-    if (!target) return false;
-
-    // Guard: hanya transisi upcoming→open atau open→closed yang sah
-    if (newStatus === 'open' && target.status !== 'upcoming') return false;
-    if (newStatus === 'closed' && target.status !== 'open') return false;
-
-    setSessions((prev) =>
-      prev.map((s) => (s.id === sessionId ? { ...s, status: newStatus } : s)),
-    );
-    return true;
-  };
-
-  const handleResetSessions = () => {
-    setSessions(INITIAL_SESSIONS);
-  };
-
   const statusInfo = STATUS_LABELS[currentSession.status];
 
   return (
@@ -126,13 +64,13 @@ export default function AssistantActionsDemoScreen() {
           ]}>
           Detail sesi
         </Text>
-        <Pressable onPress={handleResetSessions} hitSlop={8}>
+        <Pressable onPress={openIdentitySelector} hitSlop={8} accessibilityRole="button">
           <Text
             style={[
               styles.headerActionText,
               isDark ? styles.textSecDark : styles.textSecLight,
             ]}>
-            Reset
+            Ganti identitas
           </Text>
         </Pressable>
       </View>
@@ -140,40 +78,11 @@ export default function AssistantActionsDemoScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        {/* Peran Toggle — compact row */}
+        {/* Identitas aktif berasal dari pemilih global */}
         <View style={styles.roleRow}>
-          {(['assistant', 'student'] as UserRole[]).map((r) => {
-            const active = currentRole === r;
-            return (
-              <Pressable
-                key={r}
-                onPress={() => setCurrentRole(r)}
-                style={[
-                  styles.roleChip,
-                  active
-                    ? isDark
-                      ? styles.roleChipActiveDark
-                      : styles.roleChipActiveLight
-                    : isDark
-                      ? styles.roleChipInactiveDark
-                      : styles.roleChipInactiveLight,
-                ]}>
-                <Text
-                  style={[
-                    styles.roleChipText,
-                    active
-                      ? isDark
-                        ? styles.roleChipTextActiveDark
-                        : styles.roleChipTextActiveLight
-                      : isDark
-                        ? styles.textSecDark
-                        : styles.textSecLight,
-                  ]}>
-                  {r === 'assistant' ? 'Asisten' : 'Praktikan'}
-                </Text>
-              </Pressable>
-            );
-          })}
+          <Text style={[styles.roleChipText, isDark ? styles.textSecDark : styles.textSecLight]}>
+            Peran aktif: {activeIdentity?.role === 'assistant' ? 'Asisten' : 'Praktikan'}
+          </Text>
         </View>
 
         {/* Sesi selector — horizontal pills */}
@@ -300,9 +209,9 @@ export default function AssistantActionsDemoScreen() {
 
         {/* Komponen utama Kaka: Kontrol aksi asisten */}
         <AssistantSessionActionControls
-          role={currentRole}
+          role={activeIdentity?.role ?? 'student'}
           session={currentSession}
-          onStatusChange={handleStatusChange}
+          onStatusChange={updateSessionStatus}
           hideWhenStudent={false}
         />
       </ScrollView>

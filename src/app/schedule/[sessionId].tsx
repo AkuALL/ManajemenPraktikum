@@ -4,7 +4,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AssistantSessionActionControls } from '@/components/assistant';
 import { useIdentity } from '@/features/identity';
-import { SessionDetail, StudentAttendanceAction, useSchedule } from '@/features/schedule';
+import { SessionDetail, useSchedule } from '@/features/schedule';
+import { StudentAttendanceForm } from '@/features/attendance';
 
 export default function SessionDetailScreen() {
   const router = useRouter();
@@ -34,7 +35,7 @@ export default function SessionDetailScreen() {
                 onStatusChange={updateSessionStatus}
               />
             ) : (
-              <StudentAttendanceAction session={session} />
+              <StudentAttendanceForm session={session} />
             )}
           </>
         ) : (
