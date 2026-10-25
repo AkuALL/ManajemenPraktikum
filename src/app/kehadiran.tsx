@@ -20,12 +20,35 @@ import { useIdentity } from '@/features/identity';
 import { useSchedule } from '@/features/schedule';
 import type { AttendanceRecord } from '@/types';
 
+type ThemeColors = (typeof Colors)[keyof typeof Colors];
+
 export default function AttendanceScreen() {
   const { activeIdentity } = useIdentity();
   const { attendance, sessions } = useSchedule();
   const isDark = useColorScheme() === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
   const [sortAsc, setSortAsc] = useState(false); // false = terbaru dulu
+  const studentId = activeIdentity?.role === 'student' ? activeIdentity.userId : null;
+
+  const allRecords = useMemo(() => {
+    if (!studentId) return [];
+
+    return attendance
+      .filter((record) => record.studentId === studentId)
+      .map((record) => {
+        const session = sessions.find((item) => item.id === record.sessionId);
+        return {
+          ...record,
+          sessionName: session?.practicumName ?? record.sessionId,
+          sessionClass: session?.courseClass,
+        };
+      });
+  }, [attendance, sessions, studentId]);
+
+  const sorted = useMemo(() => {
+    const copy = [...allRecords];
+    return sortAsc ? copy.reverse() : copy;
+  }, [allRecords, sortAsc]);
 
   // Guard: hanya Praktikan
   if (activeIdentity?.role !== 'student') {
@@ -40,21 +63,6 @@ export default function AttendanceScreen() {
       </View>
     );
   }
-
-  const allRecords = attendance
-    .filter((record) => record.studentId === activeIdentity.userId)
-    .map((record) => {
-      const session = sessions.find((item) => item.id === record.sessionId);
-      return {
-        ...record,
-        sessionName: session?.practicumName ?? record.sessionId,
-        sessionClass: session?.courseClass,
-      };
-    });
-  const sorted = useMemo(() => {
-    const copy = [...allRecords];
-    return sortAsc ? copy.reverse() : copy;
-  }, [allRecords, sortAsc]);
 
   const totalSessions = allRecords.length;
   const attendedCount = allRecords.length; // semua record = hadir
@@ -210,7 +218,7 @@ function AttendanceCard({
   colors,
 }: {
   record: AttendanceRecord & { sessionName: string; sessionClass?: string };
-  colors: ReturnType<typeof getColors>;
+  colors: ThemeColors;
 }) {
   return (
     <View
@@ -269,7 +277,7 @@ function AttendanceCard({
   );
 }
 
-function EmptyState({ colors }: { colors: ReturnType<typeof getColors> }) {
+function EmptyState({ colors }: { colors: ThemeColors }) {
   return (
     <View
       style={[
@@ -285,11 +293,6 @@ function EmptyState({ colors }: { colors: ReturnType<typeof getColors> }) {
       </Text>
     </View>
   );
-}
-
-/* ── Helper type ─────────────────────────────────── */
-function getColors(isDark: boolean) {
-  return isDark ? Colors.dark : Colors.light;
 }
 
 /* ── Styles ─────────────────────────────────────── */
