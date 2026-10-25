@@ -138,7 +138,7 @@ export function AssistantSessionActionControls({
                   styles.primaryButtonText,
                   isDark ? styles.primaryButtonTextDark : styles.primaryButtonTextLight,
                 ]}>
-                ▶ Buka sesi
+                Buka sesi
               </Text>
             </Pressable>
           </View>
@@ -186,7 +186,7 @@ export function AssistantSessionActionControls({
                   styles.secondaryButtonText,
                   isDark ? styles.textPrimaryDark : styles.textPrimaryLight,
                 ]}>
-                ■ Tutup sesi
+                Tutup sesi
               </Text>
             </Pressable>
           </View>
@@ -200,7 +200,7 @@ export function AssistantSessionActionControls({
                 styles.closedTitle,
                 isDark ? styles.textPrimaryDark : styles.textPrimaryLight,
               ]}>
-              ✓ Sesi Telah Selesai
+              Sesi telah selesai
             </Text>
             <Text
               style={[

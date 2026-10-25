@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "example",
+    "name": "Manajemen Praktikum",
     "slug": "example",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -29,9 +29,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "backgroundColor": "#F7F7F7"
         }
       ]
     ],

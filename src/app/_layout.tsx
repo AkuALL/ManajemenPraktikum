@@ -1,18 +1,61 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { DarkTheme, DefaultTheme, ThemeProvider, Stack } from 'expo-router';
+import { useColorScheme, SafeAreaView, StyleSheet, View } from 'react-native';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+import { IdentityProvider, IdentitySelectionModal, IdentityBar, useIdentity } from '@/features/identity';
+import { RoleTabBar } from '@/features/navigation';
+import { ScheduleProvider } from '@/features/schedule';
+import { Colors } from '@/constants/theme';
 
-SplashScreen.preventAutoHideAsync();
-
-export default function TabLayout() {
+export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const colors = isDark ? Colors.dark : Colors.light;
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
+    <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
+      <IdentityProvider>
+        <ScheduleProvider>
+          <RoleAwareApp backgroundColor={colors.background} />
+        </ScheduleProvider>
+      </IdentityProvider>
     </ThemeProvider>
   );
 }
+
+function RoleAwareApp({ backgroundColor }: { backgroundColor: string }) {
+  const { activeIdentity } = useIdentity();
+  const isAssistant = activeIdentity?.role === 'assistant';
+  const isStudent = activeIdentity?.role === 'student';
+  const hasIdentity = activeIdentity !== null;
+
+  return (
+    <SafeAreaView style={[styles.safeArea, { backgroundColor }]}>
+      <IdentityBar />
+      <View style={styles.content}>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Protected guard={hasIdentity} redirectTo="/">
+            <Stack.Screen name="schedule" />
+          </Stack.Protected>
+          <Stack.Protected guard={isAssistant} redirectTo="/">
+            <Stack.Screen name="rekap" />
+          </Stack.Protected>
+          <Stack.Protected guard={isStudent} redirectTo="/">
+            <Stack.Screen name="kehadiran" />
+          </Stack.Protected>
+        </Stack>
+      </View>
+      <RoleTabBar />
+      <IdentitySelectionModal />
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+  },
+});

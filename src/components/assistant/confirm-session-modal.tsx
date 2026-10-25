@@ -98,19 +98,7 @@ export function ConfirmSessionModal({
                     ? styles.iconBadgeCloseDark
                     : styles.iconBadgeCloseLight,
               ]}>
-              <Text
-                style={[
-                  styles.iconText,
-                  isOpenAction
-                    ? isDark
-                      ? styles.iconTextOpenDark
-                      : styles.iconTextOpenLight
-                    : isDark
-                      ? styles.iconTextCloseDark
-                      : styles.iconTextCloseLight,
-                ]}>
-                {isOpenAction ? '▶' : '■'}
-              </Text>
+              <View style={[styles.statusMark, isDark ? styles.statusMarkDark : styles.statusMarkLight]} accessibilityElementsHidden />
             </View>
             <View style={styles.titleContainer}>
               <Text
@@ -342,22 +330,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#414141',
   },
-  iconText: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  iconTextOpenLight: {
-    color: '#171717',
-  },
-  iconTextOpenDark: {
-    color: '#F5F5F5',
-  },
-  iconTextCloseLight: {
-    color: '#171717',
-  },
-  iconTextCloseDark: {
-    color: '#F5F5F5',
-  },
+  statusMark: { width: 10, height: 10, borderRadius: 5 },
+  statusMarkLight: { backgroundColor: '#171717' },
+  statusMarkDark: { backgroundColor: '#F5F5F5' },
   titleContainer: {
     flex: 1,
   },

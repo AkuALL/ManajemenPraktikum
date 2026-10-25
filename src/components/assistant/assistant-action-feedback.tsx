@@ -40,8 +40,9 @@ export function AssistantActionFeedback({
     return null;
   }
 
+  const isSuccess = feedback.type === 'success';
   const isError = feedback.type === 'error';
-  const feedbackIcon = feedback.type === 'success' ? '✓' : isError ? '✕' : 'ℹ';
+  const feedbackIcon = isSuccess ? '✓' : isError ? '✕' : 'ℹ';
 
   return (
     <View
@@ -53,7 +54,13 @@ export function AssistantActionFeedback({
       accessibilityLiveRegion="polite">
       <View style={styles.contentRow}>
         <View style={styles.iconCircle}>
-          <Text style={styles.iconText}>{feedbackIcon}</Text>
+          <Text
+            style={[
+              styles.iconText,
+              isDark ? styles.textPrimaryDark : styles.textPrimaryLight,
+            ]}>
+            {feedbackIcon}
+          </Text>
         </View>
         <View style={styles.textColumn}>
           <Text
@@ -86,7 +93,7 @@ export function AssistantActionFeedback({
               styles.dismissText,
               isDark ? styles.textSecondaryDark : styles.textSecondaryLight,
             ]}>
-            ✕
+            Tutup
           </Text>
         </Pressable>
       </View>
@@ -129,10 +136,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iconText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
-    color: '#171717',
   },
+  indicator: { width: 8, height: 8, borderRadius: 4 },
+  successIndicator: { backgroundColor: '#171717' },
+  infoIndicator: { backgroundColor: '#666666' },
   textColumn: {
     flex: 1,
   },
@@ -146,8 +155,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   dismissButton: {
-    width: 32,
-    height: 32,
+    minWidth: 44,
+    minHeight: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },

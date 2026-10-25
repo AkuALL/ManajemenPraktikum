@@ -1,6 +1,7 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * Token Tema Global Sistem Manajemen Praktikum - Sprint 1
+ * Dikelola oleh: Galang (Owner Tema Global)
+ * Referensi: design_baseline.md Bagian 2.2 (Monokrom Penuh)
  */
 
 import '@/global.css';
@@ -9,32 +10,51 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
+    // Monokrom Design Baseline Sprint 1
+    background: '#F7F7F7',
+    surface: '#FFFFFF',
+    surfaceMuted: '#EEEEEE',
+    textPrimary: '#171717',
+    textSecondary: '#555555',
+    border: '#D2D2D2',
+    actionPrimary: '#171717',
+    actionSecondary: '#FFFFFF',
+    disabledSurface: '#E5E5E5',
+    disabledText: '#555555',
+
+    // Kompatibilitas komponen dasar starter
+    text: '#171717',
+    backgroundElement: '#EEEEEE',
     backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
+    // Monokrom Design Baseline Sprint 1
+    background: '#111111',
+    surface: '#1C1C1C',
+    surfaceMuted: '#292929',
+    textPrimary: '#F5F5F5',
+    textSecondary: '#C2C2C2',
+    border: '#414141',
+    actionPrimary: '#F5F5F5',
+    actionSecondary: '#1C1C1C',
+    disabledSurface: '#303030',
+    disabledText: '#B5B5B5',
+
+    // Kompatibilitas komponen dasar starter
+    text: '#F5F5F5',
+    backgroundElement: '#292929',
     backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
   },
 } as const;
 
+export type ThemeColors = typeof Colors.light;
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
 export const Fonts = Platform.select({
   ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
     sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
     serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
     rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
     mono: 'ui-monospace',
   },
   default: {
