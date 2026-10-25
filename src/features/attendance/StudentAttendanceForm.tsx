@@ -1,12 +1,3 @@
-/**
- * StudentAttendanceForm — JE-02, JE-03
- * Owner: Jesica
- *
- * Komponen presensi Praktikan untuk satu sesi.
- * Props diterima dari screen detail sesi (Abhi) atau screen kehadiran.
- * Menangani eligibility (JE-02), pencatatan + feedback (JE-03),
- * dan anti-duplikasi.
- */
 
 import React, { useState } from 'react';
 import {

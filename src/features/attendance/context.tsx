@@ -1,9 +1,3 @@
-/**
- * Attendance Context — JE-01
- * Owner: Jesica
- * State presensi lokal Praktikan. Kunci unik: studentId + sessionId.
- * Tidak bergantung pada fixture rekap Abhi.
- */
 
 import React, {
   createContext,
