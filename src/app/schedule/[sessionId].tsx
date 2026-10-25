@@ -2,12 +2,15 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { SessionDetail, useSchedule } from '@/features/schedule';
+import { AssistantSessionActionControls } from '@/components/assistant';
+import { useIdentity } from '@/features/identity';
+import { SessionDetail, StudentAttendanceAction, useSchedule } from '@/features/schedule';
 
 export default function SessionDetailScreen() {
   const router = useRouter();
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
-  const { getSessionById } = useSchedule();
+  const { activeIdentity } = useIdentity();
+  const { getSessionById, updateSessionStatus } = useSchedule();
   const session = getSessionById(sessionId);
 
   return (
@@ -22,7 +25,18 @@ export default function SessionDetailScreen() {
         </Pressable>
 
         {session ? (
-          <SessionDetail session={session} />
+          <>
+            <SessionDetail session={session} />
+            {activeIdentity?.role === 'assistant' ? (
+              <AssistantSessionActionControls
+                role="assistant"
+                session={session}
+                onStatusChange={updateSessionStatus}
+              />
+            ) : (
+              <StudentAttendanceAction session={session} />
+            )}
+          </>
         ) : (
           <View style={styles.notFound}>
             <Text style={styles.notFoundTitle}>Sesi tidak ditemukan</Text>

@@ -25,11 +25,11 @@ export function RoleTabBar() {
   const tabs: RoleTabItem[] =
     role === 'assistant'
       ? [
-          { key: 'schedule', label: 'Jadwal', route: APP_ROUTES.HOME, role: 'assistant' },
+          { key: 'schedule', label: 'Jadwal', route: APP_ROUTES.SCHEDULE, role: 'assistant' },
           { key: 'rekap', label: 'Rekap', route: APP_ROUTES.ASSISTANT_REKAP, role: 'assistant' },
         ]
       : [
-          { key: 'schedule', label: 'Jadwal', route: APP_ROUTES.HOME, role: 'student' },
+          { key: 'schedule', label: 'Jadwal', route: APP_ROUTES.SCHEDULE, role: 'student' },
           {
             key: 'attendance',
             label: 'Kehadiran saya',
@@ -58,7 +58,7 @@ export function RoleTabBar() {
       {tabs.map((tab) => {
         const isScheduleTab = tab.key === 'schedule';
         const isCurrentRoute = isScheduleTab
-          ? pathname === '/' || pathname === '/index' || !pathname
+          ? pathname === APP_ROUTES.SCHEDULE
           : pathname === tab.route;
 
         return (
