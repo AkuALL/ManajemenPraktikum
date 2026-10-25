@@ -7,10 +7,46 @@ import {
 } from '@/types';
 import { ActionFeedbackMessage } from '@/components/assistant/assistant-action-feedback';
 
+/**
+ * Callback untuk perubahan status sesi.
+ * Return value menentukan apakah perubahan berhasil:
+ * - `void` / `undefined` / `true` → berhasil
+ * - `false` → ditolak
+ * - `{ success: false, message?: string }` → ditolak dengan pesan opsional
+ * - throw Error → gagal
+ */
+export type StatusChangeCallback = (
+  sessionId: string,
+  newStatus: SessionStatus,
+) =>
+  | void
+  | boolean
+  | { success: boolean; message?: string }
+  | Promise<void | boolean | { success: boolean; message?: string }>;
+
 export interface UseSessionActionsOptions {
   role: UserRole;
   session: LabSession;
-  onStatusChange?: (sessionId: string, newStatus: SessionStatus) => void;
+  onStatusChange?: StatusChangeCallback;
+}
+
+/** Cek apakah hasil callback mengindikasikan penolakan / kegagalan. */
+function isRejected(
+  result: void | boolean | { success: boolean; message?: string } | undefined,
+): result is false | { success: false; message?: string } {
+  if (result === false) return true;
+  if (result && typeof result === 'object' && result.success === false) return true;
+  return false;
+}
+
+/** Ambil pesan kustom dari hasil penolakan, jika ada. */
+function getRejectionMessage(
+  result: void | boolean | { success: boolean; message?: string } | undefined,
+): string | undefined {
+  if (result && typeof result === 'object' && 'message' in result) {
+    return result.message;
+  }
+  return undefined;
 }
 
 export function useSessionActions({
@@ -81,37 +117,63 @@ export function useSessionActions({
     setActiveAction(null);
   }, []);
 
-  // Confirm action in modal
-  const handleConfirmAction = useCallback(() => {
+  // Confirm action in modal — async untuk menangani callback yang mengembalikan Promise
+  const handleConfirmAction = useCallback(async () => {
     if (!activeAction) return;
 
     setIsProcessing(true);
 
-    // Format waktu lokal saat ini
     const now = new Date();
     const timeFormatted = `${String(now.getHours()).padStart(2, '0')}:${String(
-      now.getMinutes()
+      now.getMinutes(),
     ).padStart(2, '0')} WIB`;
 
-    if (activeAction === 'open') {
-      onStatusChange?.(session.id, 'open');
-      setFeedback({
-        type: 'success',
-        message: 'Sesi berhasil dibuka. Praktikan dapat mulai melakukan presensi.',
-        timestamp: timeFormatted,
-      });
-    } else if (activeAction === 'close') {
-      onStatusChange?.(session.id, 'closed');
-      setFeedback({
-        type: 'success',
-        message: 'Sesi praktikum telah ditutup. Presensi baru telah dinonaktifkan.',
-        timestamp: timeFormatted,
-      });
-    }
+    const newStatus: SessionStatus = activeAction === 'open' ? 'open' : 'closed';
 
-    setIsProcessing(false);
-    setModalVisible(false);
-    setActiveAction(null);
+    try {
+      // Eksekusi callback dan tangkap hasilnya
+      const result = await onStatusChange?.(session.id, newStatus);
+
+      // Periksa apakah callback menolak / gagal
+      if (isRejected(result)) {
+        const customMessage = getRejectionMessage(result);
+        setFeedback({
+          type: 'error',
+          message:
+            customMessage ||
+            (activeAction === 'open'
+              ? 'Gagal membuka sesi. Perubahan status ditolak.'
+              : 'Gagal menutup sesi. Perubahan status ditolak.'),
+          timestamp: timeFormatted,
+        });
+      } else {
+        // Callback berhasil (void, true, atau { success: true })
+        setFeedback({
+          type: 'success',
+          message:
+            activeAction === 'open'
+              ? 'Sesi berhasil dibuka. Praktikan dapat mulai melakukan presensi.'
+              : 'Sesi praktikum telah ditutup. Presensi baru telah dinonaktifkan.',
+          timestamp: timeFormatted,
+        });
+      }
+    } catch (error: unknown) {
+      // Callback melempar error — tampilkan pesan kegagalan
+      const errorMessage =
+        error instanceof Error ? error.message : 'Terjadi kesalahan tak terduga.';
+      setFeedback({
+        type: 'error',
+        message:
+          activeAction === 'open'
+            ? `Gagal membuka sesi: ${errorMessage}`
+            : `Gagal menutup sesi: ${errorMessage}`,
+        timestamp: timeFormatted,
+      });
+    } finally {
+      setIsProcessing(false);
+      setModalVisible(false);
+      setActiveAction(null);
+    }
   }, [activeAction, onStatusChange, session.id]);
 
   const dismissFeedback = useCallback(() => {

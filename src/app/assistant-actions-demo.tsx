@@ -49,298 +49,223 @@ const INITIAL_SESSIONS: LabSession[] = [
   },
 ];
 
+const STATUS_LABELS: Record<SessionStatus, { icon: string; label: string }> = {
+  upcoming: { icon: '◷', label: 'Belum dibuka' },
+  open: { icon: '●', label: 'Berlangsung' },
+  closed: { icon: '✓', label: 'Selesai' },
+};
+
 export default function AssistantActionsDemoScreen() {
   const router = useRouter();
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
 
-  // State peran (untuk memverifikasi guard role: Asisten vs Praktikan)
   const [currentRole, setCurrentRole] = useState<UserRole>('assistant');
-
-  // State daftar sesi lokal
   const [sessions, setSessions] = useState<LabSession[]>(INITIAL_SESSIONS);
   const [selectedSessionId, setSelectedSessionId] = useState<string>('ses-01');
 
   const currentSession =
     sessions.find((s) => s.id === selectedSessionId) || sessions[0];
 
-  // Callback transisi status kanonis (KA-02)
-  const handleStatusChange = (sessionId: string, newStatus: SessionStatus) => {
+  /**
+   * Callback transisi status kanonis (KA-02).
+   * Mengembalikan true jika transisi valid, false jika ditolak.
+   */
+  const handleStatusChange = (
+    sessionId: string,
+    newStatus: SessionStatus,
+  ): boolean => {
+    const target = sessions.find((s) => s.id === sessionId);
+    if (!target) return false;
+
+    // Guard: hanya transisi upcoming→open atau open→closed yang sah
+    if (newStatus === 'open' && target.status !== 'upcoming') return false;
+    if (newStatus === 'closed' && target.status !== 'open') return false;
+
     setSessions((prev) =>
-      prev.map((s) => (s.id === sessionId ? { ...s, status: newStatus } : s))
+      prev.map((s) => (s.id === sessionId ? { ...s, status: newStatus } : s)),
     );
+    return true;
   };
 
   const handleResetSessions = () => {
     setSessions(INITIAL_SESSIONS);
   };
 
-  const getStatusBadge = (status: SessionStatus) => {
-    switch (status) {
-      case 'upcoming':
-        return {
-          label: '◷ Belum dibuka',
-          bgLight: '#EEEEEE',
-          bgDark: '#292929',
-          borderLight: '#D2D2D2',
-          borderDark: '#414141',
-          textLight: '#555555',
-          textDark: '#C2C2C2',
-        };
-      case 'open':
-        return {
-          label: '● Berlangsung',
-          bgLight: '#E8F5E9',
-          bgDark: '#1B3822',
-          borderLight: '#A5D6A7',
-          borderDark: '#2E7D32',
-          textLight: '#1B5E20',
-          textDark: '#A5D6A7',
-        };
-      case 'closed':
-        return {
-          label: '✓ Selesai',
-          bgLight: '#E0E0E0',
-          bgDark: '#333333',
-          borderLight: '#BDBDBD',
-          borderDark: '#555555',
-          textLight: '#424242',
-          textDark: '#E0E0E0',
-        };
-    }
-  };
-
-  const badgeStyle = getStatusBadge(currentSession.status);
+  const statusInfo = STATUS_LABELS[currentSession.status];
 
   return (
     <SafeAreaView
       style={[
         styles.safeArea,
-        isDark ? styles.safeAreaDark : styles.safeAreaLight,
+        isDark ? styles.bgDark : styles.bgLight,
       ]}>
-      {/* Header Bar */}
+      {/* Header */}
       <View
         style={[
-          styles.headerBar,
-          isDark ? styles.headerBarDark : styles.headerBarLight,
+          styles.header,
+          isDark ? styles.headerDark : styles.headerLight,
         ]}>
         <Pressable
           onPress={() => router.back()}
-          style={styles.backButton}
+          hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Kembali">
           <Text
             style={[
-              styles.backButtonText,
-              isDark ? styles.textPrimaryDark : styles.textPrimaryLight,
+              styles.headerBackText,
+              isDark ? styles.textPrimDark : styles.textPrimLight,
             ]}>
-            ‹ Kembali
+            ‹ Jadwal
           </Text>
         </Pressable>
         <Text
           style={[
             styles.headerTitle,
-            isDark ? styles.textPrimaryDark : styles.textPrimaryLight,
+            isDark ? styles.textPrimDark : styles.textPrimLight,
           ]}>
-          Aksi Sesi Asisten
+          Detail sesi
         </Text>
-        <Pressable onPress={handleResetSessions} style={styles.resetButton}>
-          <Text style={styles.resetButtonText}>Reset</Text>
+        <Pressable onPress={handleResetSessions} hitSlop={8}>
+          <Text
+            style={[
+              styles.headerActionText,
+              isDark ? styles.textSecDark : styles.textSecLight,
+            ]}>
+            Reset
+          </Text>
         </Pressable>
       </View>
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        {/* Domain & Modul Badge */}
-        <View
-          style={[
-            styles.metaBanner,
-            isDark ? styles.metaBannerDark : styles.metaBannerLight,
-          ]}>
-          <Text
-            style={[
-              styles.metaTitle,
-              isDark ? styles.textPrimaryDark : styles.textPrimaryLight,
-            ]}>
-            Sprint 1 · Domain Kaka (Merdeka Dewa Zuliyanto)
-          </Text>
-          <Text
-            style={[
-              styles.metaSubtitle,
-              isDark ? styles.textSecondaryDark : styles.textSecondaryLight,
-            ]}>
-            FR-05 (Buka Sesi), FR-06 (Tutup Sesi), KA-01–KA-03 (Modal & Status Guard)
-          </Text>
-        </View>
-
-        {/* Switcher Peran untuk Pengujian Guard */}
-        <View style={styles.switchSection}>
-          <Text
-            style={[
-              styles.sectionLabel,
-              isDark ? styles.textSecondaryDark : styles.textSecondaryLight,
-            ]}>
-            SIMULASI PERAN PENGGUNA
-          </Text>
-          <View style={styles.roleToggleRow}>
-            <Pressable
-              onPress={() => setCurrentRole('assistant')}
-              style={[
-                styles.roleToggleBtn,
-                currentRole === 'assistant'
-                  ? isDark
-                    ? styles.roleToggleActiveDark
-                    : styles.roleToggleActiveLight
-                  : isDark
-                    ? styles.roleToggleInactiveDark
-                    : styles.roleToggleInactiveLight,
-              ]}>
-              <Text
+        {/* Peran Toggle — compact row */}
+        <View style={styles.roleRow}>
+          {(['assistant', 'student'] as UserRole[]).map((r) => {
+            const active = currentRole === r;
+            return (
+              <Pressable
+                key={r}
+                onPress={() => setCurrentRole(r)}
                 style={[
-                  styles.roleToggleText,
-                  currentRole === 'assistant'
+                  styles.roleChip,
+                  active
                     ? isDark
-                      ? styles.roleToggleTextActiveDark
-                      : styles.roleToggleTextActiveLight
+                      ? styles.roleChipActiveDark
+                      : styles.roleChipActiveLight
                     : isDark
-                      ? styles.textSecondaryDark
-                      : styles.textSecondaryLight,
+                      ? styles.roleChipInactiveDark
+                      : styles.roleChipInactiveLight,
                 ]}>
-                👨‍🏫 Asisten (Aktif Aksi)
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => setCurrentRole('student')}
-              style={[
-                styles.roleToggleBtn,
-                currentRole === 'student'
-                  ? isDark
-                    ? styles.roleToggleActiveDark
-                    : styles.roleToggleActiveLight
-                  : isDark
-                    ? styles.roleToggleInactiveDark
-                    : styles.roleToggleInactiveLight,
-              ]}>
-              <Text
-                style={[
-                  styles.roleToggleText,
-                  currentRole === 'student'
-                    ? isDark
-                      ? styles.roleToggleTextActiveDark
-                      : styles.roleToggleTextActiveLight
-                    : isDark
-                      ? styles.textSecondaryDark
-                      : styles.textSecondaryLight,
-                ]}>
-                🎓 Praktikan (Guard Nonaktif)
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Pemilih Sesi Demo */}
-        <View style={styles.switchSection}>
-          <Text
-            style={[
-              styles.sectionLabel,
-              isDark ? styles.textSecondaryDark : styles.textSecondaryLight,
-            ]}>
-            PILIH SESI PRAKTIKUM
-          </Text>
-          <View style={styles.sessionChipsRow}>
-            {sessions.map((s) => {
-              const isSelected = s.id === selectedSessionId;
-              return (
-                <Pressable
-                  key={s.id}
-                  onPress={() => setSelectedSessionId(s.id)}
+                <Text
                   style={[
-                    styles.sessionChip,
-                    isSelected
+                    styles.roleChipText,
+                    active
                       ? isDark
-                        ? styles.sessionChipActiveDark
-                        : styles.sessionChipActiveLight
+                        ? styles.roleChipTextActiveDark
+                        : styles.roleChipTextActiveLight
                       : isDark
-                        ? styles.sessionChipInactiveDark
-                        : styles.sessionChipInactiveLight,
+                        ? styles.textSecDark
+                        : styles.textSecLight,
                   ]}>
-                  <Text
-                    style={[
-                      styles.sessionChipText,
-                      isSelected
-                        ? isDark
-                          ? styles.sessionChipTextActiveDark
-                          : styles.sessionChipTextActiveLight
-                        : isDark
-                          ? styles.textSecondaryDark
-                          : styles.textSecondaryLight,
-                    ]}>
-                    {s.practicumName}
-                  </Text>
-                  <Text style={styles.sessionChipStatus}>
-                    {s.status === 'upcoming'
-                      ? '◷'
-                      : s.status === 'open'
-                        ? '●'
-                        : '✓'}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+                  {r === 'assistant' ? 'Asisten' : 'Praktikan'}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
 
-        {/* Kartu Detail Sesi (Mockup Baseline) */}
+        {/* Sesi selector — horizontal pills */}
+        <View style={styles.sessionPillRow}>
+          {sessions.map((s) => {
+            const isActive = s.id === selectedSessionId;
+            const si = STATUS_LABELS[s.status];
+            return (
+              <Pressable
+                key={s.id}
+                onPress={() => setSelectedSessionId(s.id)}
+                style={[
+                  styles.sessionPill,
+                  isActive
+                    ? isDark
+                      ? styles.sessionPillActiveDark
+                      : styles.sessionPillActiveLight
+                    : isDark
+                      ? styles.sessionPillInactiveDark
+                      : styles.sessionPillInactiveLight,
+                ]}>
+                <Text
+                  style={[
+                    styles.sessionPillName,
+                    isActive
+                      ? isDark
+                        ? styles.sessionPillTextActiveDark
+                        : styles.sessionPillTextActiveLight
+                      : isDark
+                        ? styles.textSecDark
+                        : styles.textSecLight,
+                  ]}>
+                  {s.practicumName}
+                </Text>
+                <Text
+                  style={[
+                    styles.sessionPillStatus,
+                    isActive
+                      ? isDark
+                        ? styles.sessionPillTextActiveDark
+                        : styles.sessionPillTextActiveLight
+                      : isDark
+                        ? styles.textSecDark
+                        : styles.textSecLight,
+                  ]}>
+                  {si.icon} {si.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Session Card — sesuai mockup detail sesi */}
         <View
           style={[
-            styles.sessionCard,
-            isDark ? styles.sessionCardDark : styles.sessionCardLight,
+            styles.card,
+            isDark ? styles.cardDark : styles.cardLight,
           ]}>
-          <View style={styles.sessionHeaderRow}>
-            <View>
+          {/* Card Header: nama & status */}
+          <View style={styles.cardHeaderRow}>
+            <View style={{ flex: 1 }}>
               <Text
                 style={[
-                  styles.courseLabel,
-                  isDark ? styles.textSecondaryDark : styles.textSecondaryLight,
+                  styles.cardLabel,
+                  isDark ? styles.textSecDark : styles.textSecLight,
                 ]}>
                 MATA KULIAH
               </Text>
               <Text
                 style={[
-                  styles.practicumTitle,
-                  isDark ? styles.textPrimaryDark : styles.textPrimaryLight,
+                  styles.cardTitle,
+                  isDark ? styles.textPrimDark : styles.textPrimLight,
                 ]}>
                 {currentSession.practicumName}
               </Text>
             </View>
-
-            {/* Status Badge */}
             <View
               style={[
                 styles.statusBadge,
-                {
-                  backgroundColor: isDark
-                    ? badgeStyle.bgDark
-                    : badgeStyle.bgLight,
-                  borderColor: isDark
-                    ? badgeStyle.borderDark
-                    : badgeStyle.borderLight,
-                },
+                isDark ? styles.statusBadgeDark : styles.statusBadgeLight,
               ]}>
               <Text
                 style={[
                   styles.statusBadgeText,
-                  {
-                    color: isDark ? badgeStyle.textDark : badgeStyle.textLight,
-                  },
+                  isDark ? styles.textSecDark : styles.textSecLight,
                 ]}>
-                {badgeStyle.label}
+                {statusInfo.icon} {statusInfo.label}
               </Text>
             </View>
           </View>
 
+          {/* Divider */}
           <View
             style={[
               styles.divider,
@@ -348,179 +273,103 @@ export default function AssistantActionsDemoScreen() {
             ]}
           />
 
-          {/* Grid Informasi Sesi */}
+          {/* Info Grid */}
           <View style={styles.infoGrid}>
-            <View style={styles.infoCol}>
-              <Text
-                style={[
-                  styles.infoLabel,
-                  isDark ? styles.textSecondaryDark : styles.textSecondaryLight,
-                ]}>
-                Kelas
-              </Text>
-              <Text
-                style={[
-                  styles.infoValue,
-                  isDark ? styles.textPrimaryDark : styles.textPrimaryLight,
-                ]}>
-                {currentSession.courseClass || 'Kelas A'}
-              </Text>
-            </View>
-
-            <View style={styles.infoCol}>
-              <Text
-                style={[
-                  styles.infoLabel,
-                  isDark ? styles.textSecondaryDark : styles.textSecondaryLight,
-                ]}>
-                Lokasi
-              </Text>
-              <Text
-                style={[
-                  styles.infoValue,
-                  isDark ? styles.textPrimaryDark : styles.textPrimaryLight,
-                ]}>
-                {currentSession.location}
-              </Text>
-            </View>
-
-            <View style={styles.infoCol}>
-              <Text
-                style={[
-                  styles.infoLabel,
-                  isDark ? styles.textSecondaryDark : styles.textSecondaryLight,
-                ]}>
-                Tanggal
-              </Text>
-              <Text
-                style={[
-                  styles.infoValue,
-                  isDark ? styles.textPrimaryDark : styles.textPrimaryLight,
-                ]}>
-                {currentSession.date || '27 Okt 2026'}
-              </Text>
-            </View>
-
-            <View style={styles.infoCol}>
-              <Text
-                style={[
-                  styles.infoLabel,
-                  isDark ? styles.textSecondaryDark : styles.textSecondaryLight,
-                ]}>
-                Waktu
-              </Text>
-              <Text
-                style={[
-                  styles.infoValue,
-                  isDark ? styles.textPrimaryDark : styles.textPrimaryLight,
-                ]}>
-                {currentSession.startsAt} – {currentSession.endsAt}
-              </Text>
-            </View>
+            <InfoField
+              label="Kelas"
+              value={currentSession.courseClass || '-'}
+              isDark={isDark}
+            />
+            <InfoField
+              label="Lokasi"
+              value={currentSession.location}
+              isDark={isDark}
+            />
+            <InfoField
+              label="Tanggal"
+              value={currentSession.date || '-'}
+              isDark={isDark}
+            />
+            <InfoField
+              label="Waktu"
+              value={`${currentSession.startsAt} – ${currentSession.endsAt}`}
+              isDark={isDark}
+            />
           </View>
         </View>
 
-        {/* KOMPONEN UTAMA KAKA: KONTROL AKSI ASISTEN */}
+        {/* Komponen utama Kaka: Kontrol aksi asisten */}
         <AssistantSessionActionControls
           role={currentRole}
           session={currentSession}
           onStatusChange={handleStatusChange}
           hideWhenStudent={false}
         />
-
-        {/* Catatan Panduan Pengujian */}
-        <View
-          style={[
-            styles.guideBox,
-            isDark ? styles.guideBoxDark : styles.guideBoxLight,
-          ]}>
-          <Text
-            style={[
-              styles.guideTitle,
-              isDark ? styles.textPrimaryDark : styles.textPrimaryLight,
-            ]}>
-            💡 Checklist Pengujian Fitur:
-          </Text>
-          <Text
-            style={[
-              styles.guideItem,
-              isDark ? styles.textSecondaryDark : styles.textSecondaryLight,
-            ]}>
-            1. Pada status <Text style={styles.boldText}>Belum dibuka</Text>, tombol <Text style={styles.boldText}>Buka sesi</Text> muncul.
-          </Text>
-          <Text
-            style={[
-              styles.guideItem,
-              isDark ? styles.textSecondaryDark : styles.textSecondaryLight,
-            ]}>
-            2. Menekan <Text style={styles.boldText}>Buka sesi</Text> memicu modal konfirmasi. Tekan Batal untuk menguji pembatalan tanpa mutasi status.
-          </Text>
-          <Text
-            style={[
-              styles.guideItem,
-              isDark ? styles.textSecondaryDark : styles.textSecondaryLight,
-            ]}>
-            3. Menyetujui konfirmasi akan mengubah status menjadi <Text style={styles.boldText}>Berlangsung</Text> dan memicu toast feedback.
-          </Text>
-          <Text
-            style={[
-              styles.guideItem,
-              isDark ? styles.textSecondaryDark : styles.textSecondaryLight,
-            ]}>
-            4. Pada status <Text style={styles.boldText}>Berlangsung</Text>, tombol <Text style={styles.boldText}>Tutup sesi</Text> muncul.
-          </Text>
-          <Text
-            style={[
-              styles.guideItem,
-              isDark ? styles.textSecondaryDark : styles.textSecondaryLight,
-            ]}>
-            5. Menutup sesi mengubah status menjadi <Text style={styles.boldText}>Selesai</Text> dan menonaktifkan seluruh tombol aksi.
-          </Text>
-          <Text
-            style={[
-              styles.guideItem,
-              isDark ? styles.textSecondaryDark : styles.textSecondaryLight,
-            ]}>
-            6. Ubah peran ke <Text style={styles.boldText}>Praktikan</Text> untuk memverifikasi proteksi hak akses (RBAC guard).
-          </Text>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+// Sub-component for info field
+function InfoField({
+  label,
+  value,
+  isDark,
+}: {
+  label: string;
+  value: string;
+  isDark: boolean;
+}) {
+  return (
+    <View style={styles.infoCol}>
+      <Text
+        style={[
+          styles.infoLabel,
+          isDark ? styles.textSecDark : styles.textSecLight,
+        ]}>
+        {label}
+      </Text>
+      <Text
+        style={[
+          styles.infoValue,
+          isDark ? styles.textPrimDark : styles.textPrimLight,
+        ]}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  // ── Layout ──
   safeArea: {
     flex: 1,
   },
-  safeAreaLight: {
+  bgLight: {
     backgroundColor: '#F7F7F7',
   },
-  safeAreaDark: {
+  bgDark: {
     backgroundColor: '#111111',
   },
-  headerBar: {
+
+  // ── Header ──
+  header: {
     height: 56,
-    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
   },
-  headerBarLight: {
+  headerLight: {
     backgroundColor: '#FFFFFF',
     borderBottomColor: '#D2D2D2',
   },
-  headerBarDark: {
+  headerDark: {
     backgroundColor: '#1C1C1C',
     borderBottomColor: '#414141',
   },
-  backButton: {
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingRight: 8,
-  },
-  backButtonText: {
+  headerBackText: {
     fontSize: 15,
     fontWeight: '600',
   },
@@ -528,94 +377,64 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-  resetButton: {
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingLeft: 8,
-  },
-  resetButtonText: {
+  headerActionText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#0284C7',
   },
+
+  // ── Content ──
   scrollContent: {
     padding: 16,
     gap: 16,
+    paddingBottom: 32,
   },
-  metaBanner: {
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-  },
-  metaBannerLight: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#D2D2D2',
-  },
-  metaBannerDark: {
-    backgroundColor: '#1C1C1C',
-    borderColor: '#414141',
-  },
-  metaTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  metaSubtitle: {
-    fontSize: 11,
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  switchSection: {
-    gap: 8,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-  },
-  roleToggleRow: {
+
+  // ── Role Toggle ──
+  roleRow: {
     flexDirection: 'row',
     gap: 10,
   },
-  roleToggleBtn: {
+  roleChip: {
     flex: 1,
     minHeight: 44,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    paddingHorizontal: 10,
   },
-  roleToggleActiveLight: {
+  roleChipActiveLight: {
     backgroundColor: '#171717',
     borderColor: '#171717',
   },
-  roleToggleActiveDark: {
+  roleChipActiveDark: {
     backgroundColor: '#F5F5F5',
     borderColor: '#F5F5F5',
   },
-  roleToggleInactiveLight: {
+  roleChipInactiveLight: {
     backgroundColor: '#FFFFFF',
     borderColor: '#D2D2D2',
   },
-  roleToggleInactiveDark: {
+  roleChipInactiveDark: {
     backgroundColor: '#1C1C1C',
     borderColor: '#414141',
   },
-  roleToggleText: {
-    fontSize: 12,
+  roleChipText: {
+    fontSize: 14,
     fontWeight: '700',
   },
-  roleToggleTextActiveLight: {
+  roleChipTextActiveLight: {
     color: '#FFFFFF',
   },
-  roleToggleTextActiveDark: {
+  roleChipTextActiveDark: {
     color: '#171717',
   },
-  sessionChipsRow: {
+
+  // ── Session Selector ──
+  sessionPillRow: {
     flexDirection: 'row',
     gap: 8,
   },
-  sessionChip: {
+  sessionPill: {
     flex: 1,
     minHeight: 44,
     borderRadius: 8,
@@ -625,62 +444,65 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sessionChipActiveLight: {
+  sessionPillActiveLight: {
     backgroundColor: '#171717',
     borderColor: '#171717',
   },
-  sessionChipActiveDark: {
+  sessionPillActiveDark: {
     backgroundColor: '#F5F5F5',
     borderColor: '#F5F5F5',
   },
-  sessionChipInactiveLight: {
+  sessionPillInactiveLight: {
     backgroundColor: '#FFFFFF',
     borderColor: '#D2D2D2',
   },
-  sessionChipInactiveDark: {
+  sessionPillInactiveDark: {
     backgroundColor: '#1C1C1C',
     borderColor: '#414141',
   },
-  sessionChipText: {
+  sessionPillName: {
     fontSize: 11,
     fontWeight: '600',
     textAlign: 'center',
   },
-  sessionChipTextActiveLight: {
-    color: '#FFFFFF',
-  },
-  sessionChipTextActiveDark: {
-    color: '#171717',
-  },
-  sessionChipStatus: {
+  sessionPillStatus: {
     fontSize: 10,
     marginTop: 2,
-    fontWeight: '700',
+    fontWeight: '500',
+    textAlign: 'center',
   },
-  sessionCard: {
+  sessionPillTextActiveLight: {
+    color: '#FFFFFF',
+  },
+  sessionPillTextActiveDark: {
+    color: '#171717',
+  },
+
+  // ── Session Card ──
+  card: {
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
   },
-  sessionCardLight: {
+  cardLight: {
     backgroundColor: '#FFFFFF',
     borderColor: '#D2D2D2',
   },
-  sessionCardDark: {
+  cardDark: {
     backgroundColor: '#1C1C1C',
     borderColor: '#414141',
   },
-  sessionHeaderRow: {
+  cardHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
-  courseLabel: {
+  cardLabel: {
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.6,
   },
-  practicumTitle: {
+  cardTitle: {
     fontSize: 20,
     fontWeight: '700',
     marginTop: 2,
@@ -690,6 +512,14 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 1,
+  },
+  statusBadgeLight: {
+    backgroundColor: '#EEEEEE',
+    borderColor: '#D2D2D2',
+  },
+  statusBadgeDark: {
+    backgroundColor: '#292929',
+    borderColor: '#414141',
   },
   statusBadgeText: {
     fontSize: 12,
@@ -714,49 +544,25 @@ const styles = StyleSheet.create({
     width: '46%',
   },
   infoLabel: {
-    fontSize: 12,
+    fontSize: 14,
   },
   infoValue: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     marginTop: 2,
   },
-  guideBox: {
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    gap: 6,
-  },
-  guideBoxLight: {
-    backgroundColor: '#F0F9FF',
-    borderColor: '#BAE6FD',
-  },
-  guideBoxDark: {
-    backgroundColor: '#082F49',
-    borderColor: '#0369A1',
-  },
-  guideTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  guideItem: {
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  boldText: {
-    fontWeight: '700',
-  },
-  textPrimaryLight: {
+
+  // ── Text tokens ──
+  textPrimLight: {
     color: '#171717',
   },
-  textPrimaryDark: {
+  textPrimDark: {
     color: '#F5F5F5',
   },
-  textSecondaryLight: {
+  textSecLight: {
     color: '#555555',
   },
-  textSecondaryDark: {
+  textSecDark: {
     color: '#C2C2C2',
   },
 });

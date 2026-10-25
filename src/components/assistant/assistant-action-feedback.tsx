@@ -40,7 +40,8 @@ export function AssistantActionFeedback({
     return null;
   }
 
-  const isSuccess = feedback.type === 'success';
+  const isError = feedback.type === 'error';
+  const feedbackIcon = feedback.type === 'success' ? '✓' : isError ? '✕' : 'ℹ';
 
   return (
     <View
@@ -52,7 +53,7 @@ export function AssistantActionFeedback({
       accessibilityLiveRegion="polite">
       <View style={styles.contentRow}>
         <View style={styles.iconCircle}>
-          <Text style={styles.iconText}>{isSuccess ? '✓' : 'ℹ'}</Text>
+          <Text style={styles.iconText}>{feedbackIcon}</Text>
         </View>
         <View style={styles.textColumn}>
           <Text
