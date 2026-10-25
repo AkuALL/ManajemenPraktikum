@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Modal,
   View,
@@ -7,9 +7,8 @@ import {
   ScrollView,
   StyleSheet,
   SafeAreaView,
-  Platform,
 } from 'react-native';
-import { UserRole } from '@/types';
+import { UserIdentity, UserRole } from '@/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useIdentity } from './context';
@@ -26,33 +25,56 @@ export function IdentitySelectionModal() {
     closeIdentitySelector,
   } = useIdentity();
 
+  const canCancel = activeIdentity !== null;
+
+  return (
+    <Modal
+      visible={isSelectingIdentity}
+      animationType="slide"
+      transparent={false}
+      onRequestClose={() => {
+        if (canCancel) {
+          closeIdentitySelector();
+        }
+      }}
+    >
+      <IdentitySelectionContent
+        key={`${activeIdentity?.role ?? 'new'}-${activeIdentity?.userId ?? 'identity'}-${isSelectingIdentity ? 'open' : 'closed'}`}
+        activeIdentity={activeIdentity}
+        closeIdentitySelector={closeIdentitySelector}
+        selectIdentity={selectIdentity}
+      />
+    </Modal>
+  );
+}
+
+type IdentitySelectionContentProps = {
+  activeIdentity: UserIdentity | null;
+  closeIdentitySelector: () => void;
+  selectIdentity: (identity: UserIdentity) => void;
+};
+
+function IdentitySelectionContent({
+  activeIdentity,
+  closeIdentitySelector,
+  selectIdentity,
+}: IdentitySelectionContentProps) {
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
-
-  // Local draft state saat form pemilihan dibuka
-  const [selectedRole, setSelectedRole] = useState<UserRole | null>(
-    activeIdentity?.role ?? null
-  );
-  const [selectedFixture, setSelectedFixture] = useState<IdentityFixtureItem | null>(null);
-
-  // Sinkronisasi state lokal saat modal dibuka atau activeIdentity berubah
-  useEffect(() => {
-    if (activeIdentity) {
-      setSelectedRole(activeIdentity.role);
-      const list = activeIdentity.role === 'assistant' ? ASSISTANT_FIXTURES : STUDENT_FIXTURES;
-      const found = list.find((item) => item.id === activeIdentity.userId) ?? null;
-      setSelectedFixture(found);
-    } else {
-      setSelectedRole(null);
-      setSelectedFixture(null);
-    }
-  }, [activeIdentity, isSelectingIdentity]);
+  const initialFixture = activeIdentity
+    ? (activeIdentity.role === 'assistant' ? ASSISTANT_FIXTURES : STUDENT_FIXTURES).find(
+        (item) => item.id === activeIdentity.userId
+      ) ?? null
+    : null;
+  const [selectedRole, setSelectedRole] = useState<UserRole | null>(activeIdentity?.role ?? null);
+  const [selectedFixture, setSelectedFixture] = useState<IdentityFixtureItem | null>(initialFixture);
+  const canCancel = activeIdentity !== null;
 
   const handleSelectRole = (role: UserRole) => {
     if (role !== selectedRole) {
       setSelectedRole(role);
-      setSelectedFixture(null); // Reset identitas jika peran diganti
+      setSelectedFixture(null);
     }
   };
 
@@ -72,23 +94,10 @@ export function IdentitySelectionModal() {
   };
 
   const isConfirmDisabled = !selectedRole || !selectedFixture;
-  const canCancel = activeIdentity !== null;
 
   return (
-    <Modal
-      visible={isSelectingIdentity}
-      animationType="slide"
-      transparent={false}
-      onRequestClose={() => {
-        if (canCancel) {
-          closeIdentitySelector();
-        }
-      }}
-    >
-      <SafeAreaView
-        style={[styles.safeArea, { backgroundColor: colors.background }]}
-      >
-        <View style={styles.container}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      <View style={styles.container}>
           {/* Top Bar / Header */}
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
             <Text style={[styles.brandText, { color: colors.textPrimary }]}>Praktikum</Text>
@@ -177,9 +186,8 @@ export function IdentitySelectionModal() {
               </Text>
             </View>
           </ScrollView>
-        </View>
-      </SafeAreaView>
-    </Modal>
+      </View>
+    </SafeAreaView>
   );
 }
 

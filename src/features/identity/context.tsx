@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useMemo, ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useState, useMemo, ReactNode } from 'react';
 import { UserIdentity } from '@/types';
 import { IdentityContextType } from './types';
 
@@ -13,26 +13,26 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     return activeIdentity === null || selectorOpen;
   }, [activeIdentity, selectorOpen]);
 
-  const selectIdentity = (identity: UserIdentity) => {
+  const selectIdentity = useCallback((identity: UserIdentity) => {
     setActiveIdentity(identity);
     setSelectorOpen(false);
-  };
+  }, []);
 
-  const clearIdentity = () => {
+  const clearIdentity = useCallback(() => {
     setActiveIdentity(null);
     setSelectorOpen(true);
-  };
+  }, []);
 
-  const openIdentitySelector = () => {
+  const openIdentitySelector = useCallback(() => {
     setSelectorOpen(true);
-  };
+  }, []);
 
-  const closeIdentitySelector = () => {
+  const closeIdentitySelector = useCallback(() => {
     // Hanya bisa ditutup jika sudah ada identitas aktif
     if (activeIdentity !== null) {
       setSelectorOpen(false);
     }
-  };
+  }, [activeIdentity]);
 
   const value = useMemo(
     () => ({
@@ -43,7 +43,14 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
       openIdentitySelector,
       closeIdentitySelector,
     }),
-    [activeIdentity, isSelectingIdentity]
+    [
+      activeIdentity,
+      clearIdentity,
+      closeIdentitySelector,
+      isSelectingIdentity,
+      openIdentitySelector,
+      selectIdentity,
+    ]
   );
 
   return <IdentityContext.Provider value={value}>{children}</IdentityContext.Provider>;
