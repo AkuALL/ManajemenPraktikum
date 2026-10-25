@@ -8,8 +8,8 @@ import type { UserRole } from './session';
 
 export * from './session';
 
-export type UserIdentity = {
-  role: UserRole;
+export interface UserIdentity {
+  role: import('./session').UserRole;
   userId: string;
   displayName: string;
   identifier?: string; // misal NIM / NIP / Kode Asisten
