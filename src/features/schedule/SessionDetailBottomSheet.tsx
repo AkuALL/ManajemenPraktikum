@@ -4,6 +4,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { LabSession } from '@/types';
 
 import { SessionDetail } from './SessionDetail';
+import { getStatusPresentation } from './status';
 
 type SessionDetailBottomSheetProps = {
   children?: ReactNode;
@@ -18,6 +19,8 @@ export function SessionDetailBottomSheet({
   session,
   visible,
 }: SessionDetailBottomSheetProps) {
+  const status = session ? getStatusPresentation(session.status) : null;
+
   return (
     <Modal
       animationType="slide"
@@ -35,19 +38,43 @@ export function SessionDetailBottomSheet({
         <View style={styles.sheet}>
           <View style={styles.handle} />
           <View style={styles.header}>
-            <Text style={styles.heading}>Detail sesi</Text>
+            <View style={styles.titleGroup}>
+              <Text numberOfLines={1} style={styles.heading}>
+                {session?.practicumName ?? 'Detail sesi'}
+              </Text>
+              {session && <Text style={styles.sessionCode}>Sesi praktikum · {session.id}</Text>}
+            </View>
             <Pressable
               accessibilityLabel="Tutup detail sesi"
               accessibilityRole="button"
               hitSlop={8}
               onPress={onClose}
               style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}>
-              <Text style={styles.closeButtonText}>Tutup</Text>
+              <Text style={styles.closeButtonText}>×</Text>
             </Pressable>
           </View>
 
+          {session && status && (
+            <View style={styles.chips}>
+              <View style={styles.classChip}>
+                <Text style={styles.classChipText}>▣ {session.courseClass ?? 'Kelas praktikum'}</Text>
+              </View>
+              <View
+                style={[
+                  styles.statusChip,
+                  { backgroundColor: status.backgroundColor, borderColor: status.borderColor },
+                ]}>
+                <Text style={[styles.statusChipText, { color: status.textColor }]}>
+                  {status.icon} {status.label}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          <View style={styles.divider} />
+
           <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-            {session && <SessionDetail session={session} />}
+            {session && <SessionDetail session={session} showHeader={false} />}
             {children}
           </ScrollView>
         </View>
@@ -58,7 +85,7 @@ export function SessionDetailBottomSheet({
 
 const styles = StyleSheet.create({
   overlay: {
-    backgroundColor: 'rgba(15, 23, 42, 0.44)',
+    backgroundColor: 'transparent',
     flex: 1,
     justifyContent: 'flex-end',
   },
@@ -70,44 +97,90 @@ const styles = StyleSheet.create({
     top: 0,
   },
   sheet: {
-    backgroundColor: '#F4F7FB',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
     maxHeight: '86%',
     overflow: 'hidden',
     paddingTop: 10,
   },
   handle: {
     alignSelf: 'center',
-    backgroundColor: '#94A3B8',
+    backgroundColor: '#D9E0E9',
     borderRadius: 99,
     height: 4,
     width: 42,
   },
   header: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingTop: 12,
+    paddingBottom: 6,
+  },
+  titleGroup: {
+    flex: 1,
+    gap: 3,
   },
   heading: {
-    color: '#172033',
-    fontSize: 18,
+    color: '#1E2942',
+    fontSize: 17,
     fontWeight: '800',
+  },
+  sessionCode: {
+    color: '#8A94A6',
+    fontSize: 12,
   },
   closeButton: {
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 44,
-    minWidth: 56,
+    minWidth: 44,
   },
   closeButtonText: {
-    color: '#0369A1',
-    fontSize: 14,
+    color: '#25324A',
+    fontSize: 28,
+    fontWeight: '400',
+    lineHeight: 30,
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 12,
+  },
+  classChip: {
+    backgroundColor: '#EEF1F5',
+    borderColor: '#D9E0E9',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  classChipText: {
+    color: '#536078',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statusChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  statusChipText: {
+    fontSize: 12,
     fontWeight: '700',
   },
+  divider: {
+    backgroundColor: '#E7EBF0',
+    height: 1,
+  },
   content: {
+    backgroundColor: '#F8FAFC',
     gap: 12,
     padding: 20,
     paddingBottom: 32,
