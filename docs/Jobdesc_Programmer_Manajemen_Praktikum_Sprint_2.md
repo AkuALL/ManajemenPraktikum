@@ -2,30 +2,57 @@
 
 ## 1 Tujuan Pembagian
 
-Sprint 2 menggunakan Abhi sebagai Project Manager dan empat programmer: AL, Galang, Jesica, serta Kaka. Pembagian ini memisahkan fondasi data, autentikasi, pengalaman Praktikan, dan pengalaman operasional Asisten agar pekerjaan dapat berjalan paralel tanpa membuat sumber data Firestore ganda.
+Sprint 2 memakai pembagian berbasis **fitur lengkap** atau vertical slice. Setiap programmer memiliki alur fitur dari UI, validasi, repository Firestore, listener real-time, state loading/error, sampai pengujian domainnya sendiri. Dengan demikian, tidak ada programmer yang perlu menunggu fitur programmer lain selesai untuk mulai mengerjakan fiturnya.
 
-| Anggota | Peran | Domain utama |
+Pembagian ini tidak berarti fitur akhir tidak akan diintegrasikan. Firebase project, kontrak data, dan route list disepakati lebih dahulu sebagai input bersama. Pada tahap implementasi, setiap programmer boleh memakai adapter/mock yang mengikuti kontrak tersebut; integrasi Firestore nyata dilakukan setelah modulnya siap.
+
+| Anggota | Peran | Domain mandiri |
 |---|---|---|
-| Abhi | Project Manager | Scope, kontrak, integrasi, acceptance, demo, dan pengendalian risiko; tidak mengambil ownership implementasi fitur. |
-| AL | Programmer Data dan Praktikum | Firebase project integration, Firestore repository, Security Rules, kelas, anggota, sesi, dan data jadwal. |
-| Galang | Programmer Auth dan Navigasi | Firebase Authentication, profil pengguna, role guard, session aplikasi, dan Expo Router shell. |
-| Jesica | Programmer Praktikan dan AI | Presensi Praktikan, riwayat pribadi, pengajuan izin, status klasifikasi AI, dan error state domain Praktikan. |
-| Kaka | Programmer Operasional Asisten | Buka/tutup sesi, rekap presensi, daftar/review izin, dan keputusan manual Asisten. |
+| Abhi | Project Manager | Scope, kontrak, akses Firebase, acceptance, integrasi akhir, dan demo; tidak memiliki fitur implementasi. |
+| AL | Programmer Autentikasi | Registrasi, login, logout, profil, peran, dan auth guard. |
+| Galang | Programmer Manajemen Praktikum | Kelas, anggota, jadwal, sesi, serta buka/tutup sesi. |
+| Jesica | Programmer Presensi | Presensi Praktikan, anti-duplikasi, riwayat pribadi, dan rekap Asisten. |
+| Kaka | Programmer Izin dan AI | Pengajuan izin, klasifikasi AI, daftar izin, serta keputusan Asisten. |
 
-Abhi tidak menulis fitur kode agar dapat menjaga acceptance dan menyelesaikan konflik dependency. Keempat programmer tetap bertanggung jawab atas unit/domain test, validasi, dan perbaikan bug pada domain masing-masing.
+## 2 Pembagian SRS atau Fitur
 
-## 2 Prinsip Kerja dan Kontrak Bersama
+Abhi - PM: menyusun backlog, memfasilitasi kontrak data, menyediakan akses Firebase project dan akun demo, melakukan integration review, serta menjalankan acceptance test. Abhi tidak mengambil ownership implementasi kode fitur.
 
-1. Firebase Authentication dan Firestore adalah satu-satunya sumber identitas dan data bisnis runtime. Tidak ada fixture lokal yang menjadi sumber kebenaran setelah integrasi.
-2. Semua write Firestore melewati repository/service typed milik AL atau kontrak service yang ia sepakati. Owner fitur tidak menulis ulang inisialisasi Firebase atau Security Rules sendiri.
-3. Route hanya berada di `src/app/`. Components, hooks, repositories, Firebase config, types, dan utilitas berada di luar `src/app/`.
-4. `users/{uid}` menjadi profil pelengkap akun Auth. Peran teknis hanya `student` atau `assistant`; UI menggunakan Praktikan dan Asisten.
-5. Timestamp operasi memakai `serverTimestamp`; tidak memakai `new Date()` perangkat sebagai waktu kebenaran presensi, sesi, maupun keputusan izin.
-6. Presensi dan izin memakai ID deterministik `{sessionId}_{studentId}`. Owner fitur harus menganggap error `already-exists` sebagai hasil idempoten/duplikat yang informatif, bukan menimpa dokumen.
-7. Nilai `EXPO_PUBLIC_*` bukan tempat menyimpan rahasia. API key AI diletakkan pada Cloud Function/proxy atau mekanisme server aman; Galang dan Jesica tidak boleh membundelnya ke client.
-8. Perubahan kontrak data, route root, Firebase config, `package.json`, Security Rules, dan types lintas domain membutuhkan persetujuan Abhi dan owner file sebelum merge.
+AL - FR-01: Pengguna dapat registrasi menggunakan Firebase Authentication.
 
-## 3 Kontrak Data Minimum
+AL - FR-02: Pengguna dapat login, pemulihan sesi, dan logout.
+
+AL - FR-03: Aplikasi memuat profil pengguna, menampilkan fitur sesuai peran Praktikan/Asisten, dan melindungi route yang tidak berwenang.
+
+Galang - FR-04: Asisten dapat CRUD kelas dan anggota praktikum.
+
+Galang - FR-05: Asisten dapat CRUD sesi praktikum.
+
+Galang - FR-06: Praktikan dapat melihat jadwal dan detail sesi kelas yang diikutinya.
+
+Galang - FR-07: Asisten dapat membuka sesi terjadwal dan menutup sesi yang sedang berlangsung.
+
+Jesica - FR-08: Praktikan dapat melakukan presensi satu kali pada sesi yang sedang dibuka.
+
+Jesica - FR-09: Praktikan dapat melihat riwayat presensi dan Asisten dapat melihat rekap kehadiran secara real-time.
+
+Kaka - FR-10: Praktikan dapat mengajukan izin untuk sesi tertentu dengan alasan yang valid.
+
+Kaka - FR-11: Sistem mengirim alasan izin ke API AI dan menampilkan hasil klasifikasi hanya sebagai informasi pendukung.
+
+Kaka - FR-12: Asisten dapat melihat pengajuan izin, lalu menerima atau menolak secara manual.
+
+### 2.1 Requirement Lintas Fitur
+
+| Kode | Pembagian tanpa saling menunggu |
+|---|---|
+| FR-13 Sinkronisasi real-time dan persistensi | Setiap owner memasang listener hanya pada koleksi domainnya: AL `users`, Galang `classes`/`members`/`sessions`, Jesica `attendance`, Kaka `leaveRequests`. |
+| FR-14 Validasi dan penanganan kesalahan | Setiap owner menangani input invalid, loading, empty state, gangguan koneksi, retry, dan error fitur miliknya. |
+| FR-15 Proteksi data | Rules dipecah sebagai fragment per koleksi: AL `users`, Galang `classes`/`members`/`sessions`, Jesica `attendance`, Kaka `leaveRequests`. Abhi menggabungkan dan meninjau skenario integration test tanpa mengambil alih implementasi domain. |
+
+## 3 Kontrak Awal yang Dibekukan Sebelum Coding
+
+Abhi memfasilitasi kesepakatan berikut sebelum pekerjaan paralel dimulai. Kontrak ini adalah batas integrasi, bukan dependency pekerjaan harian. Bila Firebase service belum aktif, programmer memakai mock dengan signature yang sama.
 
 ```ts
 type UserRole = 'assistant' | 'student';
@@ -33,41 +60,17 @@ type SessionStatus = 'scheduled' | 'open' | 'closed';
 type LeaveStatus = 'pending' | 'approved' | 'rejected';
 type AiStatus = 'pending' | 'success' | 'failed';
 
-type UserProfile = {
+type AuthUser = {
   uid: string;
-  displayName: string;
-  email: string;
   role: UserRole;
+  displayName: string;
   identifier: string;
-  createdAt: Timestamp;
 };
 
-type PracticumClass = {
-  id: string;
-  practicumName: string;
-  className: string;
-  lab: string;
-  assistantIds: string[];
-  createdBy: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-};
-
-type LabSession = {
+type SessionSummary = {
   id: string;
   classId: string;
-  title: string;
-  location: string;
-  startsAt: Timestamp;
-  endsAt: Timestamp;
   status: SessionStatus;
-  openedBy?: string;
-  openedAt?: Timestamp;
-  closedBy?: string;
-  closedAt?: Timestamp;
-  createdBy: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
 };
 
 type AttendanceRecord = {
@@ -75,8 +78,6 @@ type AttendanceRecord = {
   sessionId: string;
   classId: string;
   studentId: string;
-  studentName: string;
-  studentIdentifier: string;
   attendedAt: Timestamp;
 };
 
@@ -88,186 +89,140 @@ type LeaveRequest = {
   reason: string;
   status: LeaveStatus;
   aiStatus: AiStatus;
-  aiCategory?: string | null;
-  aiConfidence?: number | null;
-  aiClassifiedAt?: Timestamp | null;
-  reviewedBy?: string | null;
-  reviewedAt?: Timestamp | null;
-  reviewNote?: string | null;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
 };
 ```
 
-`Timestamp` adalah tipe dari Firebase Firestore. Null/optional harus dipetakan konsisten di repository agar UI tidak perlu memahami detail serialisasi Firestore.
+Aturan kontrak:
 
-## 4 Detail Jobdesc
+1. ID presensi dan izin selalu menggunakan `{sessionId}_{studentId}` agar satu Praktikan tidak dapat membuat catatan kedua pada sesi sama.
+2. Waktu aksi bisnis memakai `serverTimestamp`; waktu perangkat hanya untuk tampilan sementara.
+3. Nilai profile, session, attendance, dan leave request dibaca melalui interface/adapter. Feature module tidak boleh mengimpor state internal feature programmer lain.
+4. Jika field kontrak berubah, Abhi menyetujui perubahan dan seluruh owner diberi tahu sebelum merge.
+5. API key AI tidak boleh ditaruh di source code atau `EXPO_PUBLIC_*`; Kaka menggunakan Cloud Function/proxy aman atau endpoint yang tidak membutuhkan secret client.
+
+## 4 Detail Jobdesc Mandiri
 
 ### 4.1 Abhi Project Manager dan Integrasi
 
 **Task**
 
-- **AB-01 Scope dan backlog:** menurunkan SRS Sprint 2 menjadi backlog, prioritas, serta acceptance criteria per FR.
-- **AB-02 Kontrak lintas domain:** memfasilitasi kesepakatan skema, repository signature, route ownership, status, dan error contract sebelum coding integrasi.
-- **AB-03 Dependency dan risiko:** membuat urutan kerja, mencatat blocker Firebase/API AI, serta memastikan ada fallback demo AI gagal.
-- **AB-04 Integration review:** menelusuri route guard, role, listener, CRUD, presensi, izin, dan Security Rules bersama owner; melaporkan defect ke owner tanpa mengambil alih implementasi.
-- **AB-05 Acceptance dan demo:** menjalankan dua skenario demo SRS memakai dua akun, mencatat hasil aktual, dan menyetujui Definition of Done.
+- **AB-01 Scope dan acceptance:** mengubah SRS menjadi backlog/acceptance criterion per FR.
+- **AB-02 Contract kickoff:** menyepakati tipe minimum, status, ID deterministik, route list, dan error convention sebelum coding.
+- **AB-03 Environment readiness:** menyediakan akses Firebase project, akun demo Praktikan/Asisten, nilai konfigurasi yang aman, dan kontak API AI dari pengajar.
+- **AB-04 Integration review:** memeriksa hasil integrasi tanpa menulis ulang fitur domain; blocker dikembalikan kepada owner yang tepat.
+- **AB-05 Demo dan acceptance:** menjalankan dua skenario demo SRS, mencatat hasil aktual, dan memverifikasi lint/typecheck sebelum penutupan sprint.
 
-**Dependency:** AB-01 dan AB-02 dilakukan sebelum merge kontrak bersama. AB-03 sampai AB-05 berjalan sepanjang sprint.
+**Batas scope:** tidak mengimplementasikan Auth, kelas/sesi, presensi, izin, AI, maupun Security Rules domain.
 
-**Batas scope:** Abhi tidak menjadi owner Firebase config, UI, repository, atau screen. Perbaikan kode tetap dikembalikan kepada AL, Galang, Jesica, atau Kaka sesuai domain.
-
-### 4.2 AL Programmer Data dan Praktikum
+### 4.2 AL Programmer Autentikasi
 
 **Task**
 
-- **AL-01 Firebase bootstrap:** menambahkan dan mengonfigurasi Firebase client yang kompatibel dengan Expo, satu file inisialisasi, emulator/dev configuration bila dipakai, serta memastikan tidak ada secret AI pada client.
-- **AL-02 Shared types dan repository:** membuat types/repository Firestore untuk `users`, `classes`, membership, `sessions`, `attendance`, dan `leaveRequests`; menyediakan konverter, mapper timestamp, serta error contract yang dipakai owner lain.
-- **AL-03 Kelas dan anggota:** UI/service CRUD kelas dan membership Asisten, validasi form, konfirmasi penghapusan, dan listener daftar kelas yang dikelola.
-- **AL-04 Sesi dan jadwal:** CRUD sesi, validasi kelas/waktu/status awal `scheduled`, query jadwal per kelas, detail sesi read-only reusable, serta aturan hapus sebelum data turunan ada.
-- **AL-05 Security Rules dan indeks:** menulis `firestore.rules`, konfigurasi indeks yang dibutuhkan query, dan test Emulator untuk autentikasi, peran, membership, write lintas kelas, duplikasi presensi, dan perubahan izin ilegal.
-- **AL-06 Data integration QA:** menguji CRUD dari dua akun, listener cleanup, persistensi setelah restart, dan mapping data kosong/loading/error pada repository.
+- **AL-01 Registration:** form registrasi, validasi email/kata sandi/identitas, pembuatan akun Firebase Authentication, dan pembuatan profil `users/{uid}`.
+- **AL-02 Login/logout:** form login, pemetaan error Firebase Authentication, pemulihan sesi saat aplikasi dibuka, dan logout yang membersihkan state privat UI.
+- **AL-03 Profile dan role:** auth provider/hook, profil aktif, label identitas, peran `student`/`assistant`, dan fallback jika profil tidak ada atau tidak valid.
+- **AL-04 Auth guard:** guard untuk belum login, loading auth, route role Praktikan/Asisten, dan pengalihan aman dari route terlarang.
+- **AL-05 Auth domain QA:** menguji register, login gagal, restart aplikasi, logout, profil rusak, dan akses route manual yang ditolak.
 
-**Dependency:** AL-01/02 adalah fondasi Galang, Jesica, dan Kaka. AL-03/04 dapat dibuat paralel setelah kontrak disetujui. AL-05 ditinjau dengan setiap owner yang memiliki write.
+**Artefak mandiri:** feature/auth, adapter `AuthPort`, mock AuthPort, UI auth, serta fragment Rules `users`.
 
-**Batas scope:** AL menyediakan data/repository dan screen domain kelas/sesi, tetapi tidak mengimplementasikan login, aksi open/close, presensi UI, pengajuan izin UI, atau keputusan izin.
+**Tidak menunggu:** Galang, Jesica, dan Kaka cukup menerima `AuthUser` dari mock atau auth provider. AL tidak perlu menunggu class/session/attendance/leave request untuk menyelesaikan domainnya.
 
-### 4.3 Galang Programmer Auth dan Navigasi
-
-**Task**
-
-- **GA-01 Auth service:** registrasi, login, logout, pemulihan session Firebase Authentication, pemetaan error auth, dan loading state.
-- **GA-02 Profile bootstrap:** membuat profil `users/{uid}` setelah registrasi, memuat profil aktif, menangani profil hilang/role tidak valid, serta menampilkan identitas aktif.
-- **GA-03 Role guard:** membuat provider/hook auth dan guard untuk kondisi belum login, loading, dan role Praktikan/Asisten; route manual ke area terlarang harus dialihkan aman.
-- **GA-04 Expo Router shell:** memiliki `src/app/_layout.tsx`, layout auth, layout area Praktikan, layout area Asisten, dan navigasi menuju screen yang diekspor owner domain.
-- **GA-05 Auth QA:** menguji registrasi, login gagal, logout, restart aplikasi, profil gagal dibuat, dan isolasi tampilan data privat setelah logout.
-
-**Dependency:** GA-01 membutuhkan Firebase bootstrap AL. GA-02 membutuhkan kontrak `UserProfile`; GA-04 membutuhkan route screen signature dari AL, Jesica, dan Kaka.
-
-**Batas scope:** Galang tidak membuat Security Rules, CRUD kelas/sesi, presensi, AI, ataupun keputusan izin. Ia boleh memasang guard yang mengonsumsi kontrak yang disediakan AL.
-
-### 4.4 Jesica Programmer Praktikan dan AI
+### 4.3 Galang Programmer Manajemen Praktikum
 
 **Task**
 
-- **JE-01 Jadwal Praktikan:** menyajikan kelas/session yang menjadi milik Praktikan menggunakan query/repository AL; tampilkan loading, empty, offline/error, dan detail sesi.
-- **JE-02 Presensi:** tombol dan proses presensi hanya untuk Praktikan anggota pada sesi `open`; pakai ID `{sessionId}_{uid}`, waktu server, loading state, serta feedback sukses/duplikat/ditolak.
-- **JE-03 Riwayat presensi:** listener riwayat presensi UID aktif, pemetaan sesi yang relevan, empty state, dan refresh setelah koneksi kembali.
-- **JE-04 Form pengajuan izin:** validasi alasan, pembuatan dokumen `pending`, pencegahan submit ganda, status pengajuan, dan tampilan keputusan sendiri.
-- **JE-05 AI classification client:** memanggil endpoint proxy/Cloud Function yang aman setelah pengajuan tersimpan, melakukan timeout/validasi respons, dan memperbarui field AI melalui contract yang diizinkan. Tidak memasukkan token atau membuat keputusan izin otomatis.
-- **JE-06 Praktikan QA:** menguji siswa nonanggota, sesi belum dibuka/tertutup, presensi duplikat, alasan invalid, AI sukses, AI timeout/error, dan listener keputusan izin.
+- **GA-01 Kelas dan anggota:** CRUD kelas, daftar anggota, validasi form, konfirmasi hapus, dan data kelas kosong/error.
+- **GA-02 Sesi:** CRUD sesi dengan judul, kelas, waktu, lokasi, status awal `scheduled`, serta validasi waktu mulai/selesai.
+- **GA-03 Jadwal dan detail:** daftar jadwal, detail sesi, filter/query kelas terkait, listener perubahan sesi, serta empty/loading/error state.
+- **GA-04 Lifecycle sesi:** kontrol buka dari `scheduled` dan tutup dari `open`, dengan konfirmasi, UID Asisten, serta waktu server.
+- **GA-05 Praktikum domain QA:** menguji CRUD, transisi sesi valid/tidak valid, listener status, nonanggota, dan persistensi data sesi.
 
-**Dependency:** JE-01 sampai JE-04 membutuhkan auth context Galang dan repository/query AL. JE-05 membutuhkan endpoint dan kontrak respons dari pengajar/proxy; UI/fallback tetap dapat dikerjakan tanpa endpoint aktif.
+**Artefak mandiri:** feature/practicum, adapter `PracticumPort`, mock PracticumPort, UI kelas/sesi/jadwal, serta fragment Rules `classes`, `members`, dan `sessions`.
 
-**Batas scope:** Jesica tidak membuka/menutup sesi, mengubah kelas, memutuskan izin, atau mengubah Security Rules sendiri.
+**Tidak menunggu:** Galang memakai `AuthUser` mock untuk pengujian role/owner dan tidak menunggu presensi atau izin. Jesica/Kaka hanya menerima `SessionSummary` dari mock atau PracticumPort, tanpa mengakses state internal Galang.
 
-### 4.5 Kaka Programmer Operasional Asisten
+### 4.4 Jesica Programmer Presensi
 
 **Task**
 
-- **KA-01 Kontrol sesi Asisten:** aksi buka `scheduled` dan tutup `open` dengan modal konfirmasi; write menyimpan UID serta waktu server dan menampilkan error transisi/otorisasi.
-- **KA-02 Rekap presensi:** listener presensi per sesi, jumlah hadir, daftar Praktikan dan waktu hadir, serta loading/empty/error state real-time.
-- **KA-03 Daftar izin Asisten:** query pengajuan per kelas/sesi yang dikelola, filter status, tampilan alasan, dan indikator hasil AI sebagai informasi pendukung.
-- **KA-04 Keputusan manual izin:** kontrol Terima/Tolak, konfirmasi, catatan opsional, write `reviewedBy/reviewedAt`, dan pencegahan keputusan kedua pada pengajuan final.
-- **KA-05 Operasional Asisten QA:** menguji status sesi, rekap dari akun Praktikan kedua, izin pending/AI gagal, keputusan lintas kelas yang ditolak, dan update status ke Praktikan secara real-time.
+- **JE-01 Presensi:** tombol/flow presensi Praktikan yang hanya aktif ketika `SessionSummary.status === 'open'`; write memakai ID `{sessionId}_{studentId}` dan waktu server.
+- **JE-02 Anti-duplikasi:** tangani dokumen presensi yang telah ada sebagai status “sudah tercatat”, tanpa menimpa presensi pertama.
+- **JE-03 Riwayat Praktikan:** daftar riwayat presensi milik UID aktif dengan listener, loading, empty, dan error state.
+- **JE-04 Rekap Asisten:** daftar Praktikan hadir dan waktu kehadiran per sesi secara real-time, termasuk jumlah hadir serta state kosong.
+- **JE-05 Attendance domain QA:** menguji sesi belum dibuka/ditutup, presensi berhasil, duplikasi, user nonanggota, listener rekap, dan restart aplikasi.
 
-**Dependency:** KA-01 dan KA-02 membutuhkan session/attendance repository AL; KA-03/04 membutuhkan leave repository AL dan data yang dibuat Jesica. Semua screen membutuhkan auth/role guard Galang.
+**Artefak mandiri:** feature/attendance, adapter `AttendancePort`, mock AttendancePort, UI presensi/riwayat/rekap, serta fragment Rules `attendance`.
 
-**Batas scope:** Kaka tidak melakukan CRUD definisi kelas/sesi, membuat presensi atas nama Praktikan, mengirim alasan ke AI, atau mengubah aturan akses secara mandiri.
+**Tidak menunggu:** Jesica menggunakan `AuthUser` dan `SessionSummary` mock sehingga tidak perlu menunggu Auth atau Manajemen Praktikum selesai. Domain izin bukan input bagi rekap/presensi dan tidak dikerjakan di modul ini.
 
-## 5 Pemetaan Requirement ke Owner
+### 4.5 Kaka Programmer Izin dan AI
 
-| FR | Requirement | Owner implementasi | Dukungan/integrasi |
-|---|---|---|---|
-| FR-01 | Registrasi | Galang | AL: bootstrap/config profile repository |
-| FR-02 | Login dan logout | Galang | AL: bootstrap Firebase |
-| FR-03 | Profil dan akses peran | Galang | AL: schema/profile repository; Abhi: review |
-| FR-04 | CRUD kelas dan anggota | AL | Galang: guard; Abhi: acceptance |
-| FR-05 | CRUD sesi | AL | Kaka: lifecycle sesi |
-| FR-06 | Jadwal Praktikan | Jesica | AL: query/detail reusable |
-| FR-07 | Buka dan tutup sesi | Kaka | AL: session repository/Rules |
-| FR-08 | Presensi Praktikan | Jesica | AL: attendance repository/Rules; Kaka: rekap |
-| FR-09 | Rekap dan riwayat | Kaka: rekap; Jesica: riwayat | AL: query/index |
-| FR-10 | Pengajuan izin | Jesica | AL: repository/Rules |
-| FR-11 | Klasifikasi AI | Jesica | Abhi: koordinasi API; AL: penyimpanan contract bila perlu |
-| FR-12 | Pemeriksaan izin | Kaka | AL: repository/Rules; Jesica: update tampilan Praktikan |
-| FR-13 | Real-time dan persistensi | Semua owner | AL: query/listener contract; Abhi: integrasi |
-| FR-14 | Validasi dan error | Owner fitur masing-masing | Abhi: review skenario tepi |
-| FR-15 | Proteksi data | AL | Semua owner menguji deny scenario domainnya |
+**Task**
 
-## 6 Urutan Implementasi
+- **KA-01 Ajukan izin:** form alasan, validasi, pembuatan `leaveRequests/{sessionId}_{studentId}` berstatus `pending`, serta status submit/error.
+- **KA-02 Klasifikasi AI:** panggil Cloud Function/proxy/API aman setelah pengajuan tersimpan, validasi respons kategori/skor, simpan `aiStatus`, dan tampilkan fallback ketika API gagal/timeout.
+- **KA-03 Izin saya:** riwayat dan detail pengajuan milik Praktikan, termasuk status AI dan keputusan Asisten secara real-time.
+- **KA-04 Review Asisten:** daftar izin kelas/sesi, tampilan alasan dan hasil AI sebagai informasi pendukung, serta filter pending bila diperlukan.
+- **KA-05 Keputusan izin:** Terima/Tolak manual dengan konfirmasi, catatan opsional, `reviewedBy`, serta `reviewedAt`. Tidak ada keputusan otomatis dari AI.
+- **KA-06 Leave domain QA:** menguji alasan invalid, pengajuan duplikat, AI sukses, AI gagal, keputusan Asisten, dan update keputusan ke Praktikan.
 
-### Tahap 1 Kontrak dan Fondasi
+**Artefak mandiri:** feature/leave, adapter `LeavePort` dan `AiClassificationPort`, mock kedua port, UI pengajuan/riwayat/review, serta fragment Rules `leaveRequests`.
 
-1. Abhi menetapkan backlog, acceptance, contract meeting, dan file ownership.
-2. AL menyelesaikan Firebase bootstrap, types, repository skeleton, Firestore rules baseline, dan dev seed minimal.
-3. Galang menyelesaikan auth provider, profile bootstrap, serta route guard/shell.
+**Tidak menunggu:** Kaka menggunakan `AuthUser` dan `SessionSummary` mock; ia mengelola pengajuan sampai keputusan dalam satu modul sehingga tidak menunggu Jesica. Kegagalan AI tidak boleh menghambat pengajuan izin.
 
-**Keluar tahap:** akun dapat login, profil valid dapat dimuat, dan route peran terlindungi.
+## 5 Cara Kerja Paralel Tanpa Blocking
 
-### Tahap 2 Implementasi Paralel
+### Tahap 0 Kontrak
 
-- AL membuat CRUD kelas, anggota, dan sesi beserta query jadwal.
-- Jesica membuat layar jadwal Praktikan, presensi, riwayat, dan form izin menggunakan mock repository typed bila endpoint/backend belum siap.
-- Kaka membuat control open/close, rekap, review izin, dan komponen keputusan berdasarkan contract yang sama.
-- Galang menautkan screen pada shell dan menyelesaikan error/auth state.
+Abhi menyelesaikan AB-01 sampai AB-03. Hasilnya adalah kontrak data, daftar route, akses project Firebase, dan test account. Ini merupakan input awal bersama, bukan pekerjaan yang ditunggu dari programmer lain.
 
-**Keluar tahap:** setiap screen domain dapat diuji dengan data Firestore dan tidak membuat data lokal kanonis sendiri.
+### Tahap 1 Implementasi Mandiri
 
-### Tahap 3 Integrasi Real-Time dan AI
+- AL mengembangkan AuthPort dan layar autentikasi dengan mock/backend Firebase.
+- Galang mengembangkan PracticumPort dan layar kelas/sesi dengan mock/backend Firestore.
+- Jesica mengembangkan AttendancePort dan layar presensi/rekap dengan mock AuthUser/SessionSummary.
+- Kaka mengembangkan LeavePort/AiClassificationPort dan layar izin dengan mock AuthUser/SessionSummary.
 
-1. Sambungkan write presensi Jesica ke listener rekap Kaka.
-2. Sambungkan lifecycle sesi Kaka ke jadwal/detail AL dan layar Praktikan Jesica.
-3. Sambungkan create izin Jesica ke daftar/review Kaka serta update keputusan kembali ke Praktikan.
-4. Aktifkan endpoint AI aman, uji respons sukses, timeout, dan respons invalid.
-5. Lengkapi Firestore indexes, Rules tests, dan skenario denied write.
+Tidak ada feature module yang mengimpor hook, state, atau komponen internal feature module lain. Semua integrasi hanya melalui kontrak pada Bagian 3.
 
-**Keluar tahap:** dua alur demo SRS bekerja antar dua akun tanpa reload.
+### Tahap 2 Integrasi Adapter
 
-### Tahap 4 Penerimaan
+Setelah UI/domain test selesai, setiap owner mengganti mock port pada modulnya dengan adapter Firestore/Firebase miliknya sendiri. Ini bukan pekerjaan lintas programmer karena setiap koleksi hanya memiliki satu owner.
 
-Abhi menjalankan skenario demo, semua owner memperbaiki defect domainnya, lalu tim menjalankan lint dan typecheck. Sprint hanya ditutup jika Security Rules dan fallback AI gagal telah diuji.
+### Tahap 3 Integrasi Aplikasi
 
-## 7 Ownership File dan No Overlap
+Abhi memimpin pengecekan route, provider, konfigurasi Firebase, dan Rules gabungan. Jika ditemukan defect, owner domain memperbaiki modulnya. Pada tahap ini ada integrasi aplikasi yang tidak dapat dihindari, tetapi tidak ada dependency implementasi fitur harian.
 
-| Area atau path usulan | Owner | Aturan perubahan |
+## 6 Ownership File dan No Overlap
+
+| Area atau path usulan | Owner | Aturan |
 |---|---|---|
-| `src/lib/firebase/*`, `src/services/*`, `src/types/*`, `firestore.rules`, `firestore.indexes.json` | AL | Perubahan lintas domain melalui review Abhi dan informasikan consumer. |
-| `src/features/auth/*`, `src/features/identity/*`, `src/app/_layout.tsx`, route auth/shell | Galang | Owner screen memberi route export; root layout tidak diedit orang lain tanpa koordinasi. |
-| `src/features/student/*`, route Praktikan, komponen form presensi/izin | Jesica | Mengonsumsi service AL dan context Galang. |
-| `src/features/assistant/*`, route Asisten, komponen aksi/review/rekap | Kaka | Mengonsumsi service AL dan context Galang. |
-| Dokumen backlog, acceptance, demo checklist, keputusan kontrak | Abhi | Tidak mengambil alih file kode domain. |
-| `package.json`, `app.json`, konfigurasi build | Owner yang mengusulkan; Abhi koordinasi; AL/Galang review kompatibilitas | Tidak menambah dependency tanpa cek kompatibilitas Expo dan kebutuhan native. |
+| `src/features/auth/*`, `src/features/identity/*`, route auth dan guard | AL | Hanya AL mengubah logic AuthPort dan Rules profile. |
+| `src/features/practicum/*`, route kelas/jadwal/sesi | Galang | Hanya Galang mengubah PracticumPort dan Rules kelas/sesi. |
+| `src/features/attendance/*`, route presensi/riwayat/rekap | Jesica | Hanya Jesica mengubah AttendancePort dan Rules presensi. |
+| `src/features/leave/*`, route izin/review, AI client/proxy contract | Kaka | Hanya Kaka mengubah LeavePort, AiClassificationPort, dan Rules izin. |
+| `src/contracts/sprint2.ts`, dokumen backlog/acceptance, daftar route | Abhi sebagai fasilitator | Perubahan membutuhkan persetujuan seluruh owner terdampak sebelum merge. |
+| `firestore.rules` akhir, `firestore.indexes.json`, Firebase config final | Digabung pada integration review | Fragment Rules/indeks berasal dari owner koleksi; Abhi memimpin review dan owner domain menerapkan revisinya. |
 
-## 8 Dependency Matrix
+## 7 Definition of Done
 
-| Consumer | Kontrak yang dibutuhkan | Owner penyedia | Cara tetap produktif bila belum siap |
-|---|---|---|---|
-| Galang | Firebase config dan `UserProfile` repository | AL | Selesaikan UI/provider dengan adapter typed/mock. |
-| Jesica | Auth context, session/member/attendance/leave repository | Galang, AL | Kerjakan screen dengan contract mock tanpa membuat state produksi kedua. |
-| Kaka | Auth context, session/attendance/leave repository | Galang, AL | Kerjakan modal/list/review dengan service interface; tunda write nyata. |
-| AL | UID/role untuk batas query UI | Galang | Gunakan input parameter UID/role di repository; tidak bergantung pada UI. |
-| Jesica | Endpoint dan format respons AI | Pengajar/proxy, dikoordinasikan Abhi | Selesaikan create request + `aiStatus: failed/pending` fallback. |
-| Semua | Acceptance, keputusan conflict, akun demo | Abhi | Catat blocker dan gunakan fixture Firestore seed resmi. |
+- Semua user story domain terpenuhi dengan validasi, loading, empty, sukses, offline, dan error state yang relevan.
+- Module dapat diuji menggunakan mock port tanpa menunggu module programmer lain.
+- Adapter Firebase/Firestore domain memakai listener sesuai koleksi, membersihkan listener, dan tidak membentuk sumber data lokal kedua.
+- Presensi/izin tidak dapat menggandakan atau menimpa dokumen deterministik.
+- AI tidak memutuskan izin otomatis dan tidak membocorkan API key/secret ke aplikasi.
+- Fragment Security Rules domain memiliki skenario allow dan deny test.
+- Setelah integrasi, lint dan typecheck proyek dijalankan sebelum Sprint dinyatakan selesai.
 
-## 9 Definition of Done per Programmer
-
-- Requirement dan acceptance domain terpenuhi, termasuk state loading, empty, invalid, error, dan offline yang relevan.
-- Tidak ada write yang mengandalkan UI guard saja; Rules mengizinkan flow sah dan menolak flow ilegal.
-- Listener dibersihkan, query dibatasi pada data yang berwenang, dan data tidak disalin menjadi sumber kebenaran lokal.
-- Tidak ada token/kata sandi/rahasia AI di repository, console log, atau variabel `EXPO_PUBLIC_*`.
-- Kode mengikuti TypeScript, struktur Expo Router, serta ownership file; perubahan lintas domain sudah dikoordinasikan.
-- Owner menguji kasus happy path dan minimal satu deny/error path sebelum menyerahkan ke Abhi.
-- Pada akhir sprint, `npx expo lint` dan `npx tsc --noEmit` dijalankan. Kegagalan yang tersisa tidak boleh disembunyikan dari acceptance report.
-
-## 10 Ringkasan Beban Kerja
+## 8 Ringkasan
 
 ```text
-Abhi    -> PM: scope, kontrak, dependency, review, acceptance, demo
-AL      -> data Firebase, repository, Rules, kelas, anggota, sesi
-Galang  -> Authentication, profil/role, auth guard, Expo Router shell
-Jesica  -> jadwal Praktikan, presensi, riwayat, izin, pemanggilan AI aman
-Kaka    -> buka/tutup sesi, rekap presensi, review dan keputusan izin
+Abhi    -> PM, kontrak, akses Firebase, review, acceptance, demo
+AL      -> Auth lengkap: registrasi, login, profil, role, guard
+Galang  -> Praktikum lengkap: kelas, anggota, sesi, jadwal, buka/tutup
+Jesica  -> Presensi lengkap: absen, anti-duplikasi, riwayat, rekap
+Kaka    -> Izin lengkap: ajukan, AI, riwayat, review, keputusan
 ```
 
-Keempat programmer dapat mengembangkan domain secara paralel setelah AL dan Galang menyediakan kontrak minimum. Abhi menjaga agar batas domain tetap jelas dan hasil akhir memenuhi dua skenario demo pada SRS Sprint 2.
+Pembagian ini menghilangkan dependency **antar fitur programmer saat pengerjaan**. Dependency yang tersisa hanya kontrak awal dan integrasi akhir aplikasi, yang dikelola Abhi agar tidak menjadi blocker pekerjaan harian.
