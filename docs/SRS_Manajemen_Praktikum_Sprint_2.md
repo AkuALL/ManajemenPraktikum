@@ -221,21 +221,27 @@ Status tidak boleh disampaikan dengan warna saja. Tombol harus mempunyai label, 
 
 | Kode | Requirement | Owner utama pada jobdesc |
 |---|---|---|
-| FR-01 | Registrasi | Galang |
-| FR-02 | Login dan logout | Galang |
-| FR-03 | Profil dan akses berbasis peran | Galang |
-| FR-04 | CRUD kelas dan anggota | AL |
-| FR-05 | CRUD sesi | AL |
-| FR-06 | Jadwal Praktikan | AL dan Jesica |
-| FR-07 | Buka dan tutup sesi | Kaka |
+| FR-01 | Registrasi | AL |
+| FR-02 | Login dan logout | AL |
+| FR-03 | Profil dan akses berbasis peran | AL |
+| FR-04 | CRUD kelas dan anggota | Galang |
+| FR-05 | CRUD sesi | Galang |
+| FR-06 | Jadwal Praktikan | Galang |
+| FR-07 | Buka dan tutup sesi | Galang |
 | FR-08 | Presensi Praktikan | Jesica |
-| FR-09 | Rekap dan riwayat kehadiran | Kaka dan Jesica |
-| FR-10 | Pengajuan izin | Jesica |
-| FR-11 | Klasifikasi AI | Jesica |
+| FR-09 | Rekap dan riwayat kehadiran | Jesica |
+| FR-10 | Pengajuan izin | Kaka |
+| FR-11 | Klasifikasi AI | Kaka |
 | FR-12 | Pemeriksaan izin | Kaka |
-| FR-13 | Sinkronisasi real-time dan persistensi | Semua programmer; AL pemilik layer data |
+| FR-13 | Sinkronisasi real-time dan persistensi | Semua programmer per koleksi: AL `users`, Galang `classes`/`members`/`sessions`, Jesica `attendance`, Kaka `leaveRequests` |
 | FR-14 | Validasi dan penanganan kesalahan | Owner fitur masing-masing |
-| FR-15 | Proteksi data | AL; seluruh owner memverifikasi akses domainnya |
+| FR-15 | Proteksi data | Semua programmer per fragment Rules koleksi; Abhi mengoordinasikan integration review |
+
+### 12.1 Ketentuan Implementasi Paralel
+
+Pembagian programmer memakai vertical slice agar tidak ada dependency implementasi fitur harian antar programmer. Sebelum coding, Abhi memfasilitasi kontrak minimum untuk `AuthUser`, `SessionSummary`, `AttendanceRecord`, dan `LeaveRequest`, termasuk nilai peran, status, ID deterministik, serta format error. Setiap owner dapat mengembangkan dan menguji modulnya melalui adapter/mock yang mengikuti kontrak tersebut tanpa menunggu modul programmer lain selesai.
+
+Feature module tidak boleh membaca state internal feature module lain. Integrasi dilakukan melalui kontrak bersama dan adapter Firebase/Firestore pada koleksi yang dimiliki masing-masing owner. Dependency yang tersisa hanya kontrak awal serta integrasi aplikasi akhir, yang dikoordinasikan Abhi dan tidak boleh memblokir pekerjaan harian.
 
 ## 13 Kriteria Penerimaan Sprint
 
