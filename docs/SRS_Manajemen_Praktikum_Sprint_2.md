@@ -228,18 +228,18 @@ Status tidak boleh disampaikan dengan warna saja. Tombol harus mempunyai label, 
 | FR-05 | CRUD sesi | Galang |
 | FR-06 | Jadwal Praktikan | Galang |
 | FR-07 | Buka dan tutup sesi | Galang |
-| FR-08 | Presensi Praktikan | Jesica |
-| FR-09 | Rekap dan riwayat kehadiran | Jesica |
+| FR-08 | Presensi Praktikan | AL |
+| FR-09 | Rekap dan riwayat kehadiran | AL |
 | FR-10 | Pengajuan izin | Kaka |
 | FR-11 | Klasifikasi AI | Kaka |
 | FR-12 | Pemeriksaan izin | Kaka |
-| FR-13 | Sinkronisasi real-time dan persistensi | Semua programmer per koleksi: AL `users`, Galang `classes`/`members`/`sessions`, Jesica `attendance`, Kaka `leaveRequests` |
+| FR-13 | Sinkronisasi real-time dan persistensi | Semua programmer per koleksi: AL `users`/`attendance`, Galang `classes`/`members`/`sessions`, Kaka `leaveRequests` |
 | FR-14 | Validasi dan penanganan kesalahan | Owner fitur masing-masing |
-| FR-15 | Proteksi data | Semua programmer per fragment Rules koleksi; Abhi mengoordinasikan integration review |
+| FR-15 | Proteksi data | AL untuk `users`/`attendance`, Galang untuk `classes`/`members`/`sessions`, Kaka untuk `leaveRequests`; Abhi mengoordinasikan integration review |
 
 ### 12.1 Ketentuan Implementasi Paralel
 
-Pembagian programmer memakai vertical slice agar tidak ada dependency implementasi fitur harian antar programmer. Sebelum coding, Abhi memfasilitasi kontrak minimum untuk `AuthUser`, `SessionSummary`, `AttendanceRecord`, dan `LeaveRequest`, termasuk nilai peran, status, ID deterministik, serta format error. Setiap owner dapat mengembangkan dan menguji modulnya melalui adapter/mock yang mengikuti kontrak tersebut tanpa menunggu modul programmer lain selesai.
+Pembagian programmer memakai vertical slice agar tidak ada dependency implementasi fitur harian antar programmer. Sebelum coding, Abhi memfasilitasi kontrak minimum untuk `AuthUser`, `SessionSummary`, `AttendanceRecord`, dan `LeaveRequest`, termasuk nilai peran, status, ID deterministik, serta format error. AL memiliki domain autentikasi dan presensi; Galang memiliki domain manajemen praktikum; Kaka memiliki domain izin dan AI. Setiap owner dapat mengembangkan dan menguji modulnya melalui adapter/mock yang mengikuti kontrak tersebut tanpa menunggu modul programmer lain selesai.
 
 Feature module tidak boleh membaca state internal feature module lain. Integrasi dilakukan melalui kontrak bersama dan adapter Firebase/Firestore pada koleksi yang dimiliki masing-masing owner. Dependency yang tersisa hanya kontrak awal serta integrasi aplikasi akhir, yang dikoordinasikan Abhi dan tidak boleh memblokir pekerjaan harian.
 
