@@ -25,6 +25,22 @@ export default function HomeScreen() {
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           {isAssistant ? 'Kelola sesi dan tinjau kehadiran.' : 'Lihat sesi dan catat kehadiran Anda.'}
         </Text>
+
+        {isAssistant && (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/classes' as any)}
+            style={({ pressed }) => [
+              styles.classesShortcut,
+              { borderColor: colors.actionPrimary, backgroundColor: colors.surfaceMuted },
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={[styles.classesShortcutText, { color: colors.actionPrimary }]}>
+              👥 Kelola Kelas & Anggota Praktikum ➔
+            </Text>
+          </Pressable>
+        )}
       </View>
 
       {featuredSession ? (
@@ -89,6 +105,18 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1.2 },
   title: { fontSize: 30, lineHeight: 36, fontWeight: '700', letterSpacing: -0.5 },
   subtitle: { fontSize: 15, lineHeight: 22 },
+  classesShortcut: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  classesShortcutText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
   session: { borderWidth: 1, padding: 18, borderRadius: 12 },
   sessionTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
   titleGroup: { flex: 1 }, course: { fontSize: 13, fontWeight: '600' },
