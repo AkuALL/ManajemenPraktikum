@@ -1,0 +1,359 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userProfilePath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function hasRole(role) {
+      return signedIn()
+        && exists(userProfilePath(request.auth.uid))
+        && get(userProfilePath(request.auth.uid)).data.role == role;
+    }
+
+    function classPath(classId) {
+      return /databases/$(database)/documents/classes/$(classId);
+    }
+
+    function memberPath(classId, uid) {
+      return /databases/$(database)/documents/classes/$(classId)/members/$(uid);
+    }
+
+    function sessionPath(sessionId) {
+      return /databases/$(database)/documents/sessions/$(sessionId);
+    }
+
+    function isClassAssistant(classId) {
+      return signedIn()
+        && exists(classPath(classId))
+        && get(classPath(classId)).data.assistantIds.hasAny([request.auth.uid]);
+    }
+
+    function isStudentMember(classId) {
+      return hasRole('student')
+        && exists(memberPath(classId, request.auth.uid))
+        && get(memberPath(classId, request.auth.uid)).data.role == 'student';
+    }
+
+    function validProfileCreate(uid) {
+      return request.resource.data.keys().hasOnly([
+          'uid',
+          'displayName',
+          'email',
+          'role',
+          'identifier',
+          'createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'uid',
+          'displayName',
+          'email',
+          'role',
+          'identifier',
+          'createdAt'
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && ['student', 'assistant'].hasAny([request.resource.data.role])
+        && request.resource.data.createdAt == request.time;
+    }
+
+    function validProfileUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['displayName', 'identifier', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validClassCreate() {
+      return request.resource.data.keys().hasOnly([
+          'practicumName',
+          'className',
+          'lab',
+          'assistantIds',
+          'createdBy',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'practicumName',
+          'className',
+          'assistantIds',
+          'createdBy',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.assistantIds.hasAny([request.auth.uid])
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validClassUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'practicumName',
+          'className',
+          'lab',
+          'assistantIds',
+          'updatedAt'
+        ])
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validMemberCreate(memberId) {
+      return request.resource.data.keys().hasOnly([
+          'userId',
+          'role',
+          'displayName',
+          'identifier',
+          'joinedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'userId',
+          'role',
+          'displayName',
+          'identifier',
+          'joinedAt'
+        ])
+        && request.resource.data.userId == memberId
+        && request.resource.data.role == 'student'
+        && request.resource.data.joinedAt == request.time;
+    }
+
+    function validMemberUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['displayName', 'identifier']);
+    }
+
+    function validSessionCreate() {
+      return request.resource.data.keys().hasOnly([
+          'classId',
+          'title',
+          'location',
+          'startsAt',
+          'endsAt',
+          'status',
+          'createdBy',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'classId',
+          'title',
+          'startsAt',
+          'endsAt',
+          'status',
+          'createdBy',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.status == 'scheduled'
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.startsAt < request.resource.data.endsAt
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validSessionStatusTransition() {
+      return request.resource.data.status == resource.data.status
+        || (
+          resource.data.status == 'scheduled'
+          && request.resource.data.status == 'open'
+          && request.resource.data.openedBy == request.auth.uid
+          && request.resource.data.openedAt == request.time
+        )
+        || (
+          resource.data.status == 'open'
+          && request.resource.data.status == 'closed'
+          && request.resource.data.closedBy == request.auth.uid
+          && request.resource.data.closedAt == request.time
+        );
+    }
+
+    function validSessionUpdate() {
+      return request.resource.data.keys().hasOnly([
+          'classId',
+          'title',
+          'location',
+          'startsAt',
+          'endsAt',
+          'status',
+          'openedBy',
+          'openedAt',
+          'closedBy',
+          'closedAt',
+          'createdBy',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.classId == resource.data.classId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.startsAt < request.resource.data.endsAt
+        && request.resource.data.updatedAt == request.time
+        && validSessionStatusTransition();
+    }
+
+    function isOpenStudentSession(sessionId, classId) {
+      return isStudentMember(classId)
+        && exists(sessionPath(sessionId))
+        && get(sessionPath(sessionId)).data.classId == classId
+        && get(sessionPath(sessionId)).data.status == 'open';
+    }
+
+    function isLeaveEligibleSession(sessionId, classId) {
+      return isStudentMember(classId)
+        && exists(sessionPath(sessionId))
+        && get(sessionPath(sessionId)).data.classId == classId
+        && ['scheduled', 'open'].hasAny([get(sessionPath(sessionId)).data.status]);
+    }
+
+    function validAttendanceCreate(attendanceId) {
+      return request.resource.data.keys().hasOnly([
+          'sessionId',
+          'classId',
+          'studentId',
+          'studentName',
+          'studentIdentifier',
+          'attendedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'sessionId',
+          'classId',
+          'studentId',
+          'studentName',
+          'studentIdentifier',
+          'attendedAt'
+        ])
+        && request.resource.data.studentId == request.auth.uid
+        && attendanceId == request.resource.data.sessionId + '_' + request.auth.uid
+        && request.resource.data.studentName == get(userProfilePath(request.auth.uid)).data.displayName
+        && request.resource.data.studentIdentifier == get(userProfilePath(request.auth.uid)).data.identifier
+        && request.resource.data.attendedAt == request.time
+        && isOpenStudentSession(
+          request.resource.data.sessionId,
+          request.resource.data.classId
+        );
+    }
+
+    function validLeaveCreate(leaveId) {
+      return request.resource.data.keys().hasOnly([
+          'sessionId',
+          'classId',
+          'studentId',
+          'reason',
+          'status',
+          'aiStatus',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'sessionId',
+          'classId',
+          'studentId',
+          'reason',
+          'status',
+          'aiStatus',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.studentId == request.auth.uid
+        && leaveId == request.resource.data.sessionId + '_' + request.auth.uid
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() >= 5
+        && request.resource.data.reason.size() <= 1000
+        && request.resource.data.status == 'pending'
+        && request.resource.data.aiStatus == 'pending'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && isLeaveEligibleSession(
+          request.resource.data.sessionId,
+          request.resource.data.classId
+        );
+    }
+
+    function validLeaveDecision() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'reviewedBy',
+          'reviewedAt',
+          'reviewNote',
+          'updatedAt'
+        ])
+        && resource.data.status == 'pending'
+        && ['approved', 'rejected'].hasAny([request.resource.data.status])
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.reviewedAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    match /users/{userId} {
+      allow get: if signedIn() && request.auth.uid == userId;
+      allow list: if false;
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && validProfileCreate(userId);
+      allow update: if signedIn()
+        && request.auth.uid == userId
+        && validProfileUpdate();
+      allow delete: if false;
+    }
+
+    match /classes/{classId} {
+      allow get, list: if isClassAssistant(classId)
+        || (signedIn() && exists(memberPath(classId, request.auth.uid)));
+      allow create: if hasRole('assistant') && validClassCreate();
+      allow update: if isClassAssistant(classId) && validClassUpdate();
+      allow delete: if isClassAssistant(classId);
+
+      match /members/{memberId} {
+        allow get: if isClassAssistant(classId)
+          || (signedIn() && request.auth.uid == memberId);
+        allow list: if isClassAssistant(classId);
+        allow create: if isClassAssistant(classId) && validMemberCreate(memberId);
+        allow update: if isClassAssistant(classId) && validMemberUpdate();
+        allow delete: if isClassAssistant(classId);
+      }
+    }
+
+    match /sessions/{sessionId} {
+      allow get, list: if isClassAssistant(resource.data.classId)
+        || (signedIn() && exists(memberPath(resource.data.classId, request.auth.uid)));
+      allow create: if hasRole('assistant')
+        && isClassAssistant(request.resource.data.classId)
+        && validSessionCreate();
+      allow update: if isClassAssistant(resource.data.classId)
+        && validSessionUpdate();
+      allow delete: if isClassAssistant(resource.data.classId)
+        && resource.data.status == 'scheduled';
+    }
+
+    match /attendance/{attendanceId} {
+      allow get, list: if signedIn()
+        && (request.auth.uid == resource.data.studentId
+          || isClassAssistant(resource.data.classId));
+      allow create: if hasRole('student') && validAttendanceCreate(attendanceId);
+      allow update, delete: if false;
+    }
+
+    match /leaveRequests/{leaveId} {
+      allow get, list: if signedIn()
+        && (request.auth.uid == resource.data.studentId
+          || isClassAssistant(resource.data.classId));
+      allow create: if hasRole('student') && validLeaveCreate(leaveId);
+      allow update: if isClassAssistant(resource.data.classId)
+        && validLeaveDecision();
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
