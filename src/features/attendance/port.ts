@@ -46,6 +46,7 @@ export interface AttendancePort {
     sessionId: string,
     onData: (records: AttendanceEntry[], meta: AttendanceListenerMeta) => void,
     onError: (error: AttendancePortError) => void,
+    options?: { classId?: string },
   ): () => void;
 }
 

@@ -86,13 +86,12 @@ async function findExistingAttendance(
 }
 
 function subscribeAttendanceQuery(
-  field: 'studentId' | 'sessionId',
-  value: string,
+  constraints: ReturnType<typeof where>[],
   ascending: boolean,
   onData: (records: AttendanceEntry[], meta: AttendanceListenerMeta) => void,
   onError: (error: AttendancePortError) => void,
 ): () => void {
-  const q = query(collection(db, 'attendance'), where(field, '==', value));
+  const q = query(collection(db, 'attendance'), ...constraints);
 
   return onSnapshot(
     q,
@@ -207,10 +206,19 @@ export const firestoreAttendanceAdapter: AttendancePort = {
   },
 
   subscribeStudentAttendance(studentId, onData, onError) {
-    return subscribeAttendanceQuery('studentId', studentId, false, onData, onError);
+    return subscribeAttendanceQuery(
+      [where('studentId', '==', studentId)],
+      false,
+      onData,
+      onError,
+    );
   },
 
-  subscribeSessionAttendance(sessionId, onData, onError) {
-    return subscribeAttendanceQuery('sessionId', sessionId, true, onData, onError);
+  subscribeSessionAttendance(sessionId, onData, onError, options) {
+    const constraints = [where('sessionId', '==', sessionId)];
+    if (options?.classId) {
+      constraints.push(where('classId', '==', options.classId));
+    }
+    return subscribeAttendanceQuery(constraints, true, onData, onError);
   },
 };

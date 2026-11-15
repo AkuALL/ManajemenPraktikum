@@ -43,8 +43,12 @@ export default function RecapScreen() {
     return sessions.find((item) => item.id === targetId) ?? sessions[0] ?? null;
   }, [defaultSessionId, selectedSessionId, sessions]);
 
+  const activeClassId =
+    (activeSession as { classId?: string } | null)?.classId ?? null;
+
   const { records, loading, error, fromCache, retry } = useSessionAttendance(
     activeSession?.id ?? null,
+    activeClassId,
   );
 
   if (user?.role !== 'assistant') {

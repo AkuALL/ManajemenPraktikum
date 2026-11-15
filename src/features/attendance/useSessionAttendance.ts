@@ -16,6 +16,7 @@ type SessionSnapshotState = {
 
 export function useSessionAttendance(
   sessionId: string | null,
+  classId?: string | null,
   port: AttendancePort = firestoreAttendanceAdapter,
 ) {
   const { status, user } = useAuth();
@@ -48,10 +49,11 @@ export function useSessionAttendance(
           resolved: true,
         });
       },
+      classId ? { classId } : undefined,
     );
 
     return unsubscribe;
-  }, [activeSessionId, port, retryTick]);
+  }, [activeSessionId, classId, port, retryTick]);
 
   const retry = useCallback(() => {
     if (!activeSessionId) return;

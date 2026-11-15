@@ -40,6 +40,12 @@ service cloud.firestore {
         && get(memberPath(classId, request.auth.uid)).data.role == 'student';
     }
 
+    function validText(value, minLen, maxLen) {
+      return value is string
+        && value.size() >= minLen
+        && value.size() <= maxLen;
+    }
+
     function validProfileCreate(uid) {
       return request.resource.data.keys().hasOnly([
           'uid',
@@ -60,12 +66,16 @@ service cloud.firestore {
         && request.resource.data.uid == uid
         && request.resource.data.email == request.auth.token.email
         && ['student', 'assistant'].hasAny([request.resource.data.role])
+        && validText(request.resource.data.displayName, 2, 100)
+        && validText(request.resource.data.identifier, 3, 40)
         && request.resource.data.createdAt == request.time;
     }
 
     function validProfileUpdate() {
       return request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['displayName', 'identifier', 'updatedAt'])
+        && validText(request.resource.data.displayName, 2, 100)
+        && validText(request.resource.data.identifier, 3, 40)
         && request.resource.data.updatedAt == request.time;
     }
 
