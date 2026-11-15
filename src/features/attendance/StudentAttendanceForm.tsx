@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -9,24 +8,30 @@ import {
   View,
 } from 'react-native';
 
-import { LabSession, SessionStatus } from '@/types';
 import { Colors } from '@/constants/theme';
+import { useAuth } from '@/features/auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useIdentity } from '@/features/identity';
-import { useSchedule } from '@/features/schedule';
+import type { LabSession, SessionStatusV2, SessionSummary } from '@/types';
+
+import { useAttendance } from './context';
+import {
+  formatServerTime,
+  isSessionSummary,
+  toSessionSummary,
+} from './port';
 
 export interface StudentAttendanceFormProps {
-  session: LabSession;
+  session: LabSession | SessionSummary;
 }
 
 type FeedbackState =
   | { type: 'success'; time: string }
   | { type: 'duplicate'; time: string }
-  | { type: 'ineligible'; reason: string };
+  | { type: 'error'; reason: string };
 
-function statusLabel(status: SessionStatus): string {
+function statusLabel(status: SessionStatusV2): string {
   switch (status) {
-    case 'upcoming':
+    case 'scheduled':
       return 'Belum dibuka';
     case 'open':
       return 'Berlangsung';
@@ -38,25 +43,23 @@ function statusLabel(status: SessionStatus): string {
 export function StudentAttendanceForm({
   session,
 }: StudentAttendanceFormProps) {
-  const isDark = useColorScheme() === 'dark';
-  const colors = isDark ? Colors.dark : Colors.light;
-
-  const { activeIdentity } = useIdentity();
-  const { recordAttendance, getAttendanceForStudent } = useSchedule();
+  const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
+  const { user } = useAuth();
+  const { records, submitAttendance } = useAttendance();
 
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
 
-  const existingRecord = activeIdentity
-    ? getAttendanceForStudent(activeIdentity.userId).find(
-        (record) => record.sessionId === session.id
-      )
-    : undefined;
-  const isOpen = session.status === 'open';
+  const summary = toSessionSummary(session);
+  const sessionTitle = isSessionSummary(session) ? session.id : session.practicumName;
+  const sessionClass = isSessionSummary(session) ? session.classId : session.courseClass;
 
-  // Sudah tercatat → tampilkan status berhasil tanpa tombol
+  const existingRecord = records.find((record) => record.sessionId === summary.id);
+  const isOpen = summary.status === 'open';
+
   if (existingRecord) {
+    const timeText = formatServerTime(existingRecord.attendedAtMs, 'time');
     return (
       <View
         style={[
@@ -70,13 +73,10 @@ export function StudentAttendanceForm({
             <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>
               Presensi tercatat
             </Text>
-            <Text style={[styles.cardBody, { color: colors.textSecondary }]}>
-              Kehadiran Anda pada sesi ini telah tercatat pukul{' '}
-              {new Date(existingRecord.attendedAt).toLocaleTimeString('id-ID', {
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false,
-              })}.
+            <Text style={[styles.cardBody, { color: colors.textSecondary }, styles.tabular]}>
+              {existingRecord.attendedAtMs === null
+                ? 'Kehadiran tercatat dan menunggu konfirmasi waktu server.'
+                : `Kehadiran Anda pada sesi ini telah tercatat pukul ${timeText}.`}
             </Text>
           </View>
         </View>
@@ -84,11 +84,10 @@ export function StudentAttendanceForm({
     );
   }
 
-  // Sesi tidak open → jelaskan alasan (JE-02)
   if (!isOpen) {
     const reason =
-      session.status === 'upcoming'
-        ? 'Sesi belum dibuka oleh asisten. Presensi dapat dilakukan saat sesi berstatus Berlangsung.'
+      summary.status === 'scheduled'
+        ? 'Sesi belum dibuka oleh Asisten. Presensi dapat dilakukan saat sesi berlangsung.'
         : 'Sesi ini sudah selesai. Presensi baru tidak dapat diterima.';
 
     return (
@@ -99,80 +98,74 @@ export function StudentAttendanceForm({
           { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
         ]}
       >
-        <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Presensi tidak tersedia</Text>
+        <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>
+          Presensi tidak tersedia
+        </Text>
         <Text style={[styles.cardBody, { color: colors.textSecondary }]}>{reason}</Text>
-        <View style={[styles.statusPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View
+          style={[
+            styles.statusPill,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
           <Text style={[styles.statusPillText, { color: colors.textSecondary }]}>
-            Status sesi: {statusLabel(session.status)}
+            Status sesi: {statusLabel(summary.status)}
           </Text>
         </View>
       </View>
     );
   }
 
-  // Sesi open dan belum presensi → tombol konfirmasi (JE-03)
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
+    if (submitting) return;
     setSubmitting(true);
-    const result = recordAttendance(session.id);
 
-    setSubmitting(false);
-    setConfirmVisible(false);
+    try {
+      const result = await submitAttendance(summary);
+      setConfirmVisible(false);
 
-    if (result.ok) {
-      const time = new Date(result.record.attendedAt).toLocaleTimeString('id-ID', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      });
-      setFeedback({ type: 'success', time });
-    } else if (result.reason === 'duplicate') {
-      // Duplikat — ini edge case jika race condition
-      const record = getAttendanceForStudent(activeIdentity?.userId ?? '').find(
-        (item) => item.sessionId === session.id
-      );
-      const time = record
-        ? new Date(record.attendedAt).toLocaleTimeString('id-ID', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false,
-          })
-        : '-';
-      setFeedback({ type: 'duplicate', time });
-    } else {
-      setFeedback({
-        type: 'ineligible',
-        reason:
-          result.reason === 'status'
-            ? 'Presensi hanya tersedia saat sesi berlangsung.'
-            : 'Presensi tidak dapat dicatat.',
-      });
+      if (result.ok) {
+        setFeedback({
+          type: 'success',
+          time: formatServerTime(result.record.attendedAtMs, 'time'),
+        });
+      } else if (result.reason === 'duplicate') {
+        const time = result.record
+          ? formatServerTime(result.record.attendedAtMs, 'time')
+          : '-';
+        setFeedback({ type: 'duplicate', time });
+      } else {
+        setFeedback({ type: 'error', reason: result.message });
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
     <View style={styles.wrapper}>
-      {/* Feedback banner */}
-      {feedback && (
+      {feedback ? (
         <View
+          accessibilityRole="alert"
           style={[
             styles.feedbackBanner,
-            feedback.type === 'success'
-              ? { backgroundColor: isDark ? '#1A2E1A' : '#F0FDF4', borderColor: isDark ? '#2D4D2D' : '#86EFAC' }
-              : { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
+            { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
           ]}
         >
           <Text style={[styles.feedbackTitle, { color: colors.textPrimary }]}>
             {feedback.type === 'success'
               ? '✓ Presensi berhasil dicatat'
               : feedback.type === 'duplicate'
-                ? 'ℹ Presensi sudah tercatat'
+                ? 'Presensi sudah tercatat'
                 : 'Presensi tidak dapat dicatat'}
           </Text>
-          <Text style={[styles.feedbackBody, { color: colors.textSecondary }]}>
+          <Text style={[styles.feedbackBody, { color: colors.textSecondary }, styles.tabular]}>
             {feedback.type === 'success'
-              ? `Kehadiran Anda dicatat pukul ${feedback.time}.`
+              ? feedback.time === 'Menunggu waktu server'
+                ? 'Kehadiran dikirim dan menunggu waktu server.'
+                : `Kehadiran Anda dicatat pukul ${feedback.time}.`
               : feedback.type === 'duplicate'
-                ? `Kehadiran Anda pada sesi ini sudah tercatat pukul ${feedback.time}.`
+                ? `Kehadiran Anda pada sesi ini sudah tercatat (${feedback.time}).`
                 : feedback.reason}
           </Text>
           <Pressable
@@ -181,13 +174,12 @@ export function StudentAttendanceForm({
             accessibilityLabel="Tutup notifikasi"
             style={styles.dismissButton}
           >
-            <Text style={[styles.dismissText, { color: colors.textSecondary }]}>Tutup</Text>
+            <Text style={[styles.dismissText, { color: colors.textPrimary }]}>Tutup</Text>
           </Pressable>
         </View>
-      )}
+      ) : null}
 
-      {/* Tombol presensi */}
-      {!feedback && (
+      {!feedback || feedback.type === 'error' ? (
         <View
           style={[
             styles.card,
@@ -199,13 +191,16 @@ export function StudentAttendanceForm({
             Sesi sedang berlangsung. Tekan tombol di bawah untuk mencatat kehadiran Anda.
           </Text>
           <Pressable
+            disabled={submitting}
             onPress={() => setConfirmVisible(true)}
             accessibilityRole="button"
             accessibilityLabel="Catat presensi saya"
             style={({ pressed }) => [
               styles.attendButton,
-              { backgroundColor: colors.actionPrimary },
-              pressed && styles.buttonPressed,
+              {
+                backgroundColor: submitting ? colors.disabledSurface : colors.actionPrimary,
+              },
+              pressed && !submitting && styles.buttonPressed,
             ]}
           >
             <Text style={[styles.attendButtonText, { color: colors.actionSecondary }]}>
@@ -213,9 +208,8 @@ export function StudentAttendanceForm({
             </Text>
           </Pressable>
         </View>
-      )}
+      ) : null}
 
-      {/* Modal konfirmasi presensi */}
       <Modal
         transparent
         visible={confirmVisible}
@@ -228,7 +222,9 @@ export function StudentAttendanceForm({
         <View style={styles.overlay}>
           <Pressable
             style={StyleSheet.absoluteFill}
-            onPress={() => { if (!submitting) setConfirmVisible(false); }}
+            onPress={() => {
+              if (!submitting) setConfirmVisible(false);
+            }}
             accessibilityRole="button"
             accessibilityLabel="Tutup dialog konfirmasi presensi"
           >
@@ -243,22 +239,22 @@ export function StudentAttendanceForm({
             onStartShouldSetResponder={() => true}
           >
             <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-              Konfirmasi Presensi
+              Konfirmasi presensi
             </Text>
             <Text style={[styles.modalBody, { color: colors.textSecondary }]}>
               Anda akan mencatat kehadiran sebagai{' '}
-              <Text style={{ fontWeight: '700', color: colors.textPrimary }}>
-                {activeIdentity?.displayName}
+              <Text style={{ fontWeight: '600', color: colors.textPrimary }}>
+                {user?.displayName ?? '-'}
               </Text>{' '}
               pada sesi{' '}
-              <Text style={{ fontWeight: '700', color: colors.textPrimary }}>
-                {session.practicumName}
-                {session.courseClass ? ` · ${session.courseClass}` : ''}
+              <Text style={{ fontWeight: '600', color: colors.textPrimary }}>
+                {sessionTitle}
+                {sessionClass ? ` · ${sessionClass}` : ''}
               </Text>
               .
             </Text>
             <Text style={[styles.modalNote, { color: colors.textSecondary }]}>
-              Waktu kehadiran dicatat menggunakan jam perangkat saat ini. Presensi hanya dapat dilakukan sekali per sesi.
+              Waktu kehadiran dicatat menggunakan waktu server. Presensi hanya dapat dilakukan sekali per sesi.
             </Text>
 
             <View style={styles.modalActions}>
@@ -269,8 +265,8 @@ export function StudentAttendanceForm({
                 accessibilityLabel="Batal konfirmasi presensi"
                 style={({ pressed }) => [
                   styles.modalButtonSecondary,
-                  { borderColor: colors.border },
-                  pressed && styles.buttonPressed,
+                  { borderColor: colors.border, backgroundColor: colors.surface },
+                  pressed && !submitting && styles.buttonPressed,
                 ]}
               >
                 <Text style={[styles.modalButtonText, { color: colors.textPrimary }]}>Batal</Text>
@@ -278,20 +274,24 @@ export function StudentAttendanceForm({
 
               <Pressable
                 disabled={submitting}
-                onPress={handleConfirm}
+                onPress={() => {
+                  void handleConfirm();
+                }}
                 accessibilityRole="button"
                 accessibilityLabel="Konfirmasi catat presensi"
                 style={({ pressed }) => [
                   styles.modalButtonPrimary,
-                  { backgroundColor: colors.actionPrimary },
-                  pressed && styles.buttonPressed,
+                  {
+                    backgroundColor: submitting ? colors.disabledSurface : colors.actionPrimary,
+                  },
+                  pressed && !submitting && styles.buttonPressed,
                 ]}
               >
                 {submitting ? (
-                  <ActivityIndicator size="small" color={colors.actionSecondary} />
+                  <ActivityIndicator size="small" color={colors.disabledText} />
                 ) : (
                   <Text style={[styles.modalButtonText, { color: colors.actionSecondary }]}>
-                    Ya, catat kehadiran
+                    Ya, catat hadir
                   </Text>
                 )}
               </Pressable>
@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     padding: 16,
-    gap: 10,
+    gap: 12,
   },
   cardMuted: {
     gap: 8,
@@ -322,27 +322,32 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   checkmark: {
-    fontSize: 22,
-    lineHeight: 28,
-    fontWeight: '700',
+    fontSize: 20,
+    lineHeight: 24,
+    fontWeight: '600',
   },
   textBlock: {
     flex: 1,
     gap: 4,
   },
   cardTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 22,
   },
   cardBody: {
     fontSize: 14,
+    fontWeight: '400',
     lineHeight: 20,
+  },
+  tabular: {
+    fontVariant: ['tabular-nums'],
   },
   statusPill: {
     alignSelf: 'flex-start',
-    borderRadius: 999,
+    borderRadius: 8,
     borderWidth: 1,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 4,
   },
   statusPillText: {
@@ -350,33 +355,33 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   attendButton: {
-    borderRadius: 10,
+    borderRadius: 8,
     minHeight: 48,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
   },
   attendButtonText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   buttonPressed: {
-    opacity: 0.78,
-    transform: [{ scale: 0.99 }],
+    opacity: 0.75,
   },
   feedbackBanner: {
     borderRadius: 12,
     borderWidth: 1,
-    padding: 14,
-    gap: 6,
+    padding: 16,
+    gap: 8,
   },
   feedbackTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   feedbackBody: {
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 14,
+    fontWeight: '400',
+    lineHeight: 20,
   },
   dismissButton: {
     alignSelf: 'flex-start',
@@ -386,7 +391,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  // Modal
   overlay: {
     flex: 1,
     justifyContent: 'center',
@@ -399,42 +403,40 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.52)',
+    backgroundColor: 'rgba(23, 23, 23, 0.4)',
   },
   modalCard: {
     width: '100%',
     maxWidth: 380,
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
-    padding: 20,
+    padding: 24,
     gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.14,
-    shadowRadius: 12,
-    elevation: 8,
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '600',
+    lineHeight: 24,
   },
   modalBody: {
     fontSize: 14,
-    lineHeight: 21,
+    fontWeight: '400',
+    lineHeight: 20,
   },
   modalNote: {
     fontSize: 12,
-    lineHeight: 18,
+    fontWeight: '400',
+    lineHeight: 16,
   },
   modalActions: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
     marginTop: 4,
   },
   modalButtonSecondary: {
     flex: 1,
     minHeight: 48,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -442,12 +444,12 @@ const styles = StyleSheet.create({
   modalButtonPrimary: {
     flex: 1,
     minHeight: 48,
-    borderRadius: 10,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
