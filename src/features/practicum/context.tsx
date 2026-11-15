@@ -58,16 +58,29 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
   const adapter = useMemo(() => getPracticumAdapter(), []);
   const isFirebaseActive = useMemo(() => isFirebaseConfigured(), []);
 
-  const currentUserId = activeIdentity?.userId ?? 'assistant-demo';
-  const currentUserRole = activeIdentity?.role ?? 'assistant';
+  const currentUserId = activeIdentity?.userId ?? '';
+  const currentUserRole = activeIdentity?.role;
 
   const clearError = useCallback(() => setError(null), []);
 
-  // Subscribe ke Classes secara real-time
+  // Subscribe ke Classes dan Sessions secara real-time
   useEffect(() => {
-    const assistantId = currentUserRole === 'assistant' ? currentUserId : undefined;
+    if (!activeIdentity || !currentUserRole) {
+      setClasses([]);
+      setSessions([]);
+      setLoadingClasses(false);
+      setLoadingSessions(false);
+      setError(null);
+      return;
+    }
 
-    const unsubscribe = adapter.subscribeClasses(
+    setLoadingClasses(true);
+    setLoadingSessions(true);
+
+    const assistantId = currentUserRole === 'assistant' ? currentUserId : undefined;
+    const studentId = currentUserRole === 'student' ? currentUserId : undefined;
+
+    const unsubscribeClasses = adapter.subscribeClasses(
       assistantId,
       (data) => {
         setClasses(data);
@@ -76,21 +89,13 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
       (err) => {
         setError(err.message);
         setLoadingClasses(false);
-      }
+      },
+      studentId
     );
 
-    return () => {
-      unsubscribe();
-    };
-  }, [adapter, currentUserId, currentUserRole]);
-
-  // Subscribe ke Sessions secara real-time
-  useEffect(() => {
-    const studentId = currentUserRole === 'student' ? currentUserId : undefined;
-
-    const unsubscribe = adapter.subscribeSessions(
+    const unsubscribeSessions = adapter.subscribeSessions(
       undefined,
-      studentId,
+      currentUserId,
       currentUserRole,
       (data) => {
         setSessions(data);
@@ -103,9 +108,10 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
     );
 
     return () => {
-      unsubscribe();
+      unsubscribeClasses();
+      unsubscribeSessions();
     };
-  }, [adapter, currentUserId, currentUserRole]);
+  }, [activeIdentity, adapter, currentUserId, currentUserRole]);
 
   // === CLASS ACTIONS ===
 
@@ -257,10 +263,21 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
     [adapter, currentUserId]
   );
 
+  const enrichedSessions = useMemo(() => {
+    return sessions.map((s) => {
+      const cls = classes.find((c) => c.id === s.classId);
+      return {
+        ...s,
+        className: s.className ?? cls?.className,
+        courseName: s.courseName ?? cls?.courseName,
+      };
+    });
+  }, [sessions, classes]);
+
   const value = useMemo(
     () => ({
       classes,
-      sessions,
+      sessions: enrichedSessions,
       loadingClasses,
       loadingSessions,
       error,
@@ -280,7 +297,7 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
     }),
     [
       classes,
-      sessions,
+      enrichedSessions,
       loadingClasses,
       loadingSessions,
       error,

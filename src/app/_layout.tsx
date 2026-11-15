@@ -8,8 +8,7 @@ import { AccountBar, AuthProvider, useAuth } from '@/features/auth';
 import { RoleTabBar } from '@/features/navigation';
 import { PracticumProvider } from '@/features/practicum';
 import { ScheduleProvider } from '@/features/schedule';
-import { PracticumProvider } from '@/features/practicum';
-import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -18,13 +17,15 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
-      <IdentityProvider>
-        <PracticumProvider>
-          <ScheduleProvider>
-            <RoleAwareApp backgroundColor={colors.background} />
-          </ScheduleProvider>
-        </PracticumProvider>
-      </IdentityProvider>
+      <AuthProvider>
+        <AttendanceProvider>
+          <PracticumProvider>
+            <ScheduleProvider>
+              <RoleAwareApp backgroundColor={colors.background} />
+            </ScheduleProvider>
+          </PracticumProvider>
+        </AttendanceProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 }
@@ -63,10 +64,8 @@ function RoleAwareApp({ backgroundColor }: { backgroundColor: string }) {
             <Stack.Screen name="index" />
             <Stack.Screen name="schedule" />
           </Stack.Protected>
-          <Stack.Protected guard={isAssistant} redirectTo="/">
+          <Stack.Protected guard={isAssistant} redirectTo={isAuthenticated ? '/' : '/login'}>
             <Stack.Screen name="classes" />
-          </Stack.Protected>
-          <Stack.Protected guard={isAssistant} redirectTo="/">
             <Stack.Screen name="rekap" />
             <Stack.Screen name="assistant-actions-demo" />
           </Stack.Protected>

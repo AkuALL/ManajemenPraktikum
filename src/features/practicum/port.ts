@@ -19,7 +19,8 @@ export interface PracticumPort {
   subscribeClasses(
     assistantId: string | undefined,
     onData: (classes: PracticumClass[]) => void,
-    onError?: (err: Error) => void
+    onError?: (err: Error) => void,
+    studentId?: string
   ): () => void;
   createClass(input: CreateClassInput, assistantId: string): Promise<PracticumClass>;
   updateClass(classId: string, input: UpdateClassInput): Promise<void>;

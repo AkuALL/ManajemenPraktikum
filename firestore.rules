@@ -332,6 +332,10 @@ service cloud.firestore {
       }
     }
 
+    match /{path=**}/members/{memberId} {
+      allow read: if signedIn() && request.auth.uid == memberId;
+    }
+
     match /sessions/{sessionId} {
       allow get, list: if isClassAssistant(resource.data.classId)
         || (signedIn() && exists(memberPath(resource.data.classId, request.auth.uid)));
