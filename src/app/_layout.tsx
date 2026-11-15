@@ -6,6 +6,7 @@ import { Colors } from '@/constants/theme';
 import { AttendanceProvider } from '@/features/attendance';
 import { AccountBar, AuthProvider, useAuth } from '@/features/auth';
 import { RoleTabBar } from '@/features/navigation';
+import { PracticumProvider } from '@/features/practicum';
 import { ScheduleProvider } from '@/features/schedule';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -18,9 +19,11 @@ export default function RootLayout() {
     <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
       <AuthProvider>
         <AttendanceProvider>
-          <ScheduleProvider>
-            <RoleAwareApp backgroundColor={colors.background} />
-          </ScheduleProvider>
+          <PracticumProvider>
+            <ScheduleProvider>
+              <RoleAwareApp backgroundColor={colors.background} />
+            </ScheduleProvider>
+          </PracticumProvider>
         </AttendanceProvider>
       </AuthProvider>
     </ThemeProvider>
@@ -62,6 +65,7 @@ function RoleAwareApp({ backgroundColor }: { backgroundColor: string }) {
             <Stack.Screen name="schedule" />
           </Stack.Protected>
           <Stack.Protected guard={isAssistant} redirectTo={isAuthenticated ? '/' : '/login'}>
+            <Stack.Screen name="classes" />
             <Stack.Screen name="rekap" />
             <Stack.Screen name="assistant-actions-demo" />
           </Stack.Protected>

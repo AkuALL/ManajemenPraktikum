@@ -16,6 +16,7 @@ export interface RouteDefinition {
 export const APP_ROUTES = {
   HOME: '/',
   SCHEDULE: '/schedule',
+  CLASSES: '/classes',
   SESSION_DETAIL: '/detail',
   ASSISTANT_REKAP: '/rekap',
   STUDENT_ATTENDANCE: '/kehadiran',

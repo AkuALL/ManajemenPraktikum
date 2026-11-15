@@ -2,17 +2,50 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { AssistantSessionActionControls } from '@/components/assistant';
 import { useIdentity } from '@/features/identity';
 import { SessionDetail, useSchedule } from '@/features/schedule';
 import { StudentAttendanceForm } from '@/features/attendance';
+import { usePracticum, SessionLifecycleButtons } from '@/features/practicum';
+import { LabSession } from '@/types';
 
 export default function SessionDetailScreen() {
   const router = useRouter();
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const { activeIdentity } = useIdentity();
-  const { getSessionById, updateSessionStatus } = useSchedule();
-  const session = getSessionById(sessionId);
+  const isAssistant = activeIdentity?.role === 'assistant';
+
+  const { sessions: practicumSessions, openSession, closeSession, deleteSession } = usePracticum();
+  const { getSessionById } = useSchedule();
+
+  const practicumSession = practicumSessions.find((s) => s.id === sessionId);
+  const fallbackSession = getSessionById(sessionId);
+
+  // Normalisasi ke LabSession untuk kompatibilitas dengan komponen turunan
+  const session: LabSession | null = practicumSession
+    ? {
+        id: practicumSession.id,
+        practicumName: practicumSession.title,
+        courseClass: practicumSession.className
+          ? `${practicumSession.className} - ${practicumSession.courseName ?? ''}`
+          : practicumSession.courseName ?? 'Kelas Praktikum',
+        location: practicumSession.location,
+        date: practicumSession.date ?? 'Hari ini',
+        startsAt: practicumSession.startsAt,
+        endsAt: practicumSession.endsAt,
+        status:
+          practicumSession.status === 'scheduled'
+            ? 'upcoming'
+            : practicumSession.status === 'open'
+              ? 'open'
+              : 'closed',
+        assistantName: practicumSession.assistantName ?? 'Asisten Praktikum',
+      }
+    : fallbackSession ?? null;
+
+  const handleDeleteSession = async (id: string) => {
+    await deleteSession(id);
+    router.replace('/schedule');
+  };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -21,22 +54,28 @@ export default function SessionDetailScreen() {
           accessibilityRole="button"
           accessibilityLabel="Kembali ke jadwal praktikum"
           onPress={() => router.back()}
-          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}>
+          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+        >
           <Text style={styles.backButtonText}>← Kembali ke jadwal</Text>
         </Pressable>
 
         {session ? (
           <>
             <SessionDetail session={session} />
-            {activeIdentity?.role === 'assistant' ? (
-              <AssistantSessionActionControls
-                role="assistant"
-                session={session}
-                onStatusChange={updateSessionStatus}
+
+            {/* Lifecycle Buka & Tutup Sesi untuk Asisten (GA-04 / FR-07) */}
+            {practicumSession && isAssistant && (
+              <SessionLifecycleButtons
+                session={practicumSession}
+                isAssistant={isAssistant}
+                onOpenSession={openSession}
+                onCloseSession={closeSession}
+                onDeleteSession={handleDeleteSession}
               />
-            ) : (
-              <StudentAttendanceForm session={session} />
             )}
+
+            {/* Form Presensi Mahasiswa untuk Praktikan (FR-08) */}
+            {!isAssistant && <StudentAttendanceForm session={session} />}
           </>
         ) : (
           <View style={styles.notFound}>
