@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/theme';
+import { AttendanceProvider } from '@/features/attendance';
 import { AccountBar, AuthProvider, useAuth } from '@/features/auth';
 import { RoleTabBar } from '@/features/navigation';
 import { ScheduleProvider } from '@/features/schedule';
@@ -16,9 +17,11 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
       <AuthProvider>
-        <ScheduleProvider>
-          <RoleAwareApp backgroundColor={colors.background} />
-        </ScheduleProvider>
+        <AttendanceProvider>
+          <ScheduleProvider>
+            <RoleAwareApp backgroundColor={colors.background} />
+          </ScheduleProvider>
+        </AttendanceProvider>
       </AuthProvider>
     </ThemeProvider>
   );

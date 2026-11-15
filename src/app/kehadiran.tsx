@@ -1,12 +1,12 @@
 /**
- * Kehadiran Screen — JE-04
- * Owner: Jesica
- * Riwayat kehadiran Praktikan aktif.
- * Disesuaikan dengan baseline design (HTML reference).
+ * Kehadiran Screen — AL-05 / FR-09
+ * Riwayat kehadiran Praktikan aktif secara real-time dari Firestore.
  */
 
+import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,43 +15,35 @@ import {
 } from 'react-native';
 
 import { Colors, MaxContentWidth } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useIdentity } from '@/features/identity';
+import { sortAttendanceEntries, useAttendance } from '@/features/attendance';
+import { useAuth } from '@/features/auth';
 import { useSchedule } from '@/features/schedule';
-import type { AttendanceRecord } from '@/types';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import type { AttendanceEntry } from '@/types';
 
-type ThemeColors = (typeof Colors)[keyof typeof Colors];
+type Palette = (typeof Colors)[keyof typeof Colors];
 
 export default function AttendanceScreen() {
-  const { activeIdentity } = useIdentity();
-  const { attendance, sessions } = useSchedule();
-  const isDark = useColorScheme() === 'dark';
-  const colors = isDark ? Colors.dark : Colors.light;
-  const [sortAsc, setSortAsc] = useState(false); // false = terbaru dulu
-  const studentId = activeIdentity?.role === 'student' ? activeIdentity.userId : null;
+  const router = useRouter();
+  const { user } = useAuth();
+  const { records, loading, error, fromCache, retry } = useAttendance();
+  const { sessions } = useSchedule();
+  const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
+  const [sortAsc, setSortAsc] = useState(false);
 
-  const allRecords = useMemo(() => {
-    if (!studentId) return [];
+  const enrichedRecords = useMemo(() => {
+    const ordered = sortAttendanceEntries(records, sortAsc);
+    return ordered.map((record) => {
+      const session = sessions.find((item) => item.id === record.sessionId);
+      return {
+        ...record,
+        sessionName: session?.practicumName ?? record.sessionId,
+        sessionClass: session?.courseClass ?? record.classId,
+      };
+    });
+  }, [records, sessions, sortAsc]);
 
-    return attendance
-      .filter((record) => record.studentId === studentId)
-      .map((record) => {
-        const session = sessions.find((item) => item.id === record.sessionId);
-        return {
-          ...record,
-          sessionName: session?.practicumName ?? record.sessionId,
-          sessionClass: session?.courseClass,
-        };
-      });
-  }, [attendance, sessions, studentId]);
-
-  const sorted = useMemo(() => {
-    const copy = [...allRecords];
-    return sortAsc ? copy.reverse() : copy;
-  }, [allRecords, sortAsc]);
-
-  // Guard: hanya Praktikan
-  if (activeIdentity?.role !== 'student') {
+  if (user?.role !== 'student') {
     return (
       <View style={[styles.guard, { backgroundColor: colors.background }]}>
         <Text style={[styles.guardTitle, { color: colors.textPrimary }]}>
@@ -64,9 +56,7 @@ export default function AttendanceScreen() {
     );
   }
 
-  const totalSessions = allRecords.length;
-  const attendedCount = allRecords.length; // semua record = hadir
-  const pct = totalSessions === 0 ? 0 : Math.round((attendedCount / totalSessions) * 100);
+  const attendedCount = enrichedRecords.length;
 
   return (
     <ScrollView
@@ -77,31 +67,25 @@ export default function AttendanceScreen() {
       ]}
       showsVerticalScrollIndicator={false}
     >
-      {/* ── Header identitas ─────────────────────────── */}
       <View style={styles.heading}>
         <View style={styles.headingRow}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Kehadiran saya</Text>
           <View
             style={[
-              styles.semesterBadge,
+              styles.roleBadge,
               { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
             ]}
           >
-            <Text style={[styles.semesterText, { color: colors.textSecondary }]}>
-              Semester Ganjil 2026/2027
+            <Text style={[styles.roleBadgeText, { color: colors.textSecondary }]}>
+              {fromCache ? 'Cache lokal' : 'Sinkron real-time'}
             </Text>
           </View>
         </View>
-        <View style={styles.identityRow}>
-          <Text style={[styles.identityText, { color: colors.textSecondary }]}>
-            {activeIdentity.displayName}
-            {activeIdentity.identifier ? ` · ${activeIdentity.identifier}` : ''}
-          </Text>
-          <View style={styles.activeDot} />
-        </View>
+        <Text style={[styles.identityText, { color: colors.textSecondary }, styles.tabular]}>
+          {user.displayName} · {user.identifier}
+        </Text>
       </View>
 
-      {/* ── Metric Summary Banner ────────────────────── */}
       <View
         style={[
           styles.metricCard,
@@ -112,60 +96,38 @@ export default function AttendanceScreen() {
           <View
             style={[
               styles.metricIcon,
-              {
-                backgroundColor: isDark ? '#0D2E1A' : '#F0FDF4',
-                borderColor: isDark ? '#1A4D2E' : '#86EFAC',
-              },
+              { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
             ]}
           >
-            <Text style={styles.metricIconText}>✓</Text>
+            <Text style={[styles.metricIconText, { color: colors.textPrimary }]}>✓</Text>
           </View>
           <View style={styles.metricInfo}>
-            <View style={styles.metricTitleRow}>
-              <Text style={[styles.metricCount, { color: colors.textPrimary }]}>
-                {attendedCount} kehadiran tercatat
-              </Text>
-              {attendedCount > 0 && (
-                <View
-                  style={[
-                    styles.validBadge,
-                    {
-                      backgroundColor: isDark ? '#0D2E1A' : '#DCFCE7',
-                    },
-                  ]}
-                >
-                  <Text style={styles.validBadgeText}>Valid</Text>
-                </View>
-              )}
-            </View>
+            <Text style={[styles.metricCount, { color: colors.textPrimary }, styles.tabular]}>
+              {attendedCount} kehadiran tercatat
+            </Text>
             <Text style={[styles.metricSubtitle, { color: colors.textSecondary }]}>
-              Total sesi terselesaikan semester ini
+              Riwayat presensi akun aktif
             </Text>
           </View>
         </View>
-        {/* Percentage ring (sederhana tanpa native SVG dependency) */}
+
         <View style={styles.metricRight}>
-          <View style={styles.ringContainer}>
-            <View
-              style={[
-                styles.ringOuter,
-                { borderColor: totalSessions === 0 ? colors.border : '#16A34A' },
-              ]}
-            >
-              <Text style={[styles.ringPct, { color: colors.textPrimary }]}>{pct}%</Text>
-            </View>
+          <View
+            style={[
+              styles.countRing,
+              { borderColor: attendedCount === 0 ? colors.border : colors.textPrimary },
+            ]}
+          >
+            <Text style={[styles.countRingValue, { color: colors.textPrimary }, styles.tabular]}>
+              {attendedCount}
+            </Text>
           </View>
-          <Text style={[styles.ringLabel, { color: colors.textSecondary }]}>
-            Tingkat{'\n'}presensi
-          </Text>
+          <Text style={[styles.ringLabel, { color: colors.textSecondary }]}>Total hadir</Text>
         </View>
       </View>
 
-      {/* ── Riwayat Sesi header ──────────────────────── */}
       <View style={styles.listHeader}>
-        <Text style={[styles.listHeaderTitle, { color: colors.textPrimary }]}>
-          ⊟  Riwayat Sesi
-        </Text>
+        <Text style={[styles.listHeaderTitle, { color: colors.textPrimary }]}>Riwayat sesi</Text>
         <Pressable
           onPress={() => setSortAsc((v) => !v)}
           accessibilityRole="button"
@@ -173,52 +135,109 @@ export default function AttendanceScreen() {
           style={({ pressed }) => [
             styles.sortButton,
             { backgroundColor: colors.surface, borderColor: colors.border },
-            pressed && { opacity: 0.7 },
+            pressed && styles.pressed,
           ]}
         >
-          <Text style={[styles.sortButtonText, { color: colors.textSecondary }]}>⇅ </Text>
+          <Text style={[styles.sortButtonText, { color: colors.textSecondary }]}>Urutkan: </Text>
           <Text style={[styles.sortButtonText, { color: colors.textPrimary }]}>
             {sortAsc ? 'Terlama' : 'Terbaru'}
           </Text>
         </Pressable>
       </View>
 
-      {/* ── Cards ────────────────────────────────────── */}
-      {sorted.length === 0 ? (
-        <EmptyState colors={colors} />
+      {loading ? (
+        <View
+          style={[
+            styles.stateCard,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
+          <ActivityIndicator size="small" color={colors.textPrimary} />
+          <Text style={[styles.stateBody, { color: colors.textSecondary }]}>
+            Memuat riwayat kehadiran
+          </Text>
+        </View>
+      ) : error ? (
+        <View
+          accessibilityRole="alert"
+          style={[
+            styles.stateCard,
+            { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
+          ]}
+        >
+          <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>
+            Gagal memuat riwayat
+          </Text>
+          <Text style={[styles.stateBody, { color: colors.textSecondary }]}>{error}</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Muat ulang riwayat kehadiran"
+            onPress={retry}
+            style={({ pressed }) => [
+              styles.retryButton,
+              { backgroundColor: colors.actionPrimary },
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={[styles.retryButtonText, { color: colors.actionSecondary }]}>
+              Coba lagi
+            </Text>
+          </Pressable>
+        </View>
+      ) : enrichedRecords.length === 0 ? (
+        <View
+          style={[
+            styles.stateCard,
+            { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
+          ]}
+        >
+          <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>Belum ada kehadiran</Text>
+          <Text style={[styles.stateBody, { color: colors.textSecondary }]}>
+            Presensi yang Anda catat pada sesi berlangsung akan tampil di sini.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Lihat jadwal praktikum"
+            onPress={() => router.push('/schedule')}
+            style={({ pressed }) => [
+              styles.retryButton,
+              { backgroundColor: colors.actionPrimary },
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={[styles.retryButtonText, { color: colors.actionSecondary }]}>
+              Lihat jadwal
+            </Text>
+          </Pressable>
+        </View>
       ) : (
         <View style={styles.cardList}>
-          {sorted.map((record) => (
+          {enrichedRecords.map((record) => (
             <AttendanceCard key={record.id} record={record} colors={colors} />
           ))}
         </View>
       )}
 
-      {/* ── Protocol note ────────────────────────────── */}
       <View
         style={[
           styles.protocolNote,
           { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
         ]}
       >
-        <Text style={styles.protocolIcon}>📋</Text>
         <Text style={[styles.protocolText, { color: colors.textSecondary }]}>
-          Presensi dicatat menggunakan waktu perangkat saat tombol dikonfirmasi. Data bersifat
-          sementara dan tidak tersinkronisasi ke server.
+          Presensi dicatat menggunakan waktu server Firestore dan tetap tersimpan saat aplikasi dibuka ulang.
         </Text>
       </View>
     </ScrollView>
   );
 }
 
-/* ── Sub-komponen ─────────────────────────────────── */
-
 function AttendanceCard({
   record,
   colors,
 }: {
-  record: AttendanceRecord & { sessionName: string; sessionClass?: string };
-  colors: ThemeColors;
+  record: AttendanceEntry & { sessionName: string; sessionClass?: string };
+  colors: Palette;
 }) {
   return (
     <View
@@ -227,15 +246,11 @@ function AttendanceCard({
         { backgroundColor: colors.surface, borderColor: colors.border },
       ]}
     >
-      {/* Card header */}
       <View style={styles.cardHeader}>
         <View style={styles.cardTitleGroup}>
-          <View style={styles.cardModulRow}>
-            <View style={styles.greenDot} />
-            <Text style={[styles.cardModulLabel, { color: colors.textSecondary }]}>
-              Sesi praktikum
-            </Text>
-          </View>
+          <Text style={[styles.cardModulLabel, { color: colors.textSecondary }]}>
+            Sesi praktikum
+          </Text>
           <Text style={[styles.cardSessionName, { color: colors.textPrimary }]}>
             {record.sessionName}
           </Text>
@@ -245,12 +260,18 @@ function AttendanceCard({
             </Text>
           ) : null}
         </View>
-        <View style={styles.hadirBadge}>
-          <Text style={styles.hadirBadgeText}>✓  Hadir</Text>
+        <View
+          style={[
+            styles.hadirBadge,
+            { backgroundColor: colors.actionPrimary },
+          ]}
+        >
+          <Text style={[styles.hadirBadgeText, { color: colors.actionSecondary }]}>
+            ✓ Hadir
+          </Text>
         </View>
       </View>
 
-      {/* Time info */}
       <View
         style={[
           styles.timeBox,
@@ -259,50 +280,29 @@ function AttendanceCard({
       >
         <View style={styles.timeBoxLeft}>
           <Text style={[styles.timeBoxLabel, { color: colors.textSecondary }]}>
-            🕐  Waktu Presensi
+            Waktu server
           </Text>
-          <Text style={[styles.timeBoxValue, { color: colors.textPrimary }]}>
+          <Text style={[styles.timeBoxValue, { color: colors.textPrimary }, styles.tabular]}>
             {record.attendedAt}
           </Text>
         </View>
         <View style={styles.timeBoxRight}>
           <Text style={[styles.timeBoxLabel, { color: colors.textSecondary }]}>Status</Text>
-          <View style={styles.verifiedRow}>
-            <Text style={styles.verifiedIcon}>✓</Text>
-            <Text style={[styles.timeBoxValue, { color: colors.textPrimary }]}>Tercatat</Text>
-          </View>
+          <Text style={[styles.timeBoxValue, { color: colors.textPrimary }]}>
+            {record.hasPendingWrites ? 'Menunggu sinkron' : 'Tercatat'}
+          </Text>
         </View>
       </View>
     </View>
   );
 }
 
-function EmptyState({ colors }: { colors: ThemeColors }) {
-  return (
-    <View
-      style={[
-        styles.emptyState,
-        { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
-      ]}
-    >
-      <Text style={styles.emptyIcon}>📭</Text>
-      <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Belum ada riwayat</Text>
-      <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
-        Kehadiran akan tercatat di sini setelah Anda melakukan presensi pada sesi yang sedang
-        berlangsung.
-      </Text>
-    </View>
-  );
-}
-
-/* ── Styles ─────────────────────────────────────── */
 const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
     paddingBottom: 40,
     gap: 20,
   },
-  // Guard
   guard: {
     flex: 1,
     justifyContent: 'center',
@@ -310,10 +310,21 @@ const styles = StyleSheet.create({
     padding: 32,
     gap: 8,
   },
-  guardTitle: { fontSize: 18, fontWeight: '700', textAlign: 'center' },
-  guardBody: { fontSize: 14, lineHeight: 21, textAlign: 'center' },
-  // Heading
-  heading: { gap: 6, paddingTop: 8 },
+  guardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  guardBody: {
+    fontSize: 14,
+    fontWeight: '400',
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  heading: {
+    gap: 8,
+    paddingTop: 8,
+  },
   headingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -321,25 +332,31 @@ const styles = StyleSheet.create({
     gap: 8,
     flexWrap: 'wrap',
   },
-  title: { fontSize: 26, fontWeight: '700', letterSpacing: -0.3 },
-  semesterBadge: {
-    borderRadius: 999,
+  title: {
+    fontSize: 24,
+    fontWeight: '600',
+    lineHeight: 30,
+  },
+  roleBadge: {
+    borderRadius: 8,
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  semesterText: { fontSize: 11, fontWeight: '600' },
-  identityRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  identityText: { fontSize: 14, lineHeight: 20 },
-  activeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#22C55E',
+  roleBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
-  // Metric banner
+  identityText: {
+    fontSize: 14,
+    fontWeight: '400',
+    lineHeight: 20,
+  },
+  tabular: {
+    fontVariant: ['tabular-nums'],
+  },
   metricCard: {
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     padding: 16,
     flexDirection: 'row',
@@ -347,55 +364,84 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
-  metricLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  metricLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
   metricIcon: {
     width: 40,
     height: 40,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  metricIconText: { fontSize: 18, color: '#16A34A' },
-  metricInfo: { flex: 1, gap: 3 },
-  metricTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  metricCount: { fontSize: 13, fontWeight: '700' },
-  validBadge: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
-  validBadgeText: { fontSize: 11, fontWeight: '700', color: '#15803D' },
-  metricSubtitle: { fontSize: 12, lineHeight: 16 },
-  metricRight: { alignItems: 'center', gap: 4 },
-  ringContainer: { alignItems: 'center', justifyContent: 'center' },
-  ringOuter: {
+  metricIconText: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  metricInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  metricCount: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  metricSubtitle: {
+    fontSize: 13,
+    fontWeight: '400',
+    lineHeight: 18,
+  },
+  metricRight: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  countRing: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    borderWidth: 4,
+    borderWidth: 2,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  ringPct: { fontSize: 11, fontWeight: '700' },
-  ringLabel: { fontSize: 10, textAlign: 'center', lineHeight: 14 },
-  // List header
+  countRingValue: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  ringLabel: {
+    fontSize: 12,
+    fontWeight: '400',
+  },
   listHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  listHeaderTitle: { fontSize: 13, fontWeight: '700', letterSpacing: 0.5 },
+  listHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
   sortButton: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 8,
     borderWidth: 1,
-    paddingHorizontal: 10,
+    minHeight: 36,
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    gap: 2,
   },
-  sortButtonText: { fontSize: 13, fontWeight: '600' },
-  // Card list
-  cardList: { gap: 12 },
+  sortButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  cardList: {
+    gap: 12,
+  },
   card: {
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     padding: 16,
     gap: 12,
@@ -406,54 +452,96 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 8,
   },
-  cardTitleGroup: { flex: 1, gap: 3 },
-  cardModulRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  greenDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#22C55E' },
-  cardModulLabel: { fontSize: 12, fontWeight: '500' },
-  cardSessionName: { fontSize: 17, fontWeight: '700' },
-  cardSessionClass: { fontSize: 13 },
+  cardTitleGroup: {
+    flex: 1,
+    gap: 4,
+  },
+  cardModulLabel: {
+    fontSize: 12,
+    fontWeight: '400',
+  },
+  cardSessionName: {
+    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 22,
+  },
+  cardSessionClass: {
+    fontSize: 13,
+    fontWeight: '400',
+  },
   hadirBadge: {
-    backgroundColor: '#16A34A',
     borderRadius: 8,
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
   },
-  hadirBadgeText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
-  // Time info box
+  hadirBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
   timeBox: {
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
     padding: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
   },
-  timeBoxLeft: { gap: 3 },
-  timeBoxRight: { alignItems: 'flex-end', gap: 3 },
-  timeBoxLabel: { fontSize: 12, fontWeight: '500' },
-  timeBoxValue: { fontSize: 13, fontWeight: '700' },
-  verifiedRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  verifiedIcon: { fontSize: 12, color: '#16A34A' },
-  // Empty state
-  emptyState: {
-    borderRadius: 14,
+  timeBoxLeft: {
+    flex: 1,
+    gap: 4,
+  },
+  timeBoxRight: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  timeBoxLabel: {
+    fontSize: 12,
+    fontWeight: '400',
+  },
+  timeBoxValue: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  stateCard: {
+    borderRadius: 12,
     borderWidth: 1,
     padding: 24,
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
-  emptyIcon: { fontSize: 32 },
-  emptyTitle: { fontSize: 16, fontWeight: '700' },
-  emptyBody: { fontSize: 14, lineHeight: 20, textAlign: 'center' },
-  // Protocol note
+  stateTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  stateBody: {
+    fontSize: 14,
+    fontWeight: '400',
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  retryButton: {
+    minHeight: 44,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  retryButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
   protocolNote: {
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
     padding: 12,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
   },
-  protocolIcon: { fontSize: 16 },
-  protocolText: { fontSize: 12, lineHeight: 18, flex: 1 },
+  protocolText: {
+    fontSize: 12,
+    fontWeight: '400',
+    lineHeight: 18,
+  },
+  pressed: {
+    opacity: 0.72,
+  },
 });
