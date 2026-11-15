@@ -4,6 +4,7 @@ import { useColorScheme, SafeAreaView, StyleSheet, View } from 'react-native';
 import { IdentityProvider, IdentitySelectionModal, IdentityBar, useIdentity } from '@/features/identity';
 import { RoleTabBar } from '@/features/navigation';
 import { ScheduleProvider } from '@/features/schedule';
+import { PracticumProvider } from '@/features/practicum';
 import { Colors } from '@/constants/theme';
 
 export default function RootLayout() {
@@ -14,9 +15,11 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
       <IdentityProvider>
-        <ScheduleProvider>
-          <RoleAwareApp backgroundColor={colors.background} />
-        </ScheduleProvider>
+        <PracticumProvider>
+          <ScheduleProvider>
+            <RoleAwareApp backgroundColor={colors.background} />
+          </ScheduleProvider>
+        </PracticumProvider>
       </IdentityProvider>
     </ThemeProvider>
   );
@@ -36,6 +39,9 @@ function RoleAwareApp({ backgroundColor }: { backgroundColor: string }) {
           <Stack.Screen name="index" />
           <Stack.Protected guard={hasIdentity} redirectTo="/">
             <Stack.Screen name="schedule" />
+          </Stack.Protected>
+          <Stack.Protected guard={isAssistant} redirectTo="/">
+            <Stack.Screen name="classes" />
           </Stack.Protected>
           <Stack.Protected guard={isAssistant} redirectTo="/">
             <Stack.Screen name="rekap" />

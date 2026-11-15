@@ -25,6 +25,7 @@ export function RoleTabBar() {
   const tabs: RoleTabItem[] =
     role === 'assistant'
       ? [
+          { key: 'classes', label: 'Kelas', route: APP_ROUTES.CLASSES, role: 'assistant' },
           { key: 'schedule', label: 'Jadwal', route: APP_ROUTES.SCHEDULE, role: 'assistant' },
           { key: 'rekap', label: 'Rekap', route: APP_ROUTES.ASSISTANT_REKAP, role: 'assistant' },
         ]
