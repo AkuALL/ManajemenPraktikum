@@ -18,3 +18,4 @@ export type {
 } from './port';
 export { StudentAttendanceForm } from './StudentAttendanceForm';
 export type { StudentAttendanceFormProps } from './StudentAttendanceForm';
+export { useSessionAttendance } from './useSessionAttendance';
