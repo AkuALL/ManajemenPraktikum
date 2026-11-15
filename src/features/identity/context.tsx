@@ -1,65 +1,46 @@
-import React, { createContext, useCallback, useContext, useState, useMemo, ReactNode } from 'react';
-import { UserIdentity } from '@/types';
-import { IdentityContextType } from './types';
+import React, { ReactNode, useCallback, useMemo } from 'react';
 
-const IdentityContext = createContext<IdentityContextType | undefined>(undefined);
+import { useAuth } from '@/features/auth';
+import type { UserIdentity } from '@/types';
 
+import type { IdentityContextType } from './types';
+
+// Bridge legacy Sprint 1 useIdentity() consumers to real Sprint 2 AuthContext.
 export function IdentityProvider({ children }: { children: ReactNode }) {
-  const [activeIdentity, setActiveIdentity] = useState<UserIdentity | null>(null);
-  const [selectorOpen, setSelectorOpen] = useState<boolean>(false);
-
-  const isSelectingIdentity = useMemo(() => {
-    // Jika belum ada identitas aktif, selector wajib tampil
-    return activeIdentity === null || selectorOpen;
-  }, [activeIdentity, selectorOpen]);
-
-  const selectIdentity = useCallback((identity: UserIdentity) => {
-    setActiveIdentity(identity);
-    setSelectorOpen(false);
-  }, []);
-
-  const clearIdentity = useCallback(() => {
-    setActiveIdentity(null);
-    setSelectorOpen(true);
-  }, []);
-
-  const openIdentitySelector = useCallback(() => {
-    setSelectorOpen(true);
-  }, []);
-
-  const closeIdentitySelector = useCallback(() => {
-    // Hanya bisa ditutup jika sudah ada identitas aktif
-    if (activeIdentity !== null) {
-      setSelectorOpen(false);
-    }
-  }, [activeIdentity]);
-
-  const value = useMemo(
-    () => ({
-      activeIdentity,
-      selectIdentity,
-      clearIdentity,
-      isSelectingIdentity,
-      openIdentitySelector,
-      closeIdentitySelector,
-    }),
-    [
-      activeIdentity,
-      clearIdentity,
-      closeIdentitySelector,
-      isSelectingIdentity,
-      openIdentitySelector,
-      selectIdentity,
-    ]
-  );
-
-  return <IdentityContext.Provider value={value}>{children}</IdentityContext.Provider>;
+  return <>{children}</>;
 }
 
 export function useIdentity(): IdentityContextType {
-  const context = useContext(IdentityContext);
-  if (!context) {
-    throw new Error('useIdentity must be used within an IdentityProvider');
-  }
-  return context;
+  const { user, logout } = useAuth();
+
+  const activeIdentity = useMemo<UserIdentity | null>(
+    () =>
+      user
+        ? {
+            role: user.role,
+            userId: user.uid,
+            displayName: user.displayName,
+            identifier: user.identifier,
+          }
+        : null,
+    [user],
+  );
+
+  const clearIdentity = useCallback(() => {
+    void logout();
+  }, [logout]);
+
+  const noop = useCallback(() => undefined, []);
+
+  return useMemo<IdentityContextType>(
+    () => ({
+      activeIdentity,
+      selectIdentity: noop,
+      clearIdentity,
+      isSelectingIdentity: false,
+      openIdentitySelector: noop,
+      closeIdentitySelector: noop,
+    }),
+    [activeIdentity, clearIdentity, noop],
+  );
 }
