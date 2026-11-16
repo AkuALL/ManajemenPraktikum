@@ -1,4 +1,4 @@
-import {
+import type {
   AddMemberInput,
   ClassMember,
   CreateClassInput,
@@ -8,9 +8,11 @@ import {
   UpdateClassInput,
   UpdateSessionInput,
 } from './types';
-import { PracticumPort } from './port';
+import type { PracticumPort } from './port';
 
 type Listener<T> = (data: T) => void;
+
+let mockIdSeq = 1000;
 
 export class MockPracticumAdapter implements PracticumPort {
   private classes: PracticumClass[] = [
@@ -161,17 +163,24 @@ export class MockPracticumAdapter implements PracticumPort {
 
   subscribeClasses(
     assistantId: string | undefined,
-    onData: (classes: PracticumClass[]) => void
+    onData: (classes: PracticumClass[]) => void,
+    onError?: (err: Error) => void,
+    studentId?: string
   ): () => void {
     const handler = (classes: PracticumClass[]) => {
-      if (!assistantId) {
-        onData(classes);
-      } else {
+      if (assistantId) {
         onData(
           classes.filter(
             (c) => c.assistantIds.includes(assistantId) || c.createdBy === assistantId
           )
         );
+      } else if (studentId) {
+        const enrolledClassIds = Object.entries(this.members)
+          .filter(([, memberList]) => memberList.some((m) => m.userId === studentId))
+          .map(([cId]) => cId);
+        onData(classes.filter((c) => enrolledClassIds.includes(c.id)));
+      } else {
+        onData(classes);
       }
     };
 
@@ -185,7 +194,7 @@ export class MockPracticumAdapter implements PracticumPort {
 
   async createClass(input: CreateClassInput, assistantId: string): Promise<PracticumClass> {
     const newClass: PracticumClass = {
-      id: `class-${Date.now()}`,
+      id: `class-${Date.now()}-${++mockIdSeq}`,
       courseName: input.courseName,
       className: input.className,
       lab: input.lab,
@@ -354,8 +363,14 @@ export class MockPracticumAdapter implements PracticumPort {
     const parentClass = this.classes.find((c) => c.id === input.classId);
     if (!parentClass) throw new Error('Kelas praktikum tidak ditemukan');
 
+    const startDate = new Date(input.startsAt);
+    const endDate = new Date(input.endsAt);
+    if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime()) && startDate >= endDate) {
+      throw new Error('Waktu selesai harus lebih lambat dari waktu mulai');
+    }
+
     const newSession: PracticumSession = {
-      id: `sess-${Date.now()}`,
+      id: `sess-${Date.now()}-${++mockIdSeq}`,
       classId: input.classId,
       className: parentClass.className,
       courseName: parentClass.courseName,
