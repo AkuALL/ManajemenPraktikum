@@ -1,4 +1,4 @@
-import {
+import type {
   AddMemberInput,
   ClassMember,
   CreateClassInput,
@@ -58,4 +58,35 @@ export interface PracticumPort {
   // === LIFECYCLE SESI (BUKA & TUTUP) ===
   openSession(sessionId: string, assistantId: string): Promise<void>;
   closeSession(sessionId: string, assistantId: string): Promise<void>;
+}
+
+const ISO_DATE_HINT = /^\d{4}-\d{2}-\d{2}[T ]/;
+
+/** Memformat ISO timestamp sesi menjadi jam lokal ringkas; string jam biasa dikembalikan apa adanya. */
+export function formatSessionTime(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || !ISO_DATE_HINT.test(trimmed)) return value;
+  const parsed = Date.parse(trimmed);
+  if (Number.isNaN(parsed)) return value;
+  return new Date(parsed).toLocaleTimeString('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/** Mengambil label tanggal sesi dari field date eksplisit atau fallback dari ISO startsAt. */
+export function formatSessionDate(dateStr?: string, startsAt?: string): string {
+  const explicit = dateStr?.trim();
+  if (explicit) return explicit;
+  if (startsAt && ISO_DATE_HINT.test(startsAt.trim())) {
+    const parsed = Date.parse(startsAt);
+    if (!Number.isNaN(parsed)) {
+      return new Date(parsed).toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+    }
+  }
+  return 'Belum ditentukan';
 }

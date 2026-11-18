@@ -14,7 +14,7 @@ test('buildAttendanceDocId enforces deterministic {sessionId}_{studentId} format
 });
 
 test('toSessionSummary maps both Sprint 1 LabSession and Sprint 2 SessionSummary', () => {
-  const fromLegacy = toSessionSummary({
+  const legacySession = {
     id: 'sesi-1',
     practicumName: 'Basis Data',
     courseClass: 'Kelas B',
@@ -22,10 +22,20 @@ test('toSessionSummary maps both Sprint 1 LabSession and Sprint 2 SessionSummary
     startsAt: '13.00',
     endsAt: '15.00',
     status: 'upcoming',
-  });
-  assert.deepEqual(fromLegacy, {
+  };
+  assert.deepEqual(toSessionSummary(legacySession), {
     id: 'sesi-1',
     classId: 'Kelas B',
+    status: 'scheduled',
+  });
+
+  const withFirestoreClassId = toSessionSummary({
+    ...legacySession,
+    classId: 'cls-firestore-01',
+  });
+  assert.deepEqual(withFirestoreClassId, {
+    id: 'sesi-1',
+    classId: 'cls-firestore-01',
     status: 'scheduled',
   });
 

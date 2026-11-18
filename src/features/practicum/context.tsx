@@ -47,12 +47,15 @@ interface PracticumContextType {
 
 const PracticumContext = createContext<PracticumContextType | undefined>(undefined);
 
+interface KeyedList<T> {
+  key: string;
+  items: T[];
+}
+
 export function PracticumProvider({ children }: { children: ReactNode }) {
   const { activeIdentity } = useIdentity();
-  const [classes, setClasses] = useState<PracticumClass[]>([]);
-  const [sessions, setSessions] = useState<PracticumSession[]>([]);
-  const [loadingClasses, setLoadingClasses] = useState<boolean>(true);
-  const [loadingSessions, setLoadingSessions] = useState<boolean>(true);
+  const [classesState, setClassesState] = useState<KeyedList<PracticumClass> | null>(null);
+  const [sessionsState, setSessionsState] = useState<KeyedList<PracticumSession> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const adapter = useMemo(() => getPracticumAdapter(), []);
@@ -60,22 +63,26 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
 
   const currentUserId = activeIdentity?.userId ?? '';
   const currentUserRole = activeIdentity?.role;
+  const activeKey =
+    activeIdentity && currentUserRole ? `${currentUserRole}:${currentUserId}` : null;
+
+  const classes = useMemo(
+    () => (activeKey && classesState?.key === activeKey ? classesState.items : []),
+    [activeKey, classesState],
+  );
+  const sessions = useMemo(
+    () => (activeKey && sessionsState?.key === activeKey ? sessionsState.items : []),
+    [activeKey, sessionsState],
+  );
+  const loadingClasses = activeKey !== null && classesState?.key !== activeKey;
+  const loadingSessions = activeKey !== null && sessionsState?.key !== activeKey;
+  const effectiveError = activeKey ? error : null;
 
   const clearError = useCallback(() => setError(null), []);
 
-  // Subscribe ke Classes dan Sessions secara real-time
+  // Subscribe ke Classes dan Sessions secara real-time saat identitas siap.
   useEffect(() => {
-    if (!activeIdentity || !currentUserRole) {
-      setClasses([]);
-      setSessions([]);
-      setLoadingClasses(false);
-      setLoadingSessions(false);
-      setError(null);
-      return;
-    }
-
-    setLoadingClasses(true);
-    setLoadingSessions(true);
+    if (!activeKey || !currentUserRole) return;
 
     const assistantId = currentUserRole === 'assistant' ? currentUserId : undefined;
     const studentId = currentUserRole === 'student' ? currentUserId : undefined;
@@ -83,12 +90,14 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
     const unsubscribeClasses = adapter.subscribeClasses(
       assistantId,
       (data) => {
-        setClasses(data);
-        setLoadingClasses(false);
+        setClassesState({ key: activeKey, items: data });
       },
       (err) => {
         setError(err.message);
-        setLoadingClasses(false);
+        setClassesState((prev) => ({
+          key: activeKey,
+          items: prev?.key === activeKey ? prev.items : [],
+        }));
       },
       studentId
     );
@@ -98,12 +107,14 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
       currentUserId,
       currentUserRole,
       (data) => {
-        setSessions(data);
-        setLoadingSessions(false);
+        setSessionsState({ key: activeKey, items: data });
       },
       (err) => {
         setError(err.message);
-        setLoadingSessions(false);
+        setSessionsState((prev) => ({
+          key: activeKey,
+          items: prev?.key === activeKey ? prev.items : [],
+        }));
       }
     );
 
@@ -111,7 +122,7 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
       unsubscribeClasses();
       unsubscribeSessions();
     };
-  }, [activeIdentity, adapter, currentUserId, currentUserRole]);
+  }, [activeKey, adapter, currentUserId, currentUserRole]);
 
   // === CLASS ACTIONS ===
 
@@ -280,7 +291,7 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
       sessions: enrichedSessions,
       loadingClasses,
       loadingSessions,
-      error,
+      error: effectiveError,
       isFirebaseActive,
       clearError,
       createClass,
@@ -300,7 +311,7 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
       enrichedSessions,
       loadingClasses,
       loadingSessions,
-      error,
+      effectiveError,
       isFirebaseActive,
       clearError,
       createClass,

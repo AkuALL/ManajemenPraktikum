@@ -333,7 +333,7 @@ service cloud.firestore {
     }
 
     match /{path=**}/members/{memberId} {
-      allow read: if signedIn() && request.auth.uid == memberId;
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
     }
 
     match /sessions/{sessionId} {

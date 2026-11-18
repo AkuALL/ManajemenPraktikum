@@ -72,7 +72,7 @@ export function toSessionSummary(
 
   return {
     id: session.id,
-    classId: session.courseClass ?? session.id,
+    classId: session.classId ?? session.courseClass ?? session.id,
     status: session.status === 'upcoming' ? 'scheduled' : session.status,
   };
 }
