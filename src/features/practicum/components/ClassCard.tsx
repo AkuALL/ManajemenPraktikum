@@ -9,7 +9,8 @@ interface ClassCardProps {
   isAssistant: boolean;
   onManageMembers: (cls: PracticumClass) => void;
   onEdit: (cls: PracticumClass) => void;
-  onDelete: (classId: string) => void;
+  onDelete: (classId: string) => Promise<void>;
+  isDeleting?: boolean;
 }
 
 export function ClassCard({
@@ -18,12 +19,15 @@ export function ClassCard({
   onManageMembers,
   onEdit,
   onDelete,
+  isDeleting = false,
 }: ClassCardProps) {
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
 
   const handleDeletePress = () => {
+    if (isDeleting) return;
+
     Alert.alert(
       'Hapus Kelas',
       `Yakin ingin menghapus kelas "${practicumClass.className} - ${practicumClass.courseName}"? Seluruh anggota dan sesi terkait yang belum dimulai juga akan dihapus.`,
@@ -32,7 +36,7 @@ export function ClassCard({
         {
           text: 'Hapus',
           style: 'destructive',
-          onPress: () => onDelete(practicumClass.id),
+          onPress: () => void onDelete(practicumClass.id),
         },
       ]
     );
@@ -78,6 +82,7 @@ export function ClassCard({
           <TouchableOpacity
             style={[styles.actionButton, { borderColor: colors.border }]}
             onPress={() => onManageMembers(practicumClass)}
+            disabled={isDeleting}
           >
             <Text style={[styles.actionButtonText, { color: colors.textPrimary }]}>
               Anggota
@@ -87,6 +92,7 @@ export function ClassCard({
           <TouchableOpacity
             style={[styles.actionButton, { borderColor: colors.border }]}
             onPress={() => onEdit(practicumClass)}
+            disabled={isDeleting}
           >
             <Text style={[styles.actionButtonText, { color: colors.textPrimary }]}>
               Edit
@@ -94,10 +100,11 @@ export function ClassCard({
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.actionButton, styles.deleteButton]}
+            style={[styles.actionButton, styles.deleteButton, isDeleting && styles.disabledButton]}
             onPress={handleDeletePress}
+            disabled={isDeleting}
           >
-            <Text style={styles.deleteButtonText}>Hapus</Text>
+            <Text style={styles.deleteButtonText}>{isDeleting ? 'Menghapus...' : 'Hapus'}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -180,5 +187,8 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     fontSize: 12,
     fontWeight: '600',
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
 });
