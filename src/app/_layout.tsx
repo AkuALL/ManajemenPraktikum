@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import { AttendanceProvider } from '@/features/attendance';
 import { AccountBar, AuthProvider, useAuth } from '@/features/auth';
+import { LeaveProvider } from '@/features/leave';
 import { RoleTabBar } from '@/features/navigation';
 import { PracticumProvider } from '@/features/practicum';
 import { ScheduleProvider } from '@/features/schedule';
@@ -20,9 +21,11 @@ export default function RootLayout() {
       <AuthProvider>
         <AttendanceProvider>
           <PracticumProvider>
-            <ScheduleProvider>
-              <RoleAwareApp backgroundColor={colors.background} />
-            </ScheduleProvider>
+            <LeaveProvider>
+              <ScheduleProvider>
+                <RoleAwareApp backgroundColor={colors.background} />
+              </ScheduleProvider>
+            </LeaveProvider>
           </PracticumProvider>
         </AttendanceProvider>
       </AuthProvider>
@@ -67,10 +70,12 @@ function RoleAwareApp({ backgroundColor }: { backgroundColor: string }) {
           <Stack.Protected guard={isAssistant} redirectTo={isAuthenticated ? '/' : '/login'}>
             <Stack.Screen name="classes" />
             <Stack.Screen name="rekap" />
+            <Stack.Screen name={'review-izin' as never} />
             <Stack.Screen name="assistant-actions-demo" />
           </Stack.Protected>
           <Stack.Protected guard={isStudent} redirectTo={isAuthenticated ? '/' : '/login'}>
             <Stack.Screen name="kehadiran" />
+            <Stack.Screen name={'izin' as never} />
           </Stack.Protected>
         </Stack>
       </View>

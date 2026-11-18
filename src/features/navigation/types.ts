@@ -19,7 +19,9 @@ export const APP_ROUTES = {
   CLASSES: '/classes',
   SESSION_DETAIL: '/detail',
   ASSISTANT_REKAP: '/rekap',
+  ASSISTANT_LEAVE_REVIEW: '/review-izin',
   STUDENT_ATTENDANCE: '/kehadiran',
+  STUDENT_LEAVE_REQUESTS: '/izin',
 } as const;
 
 export interface RoleTabItem {

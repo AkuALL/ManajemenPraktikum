@@ -35,7 +35,31 @@ export type AttendanceEntry = {
   hasPendingWrites?: boolean;
 };
 
+export type LeaveRequest = {
+  id: string;
+  sessionId: string;
+  classId: string;
+  studentId: string;
+  reason: string;
+  status: LeaveStatus;
+  aiStatus: AiStatus;
+  aiCategory?: string;
+  aiConfidence?: number;
+  aiClassifiedAtMs: number | null;
+  reviewedBy?: string;
+  reviewedAtMs: number | null;
+  reviewNote?: string;
+  createdAtMs: number | null;
+  updatedAtMs: number | null;
+  fromCache?: boolean;
+  hasPendingWrites?: boolean;
+};
+
 export function buildAttendanceDocId(sessionId: string, studentId: string): string {
+  return `${sessionId}_${studentId}`;
+}
+
+export function buildLeaveRequestDocId(sessionId: string, studentId: string): string {
   return `${sessionId}_${studentId}`;
 }
 
