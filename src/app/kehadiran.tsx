@@ -17,7 +17,7 @@ import {
 import { Colors, MaxContentWidth } from '@/constants/theme';
 import { sortAttendanceEntries, useAttendance } from '@/features/attendance';
 import { useAuth } from '@/features/auth';
-import { useSchedule } from '@/features/schedule';
+import { usePracticum } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { AttendanceEntry } from '@/types';
 
@@ -27,7 +27,7 @@ export default function AttendanceScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { records, loading, error, fromCache, retry } = useAttendance();
-  const { sessions } = useSchedule();
+  const { sessions } = usePracticum();
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const [sortAsc, setSortAsc] = useState(false);
 
@@ -35,10 +35,13 @@ export default function AttendanceScreen() {
     const ordered = sortAttendanceEntries(records, sortAsc);
     return ordered.map((record) => {
       const session = sessions.find((item) => item.id === record.sessionId);
+      const classLabel = session
+        ? [session.className, session.courseName].filter(Boolean).join(' · ')
+        : '';
       return {
         ...record,
-        sessionName: session?.practicumName ?? record.sessionId,
-        sessionClass: session?.courseClass ?? record.classId,
+        sessionName: session?.title ?? record.sessionId,
+        sessionClass: classLabel || record.classId,
       };
     });
   }, [records, sessions, sortAsc]);

@@ -16,11 +16,20 @@ import {
 import { Colors, MaxContentWidth } from '@/constants/theme';
 import { useSessionAttendance } from '@/features/attendance';
 import { useAuth } from '@/features/auth';
-import { useSchedule } from '@/features/schedule';
+import {
+  formatSessionDate,
+  formatSessionTime,
+  usePracticum,
+  type PracticumSession,
+} from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { normalizeSessionStatus, type SessionStatus } from '@/types';
+import { normalizeSessionStatus, type SessionStatus, type SessionStatusV2 } from '@/types';
 
-function getStatusLabel(status: SessionStatus): string {
+function getSessionCourseLabel(session: PracticumSession): string {
+  return [session.className, session.courseName].filter(Boolean).join(' · ');
+}
+
+function getStatusLabel(status: SessionStatus | SessionStatusV2): string {
   const normalized = normalizeSessionStatus(status);
   if (normalized === 'open') return '● Berlangsung';
   if (normalized === 'closed') return '✓ Selesai';
@@ -29,7 +38,7 @@ function getStatusLabel(status: SessionStatus): string {
 
 export default function RecapScreen() {
   const { user } = useAuth();
-  const { sessions } = useSchedule();
+  const { sessions, loadingSessions } = usePracticum();
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
 
   const defaultSessionId = useMemo(() => {
@@ -43,12 +52,9 @@ export default function RecapScreen() {
     return sessions.find((item) => item.id === targetId) ?? sessions[0] ?? null;
   }, [defaultSessionId, selectedSessionId, sessions]);
 
-  const activeClassId =
-    (activeSession as { classId?: string } | null)?.classId ?? null;
-
   const { records, loading, error, fromCache, retry } = useSessionAttendance(
     activeSession?.id ?? null,
-    activeClassId,
+    activeSession?.classId ?? null,
   );
 
   if (user?.role !== 'assistant') {
@@ -93,7 +99,19 @@ export default function RecapScreen() {
         </Text>
       </View>
 
-      {sessions.length === 0 ? (
+      {loadingSessions && sessions.length === 0 ? (
+        <View
+          style={[
+            styles.stateCard,
+            { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
+          ]}
+        >
+          <ActivityIndicator size="small" color={colors.textPrimary} />
+          <Text style={[styles.stateBody, { color: colors.textSecondary }]}>
+            Memuat daftar sesi praktikum
+          </Text>
+        </View>
+      ) : sessions.length === 0 ? (
         <View
           style={[
             styles.stateCard,
@@ -112,11 +130,12 @@ export default function RecapScreen() {
           <View style={styles.selectorList}>
             {sessions.map((session) => {
               const selected = session.id === activeSession?.id;
+              const classLabel = getSessionCourseLabel(session);
               return (
                 <Pressable
                   key={session.id}
                   accessibilityRole="button"
-                  accessibilityLabel={`Pilih sesi ${session.practicumName}`}
+                  accessibilityLabel={`Pilih sesi ${session.title}`}
                   accessibilityState={{ selected }}
                   onPress={() => setSelectedSessionId(session.id)}
                   style={({ pressed }) => [
@@ -134,8 +153,8 @@ export default function RecapScreen() {
                       { color: selected ? colors.actionSecondary : colors.textPrimary },
                     ]}
                   >
-                    {session.practicumName}
-                    {session.courseClass ? ` · ${session.courseClass}` : ''}
+                    {session.title}
+                    {classLabel ? ` · ${classLabel}` : ''}
                   </Text>
                 </Pressable>
               );
@@ -152,12 +171,15 @@ export default function RecapScreen() {
               <View style={styles.sessionHeader}>
                 <View style={styles.sessionTitleGroup}>
                   <Text style={[styles.sessionTitle, { color: colors.textPrimary }]}>
-                    {activeSession.practicumName}
-                    {activeSession.courseClass ? ` · ${activeSession.courseClass}` : ''}
+                    {activeSession.title}
+                    {getSessionCourseLabel(activeSession)
+                      ? ` · ${getSessionCourseLabel(activeSession)}`
+                      : ''}
                   </Text>
                   <Text style={[styles.sessionMeta, { color: colors.textSecondary }, styles.tabular]}>
-                    {activeSession.date ?? 'Tanggal belum ditentukan'} · {activeSession.startsAt}–
-                    {activeSession.endsAt} · {activeSession.location}
+                    {formatSessionDate(activeSession.date, activeSession.startsAt)} ·{' '}
+                    {formatSessionTime(activeSession.startsAt)}–
+                    {formatSessionTime(activeSession.endsAt)} · {activeSession.location}
                   </Text>
                 </View>
                 <View

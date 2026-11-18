@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
+import { formatSessionDate, formatSessionTime } from '../port';
 import { PracticumSession } from '../types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -82,7 +83,7 @@ export function SessionCard({
         <View style={styles.detailItem}>
           <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Waktu</Text>
           <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
-            {session.startsAt} – {session.endsAt}
+            {formatSessionTime(session.startsAt)} – {formatSessionTime(session.endsAt)}
           </Text>
         </View>
 
@@ -93,14 +94,12 @@ export function SessionCard({
           </Text>
         </View>
 
-        {session.date ? (
-          <View style={styles.detailItem}>
-            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Tanggal</Text>
-            <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
-              {session.date}
-            </Text>
-          </View>
-        ) : null}
+        <View style={styles.detailItem}>
+          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Tanggal</Text>
+          <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
+            {formatSessionDate(session.date, session.startsAt)}
+          </Text>
+        </View>
       </View>
 
       {/* Kontrol Buka / Tutup Sesi untuk Asisten */}

@@ -1,19 +1,28 @@
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { AssistantSessionActionControls } from '@/components/assistant';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Colors, MaxContentWidth } from '@/constants/theme';
+import { useAuth } from '@/features/auth';
+import {
+  formatSessionDate,
+  formatSessionTime,
+  SessionLifecycleButtons,
+  usePracticum,
+} from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useIdentity } from '@/features/identity';
-import { useSchedule } from '@/features/schedule';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { activeIdentity } = useIdentity();
-  const { sessions, updateSessionStatus } = useSchedule();
+  const { user } = useAuth();
+  const { sessions, loadingSessions, openSession, closeSession } = usePracticum();
   const isDark = useColorScheme() === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
-  const isAssistant = activeIdentity?.role === 'assistant';
-  const featuredSession = sessions[0];
+  const isAssistant = user?.role === 'assistant';
+  const featuredSession = sessions.find((s) => s.status === 'open') ?? sessions[0];
+
+  const featuredClassLabel = featuredSession
+    ? [featuredSession.className, featuredSession.courseName].filter(Boolean).join(' · ') ||
+      featuredSession.classId
+    : '';
 
   return (
     <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.content}>
@@ -43,29 +52,45 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {featuredSession ? (
+      {loadingSessions && !featuredSession ? (
+        <View style={[styles.empty, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+          <ActivityIndicator size="small" color={colors.textPrimary} />
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Memuat jadwal sesi...</Text>
+        </View>
+      ) : featuredSession ? (
         <View style={[styles.session, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.sessionTop}>
             <View style={styles.titleGroup}>
-              <Text style={[styles.course, { color: colors.textSecondary }]}>{featuredSession.courseClass}</Text>
-              <Text style={[styles.sessionTitle, { color: colors.textPrimary }]}>{featuredSession.practicumName}</Text>
+              <Text style={[styles.course, { color: colors.textSecondary }]}>{featuredClassLabel}</Text>
+              <Text style={[styles.sessionTitle, { color: colors.textPrimary }]}>{featuredSession.title}</Text>
             </View>
             <Text style={[styles.status, { color: colors.textPrimary, backgroundColor: colors.surfaceMuted }]}>
-              {featuredSession.status === 'upcoming' ? 'Belum dibuka' : featuredSession.status === 'open' ? 'Berlangsung' : 'Selesai'}
+              {featuredSession.status === 'scheduled' ? 'Belum dibuka' : featuredSession.status === 'open' ? 'Berlangsung' : 'Selesai'}
             </Text>
           </View>
           <View style={[styles.rule, { backgroundColor: colors.border }]} />
           <View style={styles.details}>
-            <Detail label="Tanggal" value={featuredSession.date ?? 'Belum ditentukan'} color={colors.textPrimary} muted={colors.textSecondary} />
-            <Detail label="Waktu" value={`${featuredSession.startsAt}–${featuredSession.endsAt}`} color={colors.textPrimary} muted={colors.textSecondary} />
+            <Detail
+              label="Tanggal"
+              value={formatSessionDate(featuredSession.date, featuredSession.startsAt)}
+              color={colors.textPrimary}
+              muted={colors.textSecondary}
+            />
+            <Detail
+              label="Waktu"
+              value={`${formatSessionTime(featuredSession.startsAt)}–${formatSessionTime(featuredSession.endsAt)}`}
+              color={colors.textPrimary}
+              muted={colors.textSecondary}
+            />
             <Detail label="Lokasi" value={featuredSession.location} color={colors.textPrimary} muted={colors.textSecondary} />
           </View>
 
           {isAssistant ? (
-            <AssistantSessionActionControls
-              role="assistant"
+            <SessionLifecycleButtons
               session={featuredSession}
-              onStatusChange={updateSessionStatus}
+              isAssistant={isAssistant}
+              onOpenSession={openSession}
+              onCloseSession={closeSession}
             />
           ) : (
             <Text style={[styles.notice, { color: colors.textSecondary, backgroundColor: colors.surfaceMuted }]}>
@@ -77,7 +102,7 @@ export default function HomeScreen() {
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Buka detail ${featuredSession.practicumName}`}
+            accessibilityLabel={`Buka detail ${featuredSession.title}`}
             onPress={() => router.push({ pathname: '/schedule/[sessionId]', params: { sessionId: featuredSession.id } })}
             style={({ pressed }) => [styles.detailButton, { borderColor: colors.border }, pressed && styles.pressed]}>
             <Text style={[styles.detailButtonText, { color: colors.textPrimary }]}>Lihat detail sesi</Text>
@@ -89,8 +114,6 @@ export default function HomeScreen() {
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Jadwal sesi akan tampil di sini saat tersedia.</Text>
         </View>
       )}
-
-      <Text style={[styles.disclaimer, { color: colors.textSecondary }]}>Perubahan disimpan sementara selama aplikasi berjalan.</Text>
     </ScrollView>
   );
 }
@@ -131,5 +154,4 @@ const styles = StyleSheet.create({
   detailButtonText: { fontSize: 14, fontWeight: '600' }, pressed: { opacity: 0.7 },
   empty: { padding: 20, borderWidth: 1, borderRadius: 12, gap: 6 },
   emptyTitle: { fontSize: 16, fontWeight: '700' }, emptyText: { fontSize: 14, lineHeight: 20 },
-  disclaimer: { fontSize: 12, lineHeight: 18 },
 });

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { MockPracticumAdapter } from '../mock-adapter.ts';
+import { formatSessionDate, formatSessionTime } from '../port.ts';
 
 test('GA-01 & GA-02: Asisten can create class, add members, and create session', async () => {
   const adapter = new MockPracticumAdapter();
@@ -205,4 +206,14 @@ test('GA-02 & FR-14: Validate session startsAt before endsAt', async () => {
     },
     { message: /Waktu selesai harus lebih lambat dari waktu mulai/ }
   );
+});
+
+test('formatSessionTime and formatSessionDate normalize ISO timestamps and preserve plain clock strings', () => {
+  assert.equal(formatSessionTime('08:00'), '08:00');
+  const formattedTime = formatSessionTime('2026-11-20T08:00:00.000Z');
+  assert.doesNotMatch(formattedTime, /2026-11-20T/);
+
+  assert.equal(formatSessionDate('Senin, 25 Nov 2026', '2026-11-20T08:00:00.000Z'), 'Senin, 25 Nov 2026');
+  assert.notEqual(formatSessionDate(undefined, '2026-11-20T08:00:00.000Z'), 'Belum ditentukan');
+  assert.equal(formatSessionDate(undefined, '08:00'), 'Belum ditentukan');
 });

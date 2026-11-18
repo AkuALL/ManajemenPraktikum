@@ -5,7 +5,12 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useIdentity } from '@/features/identity';
 import { SessionDetail, useSchedule } from '@/features/schedule';
 import { StudentAttendanceForm } from '@/features/attendance';
-import { usePracticum, SessionLifecycleButtons } from '@/features/practicum';
+import {
+  formatSessionDate,
+  formatSessionTime,
+  SessionLifecycleButtons,
+  usePracticum,
+} from '@/features/practicum';
 import { LabSession } from '@/types';
 
 export default function SessionDetailScreen() {
@@ -24,14 +29,15 @@ export default function SessionDetailScreen() {
   const session: LabSession | null = practicumSession
     ? {
         id: practicumSession.id,
+        classId: practicumSession.classId,
         practicumName: practicumSession.title,
         courseClass: practicumSession.className
           ? `${practicumSession.className} - ${practicumSession.courseName ?? ''}`
           : practicumSession.courseName ?? 'Kelas Praktikum',
         location: practicumSession.location,
-        date: practicumSession.date ?? 'Hari ini',
-        startsAt: practicumSession.startsAt,
-        endsAt: practicumSession.endsAt,
+        date: formatSessionDate(practicumSession.date, practicumSession.startsAt),
+        startsAt: formatSessionTime(practicumSession.startsAt),
+        endsAt: formatSessionTime(practicumSession.endsAt),
         status:
           practicumSession.status === 'scheduled'
             ? 'upcoming'

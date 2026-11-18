@@ -78,6 +78,19 @@ export default function ClassesScreen() {
     }
   };
 
+  if (!isAssistant) {
+    return (
+      <View style={[styles.guard, { backgroundColor: colors.background }]}>
+        <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+          Halaman tidak tersedia
+        </Text>
+        <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+          Pengelolaan kelas dan anggota praktikum hanya tersedia untuk Asisten.
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <ScrollView
       style={{ backgroundColor: colors.background }}
@@ -282,5 +295,12 @@ const styles = StyleSheet.create({
   },
   list: {
     marginTop: 8,
+  },
+  guard: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    gap: 8,
   },
 });

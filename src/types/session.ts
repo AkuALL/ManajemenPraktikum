@@ -9,6 +9,7 @@ export type SessionStatus = 'upcoming' | 'open' | 'closed';
 
 export interface LabSession {
   id: string;
+  classId?: string;
   practicumName: string;
   courseClass?: string;
   location: string;
