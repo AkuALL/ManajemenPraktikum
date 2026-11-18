@@ -13,6 +13,7 @@ import {
 import { PracticumClass, CreateClassInput } from '../types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { validateClassInput } from '../validation';
 
 interface ClassFormModalProps {
   visible: boolean;
@@ -41,23 +42,18 @@ function ClassFormContent({
   const [errorMessage, setErrorMessage] = useState('');
 
   const handleSubmit = async () => {
-    if (!courseName.trim()) {
-      setErrorMessage('Nama praktikum wajib diisi');
-      return;
-    }
-    if (!className.trim()) {
-      setErrorMessage('Nama kelas wajib diisi (misal: Kelas A)');
+    if (submitting) return;
+
+    const validation = validateClassInput({ courseName, className, lab });
+    if ('error' in validation) {
+      setErrorMessage(validation.error);
       return;
     }
 
     try {
       setSubmitting(true);
       setErrorMessage('');
-      await onSubmit({
-        courseName: courseName.trim(),
-        className: className.trim(),
-        lab: lab.trim() || undefined,
-      });
+      await onSubmit(validation.value);
       onClose();
     } catch (err: any) {
       setErrorMessage(err.message ?? 'Gagal menyimpan kelas');
@@ -99,8 +95,13 @@ function ClassFormContent({
             placeholder="Contoh: Pemrograman Web Lanjut"
             placeholderTextColor={colors.textSecondary}
             value={courseName}
-            onChangeText={setCourseName}
+            onChangeText={(value) => {
+              setCourseName(value);
+              setErrorMessage('');
+            }}
             editable={!submitting}
+            maxLength={120}
+            accessibilityLabel="Nama mata kuliah atau praktikum"
           />
         </View>
 
@@ -120,8 +121,13 @@ function ClassFormContent({
             placeholder="Contoh: Kelas B"
             placeholderTextColor={colors.textSecondary}
             value={className}
-            onChangeText={setClassName}
+            onChangeText={(value) => {
+              setClassName(value);
+              setErrorMessage('');
+            }}
             editable={!submitting}
+            maxLength={80}
+            accessibilityLabel="Nama kelas"
           />
         </View>
 
@@ -141,8 +147,13 @@ function ClassFormContent({
             placeholder="Contoh: Lab Jaringan Komputer"
             placeholderTextColor={colors.textSecondary}
             value={lab}
-            onChangeText={setLab}
+            onChangeText={(value) => {
+              setLab(value);
+              setErrorMessage('');
+            }}
             editable={!submitting}
+            maxLength={120}
+            accessibilityLabel="Ruang laboratorium"
           />
         </View>
 
