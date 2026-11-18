@@ -26,7 +26,7 @@ export function ClassCard({
   const handleDeletePress = () => {
     Alert.alert(
       'Hapus Kelas',
-      `Yakin ingin menghapus kelas "${practicumClass.className} - ${practicumClass.courseName}"? Sesi terkait juga akan dihapus.`,
+      `Yakin ingin menghapus kelas "${practicumClass.className} - ${practicumClass.courseName}"? Seluruh anggota dan sesi terkait yang belum dimulai juga akan dihapus.`,
       [
         { text: 'Batal', style: 'cancel' },
         {
