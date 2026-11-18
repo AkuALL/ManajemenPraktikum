@@ -70,6 +70,18 @@ Mengganti input teks jam mulai dan selesai dengan **Dropdown Pilihan Slot Waktu*
 - Ketika Asprak memilih salah satu dari **Slot 1 s.d. Slot 5**, field jam mulai dan selesai terisi dan terkunci secara otomatis sesuai rentang slot tersebut.
 - Ketika Asprak memilih **Opsi 6 (Jadwal Kustom)**, antarmuka akan memunculkan pemilih waktu (*Time Picker*) atau field jam khusus agar Asprak dapat menentukan jam mulai dan jam selesai di luar slot reguler.
 
+#### C. Validasi Logika Timestamp (Client, Adapter, & Firestore Rules)
+Untuk memastikan nilai waktu sesi (`startsAt` dan `endsAt`) selalu valid secara komputasi dan aman dari manipulasi klien:
+1. **Validasi Client (`src/features/practicum/validation.ts`):**
+   - Hasil kombinasi tanggal kalender (`YYYY-MM-DD`) dan jam slot/kustom (`HH:mm`) wajib menghasilkan timestamp ISO-8601 yang valid (`!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())`).
+   - Wajib memenuhi `end.getTime() > start.getTime()` (menolak waktu selesai yang sama dengan atau lebih awal dari waktu mulai, termasuk pada opsi **Jadwal Kustom**).
+   - Untuk pembuatan sesi baru, `startsAt` tidak boleh berada di waktu yang sudah terlewat (`start.getTime() >= now`) agar Asprak tidak salah menjadwalkan sesi ke tanggal lampau.
+2. **Validasi Adapter Firestore (`src/features/practicum/firestore-adapter.ts`):**
+   - Baik `createSession` maupun `updateSession` wajib memverifikasi bahwa `startsAt` dan `endsAt` ter-parse menjadi `Date` yang valid (bukan `Invalid Date`) dan memenuhi `startDate < endDate` sebelum dikonversi ke `Timestamp.fromDate(...)`.
+3. **Validasi Firestore Security Rules (`firestore.rules`):**
+   - Pada `validSessionCreate()` dan `validSessionUpdate()`, pastikan `request.resource.data.startsAt is timestamp`, `request.resource.data.endsAt is timestamp`, serta `request.resource.data.startsAt < request.resource.data.endsAt`.
+   - Timestamp audit (`createdAt`, `updatedAt`, `openedAt`, `closedAt`) tetap wajib menggunakan waktu server (`request.time`).
+
 ---
 
 ## 3. Investigasi & Perbaikan Error Query Login Praktikan
@@ -122,7 +134,7 @@ Perbaikan ini dialokasikan ke masing-masing penanggung jawab domain:
 | Area Perbaikan | Penanggung Jawab | Berkas yang Terdampak |
 |---|:---:|---|
 | **Filter & Dropdown Pencarian Praktikan** | **Abhi** (Praktikum & Kelas) | `src/features/practicum/components/ClassMembersModal.tsx`<br>`src/features/practicum/firestore-adapter.ts`<br>`firestore.rules` |
-| **Kalender & Dropdown Slot Waktu Sesi** | **Abhi** (Praktikum & Sesi) | `src/features/practicum/components/SessionFormModal.tsx`<br>`src/features/practicum/types.ts` |
+| **Kalender, Slot Waktu, & Validasi Timestamp Sesi** | **Abhi** (Praktikum & Sesi) | `src/features/practicum/components/SessionFormModal.tsx`<br>`src/features/practicum/validation.ts`<br>`src/features/practicum/firestore-adapter.ts`<br>`src/features/practicum/types.ts`<br>`firestore.rules` |
 | **Penyelesaian Error Query Login Praktikan** | **Al** (Otorisasi & Adaptor) & **Abhi** | `src/features/practicum/firestore-adapter.ts`<br>`src/features/practicum/context.tsx`<br>`firestore.rules` |
 | **Verifikasi & Acceptance Testing** | **Galang (PM)** | Pengujian alur tambah praktikan, input jadwal sesi, dan login praktikan |
 
@@ -130,8 +142,8 @@ Perbaikan ini dialokasikan ke masing-masing penanggung jawab domain:
 
 ## 5. Rencana Pengujian Ulang (Retesting Checklist)
 
-- [ ] **Test Case 1 (Cari Praktikan):** Asprak membuka modal anggota kelas -> mengetikkan nama/NIM/angkatan -> daftar dropdown menampilkan mahasiswa yang cocok -> memilih mahasiswa -> praktikan sukses terdaftar di kelas.
-- [ ] **Test Case 2 (Kalender Sesi):** Asprak membuat sesi baru -> mengetuk kalender -> memilih tanggal praktikum -> tanggal terformat dengan benar tanpa input manual string.
-- [ ] **Test Case 3 (Dropdown 6 Slot Jam):** Asprak memilih salah satu dari Slot 1-5 -> jam mulai dan selesai terisi otomatis. Memilih Slot 6 -> muncul pemilih waktu kustom.
-- [ ] **Test Case 4 (Login Praktikan):** Login menggunakan akun mahasiswa -> halaman beranda dan jadwal langsung menampilkan kelas/sesi yang diikuti tanpa error query pada konsol/antarmuka.
-- [ ] **Test Case 5 (Akun Baru / Tanpa Kelas):** Login menggunakan akun mahasiswa baru yang belum memiliki kelas -> antarmuka menampilkan *empty state* yang informatif, bukan pesan error Firestore.
+- [x] **Test Case 1 (Cari Praktikan):** Asprak membuka modal anggota kelas -> mengetikkan nama/NIM/angkatan -> daftar dropdown menampilkan mahasiswa yang cocok -> memilih mahasiswa -> praktikan sukses terdaftar di kelas.
+- [x] **Test Case 2 (Kalender Sesi):** Asprak membuat sesi baru -> mengetuk kalender -> memilih tanggal praktikum -> tanggal terformat dengan benar tanpa input manual string.
+- [x] **Test Case 3 (Dropdown 6 Slot Jam & Validasi Timestamp):** Asprak memilih salah satu dari Slot 1-5 -> jam mulai dan selesai terisi otomatis. Memilih Slot 6 -> muncul pemilih waktu kustom; jika jam selesai <= jam mulai, tanggal/jam lampau saat buat sesi baru, atau payload bukan timestamp valid, sistem menolak dan menampilkan pesan error yang jelas.
+- [x] **Test Case 4 (Login Praktikan):** Login menggunakan akun mahasiswa -> halaman beranda dan jadwal langsung menampilkan kelas/sesi yang diikuti tanpa error query pada konsol/antarmuka.
+- [x] **Test Case 5 (Akun Baru / Tanpa Kelas):** Login menggunakan akun mahasiswa baru yang belum memiliki kelas -> antarmuka menampilkan *empty state* yang informatif, bukan pesan error Firestore.

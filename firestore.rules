@@ -10,6 +10,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/users/$(uid);
     }
 
+    function currentUserIdentifier() {
+      return get(userProfilePath(request.auth.uid)).data.identifier;
+    }
+
     function hasRole(role) {
       return signedIn()
         && exists(userProfilePath(request.auth.uid))
@@ -36,8 +40,12 @@ service cloud.firestore {
 
     function isStudentMember(classId) {
       return hasRole('student')
-        && exists(memberPath(classId, request.auth.uid))
-        && get(memberPath(classId, request.auth.uid)).data.role == 'student';
+        && (
+          (exists(memberPath(classId, currentUserIdentifier()))
+            && get(memberPath(classId, currentUserIdentifier())).data.role == 'student')
+          || (exists(memberPath(classId, request.auth.uid))
+            && get(memberPath(classId, request.auth.uid)).data.role == 'student')
+        );
     }
 
     function validText(value, minLen, maxLen) {
@@ -85,6 +93,7 @@ service cloud.firestore {
           'className',
           'lab',
           'assistantIds',
+          'memberUids',
           'createdBy',
           'createdAt',
           'updatedAt'
@@ -100,6 +109,8 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.assistantIds is list
         && request.resource.data.assistantIds.hasAny([request.auth.uid])
+        && (!request.resource.data.keys().hasAll(['memberUids'])
+          || request.resource.data.memberUids is list)
         && validText(request.resource.data.practicumName, 2, 120)
         && validText(request.resource.data.className, 2, 80)
         && (!request.resource.data.keys().hasAll(['lab'])
@@ -114,6 +125,7 @@ service cloud.firestore {
           'className',
           'lab',
           'assistantIds',
+          'memberUids',
           'updatedAt'
         ])
         && request.resource.data.createdBy == resource.data.createdBy
@@ -123,6 +135,8 @@ service cloud.firestore {
         && validText(request.resource.data.className, 2, 80)
         && (!request.resource.data.keys().hasAll(['lab'])
           || validText(request.resource.data.lab, 2, 120))
+        && (!request.resource.data.keys().hasAll(['memberUids'])
+          || request.resource.data.memberUids is list)
         && request.resource.data.updatedAt == request.time;
     }
 
@@ -142,13 +156,10 @@ service cloud.firestore {
           'joinedAt'
         ])
         && request.resource.data.userId == memberId
+        && request.resource.data.identifier == memberId
         && request.resource.data.role == 'student'
-        && exists(userProfilePath(memberId))
-        && get(userProfilePath(memberId)).data.role == 'student'
-        && request.resource.data.displayName
-          == get(userProfilePath(memberId)).data.displayName
-        && request.resource.data.identifier
-          == get(userProfilePath(memberId)).data.identifier
+        && validText(request.resource.data.displayName, 2, 100)
+        && validText(request.resource.data.identifier, 3, 40)
         && request.resource.data.joinedAt == request.time;
     }
 
@@ -156,14 +167,11 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys()
         .hasOnly(['displayName', 'identifier'])
         && request.resource.data.userId == resource.data.userId
-        && request.resource.data.role == resource.data.role
+        && request.resource.data.identifier == resource.data.identifier
+        && request.resource.data.role == 'student'
         && request.resource.data.joinedAt == resource.data.joinedAt
-        && exists(userProfilePath(resource.data.userId))
-        && get(userProfilePath(resource.data.userId)).data.role == 'student'
-        && request.resource.data.displayName
-          == get(userProfilePath(resource.data.userId)).data.displayName
-        && request.resource.data.identifier
-          == get(userProfilePath(resource.data.userId)).data.identifier;
+        && validText(request.resource.data.displayName, 2, 100)
+        && validText(request.resource.data.identifier, 3, 40);
     }
 
     function validSessionCreate() {
@@ -192,6 +200,8 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid
         && validText(request.resource.data.title, 2, 140)
         && validText(request.resource.data.location, 2, 120)
+        && request.resource.data.startsAt is timestamp
+        && request.resource.data.endsAt is timestamp
         && request.resource.data.startsAt < request.resource.data.endsAt
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
@@ -234,6 +244,8 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt
         && validText(request.resource.data.title, 2, 140)
         && validText(request.resource.data.location, 2, 120)
+        && request.resource.data.startsAt is timestamp
+        && request.resource.data.endsAt is timestamp
         && request.resource.data.startsAt < request.resource.data.endsAt
         && request.resource.data.updatedAt == request.time
         && validSessionStatusTransition();
@@ -364,8 +376,10 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow get: if signedIn() && request.auth.uid == userId;
-      allow list: if false;
+      allow get: if signedIn()
+        && (request.auth.uid == userId
+          || (hasRole('assistant') && resource.data.role == 'student'));
+      allow list: if hasRole('assistant') && resource.data.role == 'student';
       allow create: if signedIn()
         && request.auth.uid == userId
         && validProfileCreate(userId);
@@ -378,16 +392,22 @@ service cloud.firestore {
     match /classes/{classId} {
       allow get: if signedIn()
         && (request.auth.uid in resource.data.assistantIds
+          || ('memberUids' in resource.data
+            && (currentUserIdentifier() in resource.data.memberUids
+              || request.auth.uid in resource.data.memberUids))
+          || exists(memberPath(classId, currentUserIdentifier()))
           || exists(memberPath(classId, request.auth.uid)));
       allow list: if signedIn()
-        && request.auth.uid in resource.data.assistantIds;
+        && (request.auth.uid in resource.data.assistantIds
+          || currentUserIdentifier() in resource.data.memberUids
+          || request.auth.uid in resource.data.memberUids);
       allow create: if hasRole('assistant') && validClassCreate();
       allow update: if isClassAssistant(classId) && validClassUpdate();
       allow delete: if isClassAssistant(classId);
 
       match /members/{memberId} {
         allow get: if isClassAssistant(classId)
-          || (signedIn() && request.auth.uid == memberId);
+          || (signedIn() && (currentUserIdentifier() == memberId || request.auth.uid == memberId));
         allow list: if isClassAssistant(classId);
         allow create: if isClassAssistant(classId) && validMemberCreate(memberId);
         allow update: if isClassAssistant(classId) && validMemberUpdate();
@@ -396,12 +416,17 @@ service cloud.firestore {
     }
 
     match /{path=**}/members/{memberId} {
-      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow read: if signedIn()
+        && (resource.data.userId == currentUserIdentifier()
+          || resource.data.identifier == currentUserIdentifier()
+          || resource.data.userId == request.auth.uid);
     }
 
     match /sessions/{sessionId} {
       allow get, list: if isClassAssistant(resource.data.classId)
-        || (signedIn() && exists(memberPath(resource.data.classId, request.auth.uid)));
+        || (signedIn()
+          && (exists(memberPath(resource.data.classId, currentUserIdentifier()))
+            || exists(memberPath(resource.data.classId, request.auth.uid))));
       allow create: if hasRole('assistant')
         && isClassAssistant(request.resource.data.classId)
         && validSessionCreate();

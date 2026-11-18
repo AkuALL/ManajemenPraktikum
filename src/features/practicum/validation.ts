@@ -1,9 +1,103 @@
-import type { CreateClassInput, CreateSessionInput } from './types';
+import type { CreateClassInput, CreateSessionInput, StudentCandidate } from './types';
 
 type ValidationResult<T> = { value: T } | { error: string };
 
 const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+
+export const COHORT_OPTIONS = [
+  'Semua Angkatan',
+  '2021',
+  '2022',
+  '2023',
+  '2024',
+  '2025',
+  '2026',
+] as const;
+
+export type SessionSlotId = 'slot-1' | 'slot-2' | 'slot-3' | 'slot-4' | 'slot-5' | 'custom';
+
+export interface SessionTimeSlotOption {
+  id: SessionSlotId;
+  label: string;
+  description: string;
+  startsAt: string;
+  endsAt: string;
+}
+
+export const SESSION_TIME_SLOTS: SessionTimeSlotOption[] = [
+  { id: 'slot-1', label: 'Slot 1 (08.00 - 10.00)', description: 'Sesi Pagi 1', startsAt: '08:00', endsAt: '10:00' },
+  { id: 'slot-2', label: 'Slot 2 (10.10 - 12.10)', description: 'Sesi Pagi 2', startsAt: '10:10', endsAt: '12:10' },
+  { id: 'slot-3', label: 'Slot 3 (13.00 - 15.00)', description: 'Sesi Siang 1', startsAt: '13:00', endsAt: '15:00' },
+  { id: 'slot-4', label: 'Slot 4 (15.40 - 17.40)', description: 'Sesi Sore', startsAt: '15:40', endsAt: '17:40' },
+  { id: 'slot-5', label: 'Slot 5 (18.15 - 20.15)', description: 'Sesi Malam', startsAt: '18:15', endsAt: '20:15' },
+  { id: 'custom', label: 'Opsi 6 (Jadwal Kustom)', description: 'Jadwal di luar 5 pilihan baku di atas', startsAt: '', endsAt: '' },
+];
+
+export function extractCohortYear(identifier: string): string | null {
+  const trimmed = identifier.trim();
+  if (!trimmed) return null;
+  const fullYearMatch = /^(20\d{2})/.exec(trimmed);
+  if (fullYearMatch) return fullYearMatch[1];
+
+  const shortYearMatch = /^(\d{2})(?:\D|$|\d)/.exec(trimmed);
+  if (shortYearMatch) {
+    const twoDigits = Number(shortYearMatch[1]);
+    if (twoDigits >= 18 && twoDigits <= 35) {
+      return `20${shortYearMatch[1]}`;
+    }
+  }
+  return null;
+}
+
+export function filterStudentCandidates(
+  candidates: StudentCandidate[],
+  existingMemberIds: string[],
+  filters: { name?: string; nim?: string; cohort?: string },
+): StudentCandidate[] {
+  const existingSet = new Set(existingMemberIds);
+  const nameQuery = filters.name?.trim().toLowerCase() ?? '';
+  const nimQuery = filters.nim?.trim().toLowerCase() ?? '';
+  const cohortQuery = filters.cohort?.trim() ?? '';
+
+  return candidates.filter((student) => {
+    if (existingSet.has(student.userId)) return false;
+    if (nameQuery && !student.displayName.toLowerCase().includes(nameQuery)) {
+      return false;
+    }
+    if (nimQuery && !student.identifier.toLowerCase().includes(nimQuery)) {
+      return false;
+    }
+    if (cohortQuery && cohortQuery !== 'Semua Angkatan') {
+      if (extractCohortYear(student.identifier) !== cohortQuery) return false;
+    }
+    return true;
+  });
+}
+
+export function normalizeTimeInput(value: string): string {
+  return value.trim().replace('.', ':');
+}
+
+export function detectSessionSlotId(startsAt: string, endsAt: string): SessionSlotId {
+  const start = normalizeTimeInput(startsAt);
+  const end = normalizeTimeInput(endsAt);
+  const match = SESSION_TIME_SLOTS.find(
+    (slot) => slot.id !== 'custom' && slot.startsAt === start && slot.endsAt === end,
+  );
+  return match ? match.id : 'custom';
+}
+
+export function formatCalendarDateLabel(dateStr: string): string {
+  if (!isValidDate(dateStr)) return dateStr || 'Pilih tanggal';
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
 
 function isValidDate(value: string) {
   const match = DATE_PATTERN.exec(value);
@@ -68,20 +162,23 @@ export function validateClassInput(input: CreateClassInput): ValidationResult<Cr
   return { value: { ...input, courseName, className, lab: lab || undefined } };
 }
 
-export function validateSessionInput(input: {
-  classId: string;
-  title: string;
-  location: string;
-  date: string;
-  startsAt: string;
-  endsAt: string;
-}): ValidationResult<CreateSessionInput> {
+export function validateSessionInput(
+  input: {
+    classId: string;
+    title: string;
+    location: string;
+    date: string;
+    startsAt: string;
+    endsAt: string;
+  },
+  options?: { allowPast?: boolean; now?: Date },
+): ValidationResult<CreateSessionInput> {
   const classId = input.classId.trim();
   const title = input.title.trim();
   const location = input.location.trim();
   const date = input.date.trim();
-  const startsAt = input.startsAt.trim();
-  const endsAt = input.endsAt.trim();
+  const startsAt = normalizeTimeInput(input.startsAt);
+  const endsAt = normalizeTimeInput(input.endsAt);
 
   if (!classId) return { error: 'Pilih kelas praktikum terlebih dahulu' };
   if (title.length < 2) return { error: 'Judul sesi minimal 2 karakter' };
@@ -95,7 +192,19 @@ export function validateSessionInput(input: {
 
   const start = new Date(`${date}T${startsAt}:00`);
   const end = new Date(`${date}T${endsAt}:00`);
-  if (start >= end) return { error: 'Waktu selesai harus setelah waktu mulai' };
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return { error: 'Timestamp waktu sesi tidak valid' };
+  }
+  if (end.getTime() <= start.getTime()) {
+    return { error: 'Waktu selesai harus setelah waktu mulai' };
+  }
+
+  if (options?.allowPast !== true) {
+    const referenceNow = options?.now ?? new Date();
+    if (start.getTime() < referenceNow.getTime()) {
+      return { error: 'Waktu mulai sesi baru tidak boleh berada di masa lalu' };
+    }
+  }
 
   return {
     value: {

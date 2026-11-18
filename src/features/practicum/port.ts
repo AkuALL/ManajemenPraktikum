@@ -5,6 +5,7 @@ import type {
   CreateSessionInput,
   PracticumClass,
   PracticumSession,
+  StudentCandidate,
   UpdateClassInput,
   UpdateSessionInput,
 } from './types';
@@ -31,6 +32,7 @@ export interface PracticumPort {
   deleteClass(classId: string): Promise<void>;
 
   // === ANGGOTA KELAS ===
+  getRegisteredStudents(): Promise<StudentCandidate[]>;
   getClassMembers(classId: string): Promise<ClassMember[]>;
   subscribeClassMembers(
     classId: string,

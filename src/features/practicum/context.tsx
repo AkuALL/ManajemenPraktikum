@@ -18,6 +18,7 @@ import type {
   CreateSessionInput,
   PracticumClass,
   PracticumSession,
+  StudentCandidate,
   UpdateClassInput,
   UpdateSessionInput,
 } from './types';
@@ -48,6 +49,7 @@ interface PracticumContextType {
   createClass: (input: CreateClassInput) => Promise<PracticumClass>;
   updateClass: (classId: string, input: UpdateClassInput) => Promise<void>;
   deleteClass: (classId: string) => Promise<void>;
+  getRegisteredStudents: () => Promise<StudentCandidate[]>;
   getClassMembers: (classId: string) => Promise<ClassMember[]>;
   addMember: (classId: string, input: AddMemberInput) => Promise<ClassMember>;
   removeMember: (classId: string, memberId: string) => Promise<void>;
@@ -73,7 +75,11 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
   const isFirebaseActive = useMemo(() => isFirebaseConfigured(), []);
   const currentUserId = activeIdentity?.userId ?? '';
   const currentUserRole = activeIdentity?.role;
-  const activeKey = activeIdentity && currentUserRole ? `${currentUserRole}:${currentUserId}` : null;
+  const currentStudentNim = activeIdentity?.identifier?.trim() || currentUserId;
+  const activeKey =
+    activeIdentity && currentUserRole
+      ? `${currentUserRole}:${currentUserRole === 'student' ? currentStudentNim : currentUserId}`
+      : null;
   const classesKey = activeKey ? `${activeKey}:classes:${classesRetryTick}` : null;
   const sessionsKey = activeKey ? `${activeKey}:sessions:${sessionsRetryTick}` : null;
 
@@ -81,7 +87,7 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
     if (!classesKey || !currentUserRole) return;
 
     const assistantId = currentUserRole === 'assistant' ? currentUserId : undefined;
-    const studentId = currentUserRole === 'student' ? currentUserId : undefined;
+    const studentId = currentUserRole === 'student' ? currentStudentNim : undefined;
     return adapter.subscribeClasses(
       assistantId,
       (items, meta) => {
@@ -98,14 +104,14 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
       },
       studentId,
     );
-  }, [adapter, classesKey, currentUserId, currentUserRole]);
+  }, [adapter, classesKey, currentStudentNim, currentUserId, currentUserRole]);
 
   useEffect(() => {
     if (!sessionsKey || !currentUserRole) return;
 
     return adapter.subscribeSessions(
       undefined,
-      currentUserId,
+      currentUserRole === 'student' ? currentStudentNim : currentUserId,
       currentUserRole,
       (items, meta) => {
         setSessionsState({ key: sessionsKey, items, error: null, fromCache: meta.fromCache, resolved: true });
@@ -120,7 +126,7 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
         }));
       },
     );
-  }, [adapter, currentUserId, currentUserRole, sessionsKey]);
+  }, [adapter, currentStudentNim, currentUserId, currentUserRole, sessionsKey]);
 
   const classSnapshot = classesKey && classesState?.key === classesKey ? classesState : null;
   const sessionSnapshot = sessionsKey && sessionsState?.key === sessionsKey ? sessionsState : null;
@@ -158,6 +164,7 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
   const createClass = useCallback((input: CreateClassInput) => runOperation(() => adapter.createClass(input, currentUserId), 'Gagal membuat kelas.'), [adapter, currentUserId, runOperation]);
   const updateClass = useCallback((classId: string, input: UpdateClassInput) => runOperation(() => adapter.updateClass(classId, input), 'Gagal memperbarui kelas.'), [adapter, runOperation]);
   const deleteClass = useCallback((classId: string) => runOperation(() => adapter.deleteClass(classId), 'Gagal menghapus kelas.'), [adapter, runOperation]);
+  const getRegisteredStudents = useCallback(() => runOperation(() => adapter.getRegisteredStudents(), 'Gagal memuat daftar praktikan.'), [adapter, runOperation]);
   const getClassMembers = useCallback((classId: string) => runOperation(() => adapter.getClassMembers(classId), 'Gagal memuat anggota kelas.'), [adapter, runOperation]);
   const addMember = useCallback((classId: string, input: AddMemberInput) => runOperation(() => adapter.addMember(classId, input), 'Gagal menambah anggota.'), [adapter, runOperation]);
   const removeMember = useCallback((classId: string, memberId: string) => runOperation(() => adapter.removeMember(classId, memberId), 'Gagal menghapus anggota.'), [adapter, runOperation]);
@@ -177,11 +184,11 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
     classesFromCache: classSnapshot?.fromCache ?? false,
     sessionsFromCache: sessionSnapshot?.fromCache ?? false,
     error, isFirebaseActive, clearError, retryClasses, retrySessions, retryData,
-    createClass, updateClass, deleteClass, getClassMembers, addMember, removeMember,
+    createClass, updateClass, deleteClass, getRegisteredStudents, getClassMembers, addMember, removeMember,
     createSession, updateSession, deleteSession, openSession, closeSession,
   }), [
     addMember, classes, classesError, classSnapshot?.fromCache, clearError, closeSession,
-    createClass, createSession, deleteClass, deleteSession, error, getClassMembers,
+    createClass, createSession, deleteClass, deleteSession, error, getClassMembers, getRegisteredStudents,
     isFirebaseActive, loadingClasses, loadingSessions, openSession, removeMember, retryClasses,
     retryData, retrySessions, sessions, sessionsError, sessionSnapshot?.fromCache, updateClass,
     updateSession,

@@ -8,16 +8,16 @@ import { IdentityFixtureItem } from './types';
 
 export const ASSISTANT_FIXTURES: IdentityFixtureItem[] = [
   {
-    id: 'ast-001',
-    name: 'Alex Wibowo',
-    identifier: '20.01.0001',
+    id: 'AS-202401',
+    name: 'Budi Pratama',
+    identifier: 'AS-202401',
     role: 'assistant',
     description: 'Koordinator Praktikum',
   },
   {
-    id: 'ast-002',
-    name: 'Maya Lestari',
-    identifier: '20.01.0002',
+    id: 'AS-202402',
+    name: 'Siti Rahmawati',
+    identifier: 'AS-202402',
     role: 'assistant',
     description: 'Asisten Lab',
   },
@@ -25,18 +25,18 @@ export const ASSISTANT_FIXTURES: IdentityFixtureItem[] = [
 
 export const STUDENT_FIXTURES: IdentityFixtureItem[] = [
   {
-    id: 'std-001',
-    name: 'Nadia Putri',
-    identifier: '23.11.0123',
+    id: '2402030201',
+    name: 'Anintya Putri',
+    identifier: '2402030201',
     role: 'student',
-    description: 'Praktikan - Kelas B',
+    description: 'Praktikan',
   },
   {
-    id: 'std-002',
-    name: 'Rafi Pratama',
-    identifier: '23.11.0147',
+    id: '2402030202',
+    name: 'Dimas Saputra',
+    identifier: '2402030202',
     role: 'student',
-    description: 'Praktikan - Kelas B',
+    description: 'Praktikan',
   },
 ];
 
