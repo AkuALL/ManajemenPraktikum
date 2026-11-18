@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useIdentity } from '@/features/identity';
 import { SessionDetail, useSchedule } from '@/features/schedule';
 import { StudentAttendanceForm } from '@/features/attendance';
+import { LeaveRequestAction } from '@/features/leave';
 import {
   formatSessionDate,
   formatSessionTime,
@@ -82,6 +83,17 @@ export default function SessionDetailScreen() {
 
             {/* Form Presensi Mahasiswa untuk Praktikan (FR-08) */}
             {!isAssistant && <StudentAttendanceForm session={session} />}
+
+            {!isAssistant && practicumSession ? (
+              <LeaveRequestAction
+                session={{
+                  id: practicumSession.id,
+                  classId: practicumSession.classId,
+                  status: practicumSession.status,
+                }}
+                sessionTitle={practicumSession.title}
+              />
+            ) : null}
           </>
         ) : (
           <View style={styles.notFound}>

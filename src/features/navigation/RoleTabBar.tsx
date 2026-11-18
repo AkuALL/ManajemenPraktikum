@@ -28,6 +28,7 @@ export function RoleTabBar() {
           { key: 'classes', label: 'Kelas', route: APP_ROUTES.CLASSES, role: 'assistant' },
           { key: 'schedule', label: 'Jadwal', route: APP_ROUTES.SCHEDULE, role: 'assistant' },
           { key: 'rekap', label: 'Rekap', route: APP_ROUTES.ASSISTANT_REKAP, role: 'assistant' },
+          { key: 'leave-review', label: 'Izin', route: APP_ROUTES.ASSISTANT_LEAVE_REVIEW, role: 'assistant' },
         ]
       : [
           { key: 'schedule', label: 'Jadwal', route: APP_ROUTES.SCHEDULE, role: 'student' },
@@ -37,6 +38,7 @@ export function RoleTabBar() {
             route: APP_ROUTES.STUDENT_ATTENDANCE,
             role: 'student',
           },
+          { key: 'leave', label: 'Izin saya', route: APP_ROUTES.STUDENT_LEAVE_REQUESTS, role: 'student' },
         ];
 
   const handleTabPress = (route: string) => {
