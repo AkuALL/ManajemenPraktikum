@@ -18,7 +18,7 @@ export default function HomeScreen() {
     loadingSessions,
     sessionsError,
     sessionsFromCache,
-    retrySessions,
+    retryData,
     openSession,
     closeSession,
   } = usePracticum();
@@ -69,7 +69,7 @@ export default function HomeScreen() {
         <View style={[styles.empty, { borderColor: colors.border, backgroundColor: colors.surface }]}>
           <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Jadwal belum dapat dimuat</Text>
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{sessionsError}</Text>
-          <Pressable onPress={retrySessions} style={[styles.retryButton, { borderColor: colors.border }]}>
+          <Pressable onPress={retryData} style={[styles.retryButton, { borderColor: colors.border }]}>
             <Text style={[styles.retryText, { color: colors.textPrimary }]}>Coba lagi</Text>
           </Pressable>
         </View>

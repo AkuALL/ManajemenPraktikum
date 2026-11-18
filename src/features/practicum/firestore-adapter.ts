@@ -420,33 +420,17 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
   async getSessions(classId?: string): Promise<PracticumSession[]> {
     const db = await this.getDb();
-    const { collection, getDocs, query, where, orderBy } = await import('firebase/firestore');
+    const { collection, getDocs, query, where } = await import('firebase/firestore');
 
     const sessionsRef = collection(db, 'sessions');
     const q = classId
-      ? query(sessionsRef, where('classId', '==', classId), orderBy('startsAt', 'asc'))
-      : query(sessionsRef, orderBy('startsAt', 'asc'));
+      ? query(sessionsRef, where('classId', '==', classId))
+      : sessionsRef;
 
     const snapshot = await getDocs(q);
-    return snapshot.docs.map((docSnap) => {
-      const data = docSnap.data();
-      return {
-        id: docSnap.id,
-        classId: data.classId,
-        title: data.title ?? '',
-        location: data.location ?? '',
-        startsAt: formatTimestamp(data.startsAt),
-        endsAt: formatTimestamp(data.endsAt),
-        status: data.status,
-        openedBy: data.openedBy,
-        openedAt: data.openedAt ? formatTimestamp(data.openedAt) : undefined,
-        closedBy: data.closedBy,
-        closedAt: data.closedAt ? formatTimestamp(data.closedAt) : undefined,
-        createdBy: data.createdBy,
-        createdAt: formatTimestamp(data.createdAt),
-        updatedAt: formatTimestamp(data.updatedAt),
-      };
-    });
+    return sortSessionsByStart(
+      snapshot.docs.map((docSnap) => mapSessionDoc(docSnap.id, docSnap.data())),
+    );
   }
 
   subscribeSessions(

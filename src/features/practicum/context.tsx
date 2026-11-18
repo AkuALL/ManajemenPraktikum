@@ -133,11 +133,16 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
   const error = operationError ?? classesError ?? sessionsError;
 
   const retryClasses = useCallback(() => setClassesRetryTick((tick) => tick + 1), []);
-  const retrySessions = useCallback(() => setSessionsRetryTick((tick) => tick + 1), []);
+  const retrySessions = useCallback(() => {
+    if (classesError) {
+      setClassesRetryTick((tick) => tick + 1);
+    }
+    setSessionsRetryTick((tick) => tick + 1);
+  }, [classesError]);
   const retryData = useCallback(() => {
-    retryClasses();
-    retrySessions();
-  }, [retryClasses, retrySessions]);
+    setClassesRetryTick((tick) => tick + 1);
+    setSessionsRetryTick((tick) => tick + 1);
+  }, []);
   const clearError = useCallback(() => setOperationError(null), []);
 
   const runOperation = useCallback(async <T,>(operation: () => Promise<T>, fallback: string) => {

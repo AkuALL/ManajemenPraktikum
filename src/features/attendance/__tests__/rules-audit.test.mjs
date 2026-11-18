@@ -267,3 +267,24 @@ test('attendance allow/deny matrix covers open-session check, membership, determ
     false,
   );
 });
+
+test('firebase.json and firestore.indexes.json configure members.userId COLLECTION_GROUP exemption', () => {
+  const firebaseConfig = JSON.parse(
+    fs.readFileSync(path.resolve(process.cwd(), 'firebase.json'), 'utf8'),
+  );
+  assert.equal(firebaseConfig.firestore?.indexes, 'firestore.indexes.json');
+
+  const indexesConfig = JSON.parse(
+    fs.readFileSync(path.resolve(process.cwd(), 'firestore.indexes.json'), 'utf8'),
+  );
+  const membersOverride = indexesConfig.fieldOverrides?.find(
+    (entry) => entry.collectionGroup === 'members' && entry.fieldPath === 'userId',
+  );
+  assert.ok(membersOverride, 'Missing fieldOverrides entry for members.userId');
+  assert.ok(
+    membersOverride.indexes?.some(
+      (idx) => idx.order === 'ASCENDING' && idx.queryScope === 'COLLECTION_GROUP',
+    ),
+    'Missing ASCENDING COLLECTION_GROUP index on members.userId',
+  );
+});
