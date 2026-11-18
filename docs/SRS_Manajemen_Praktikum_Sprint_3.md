@@ -241,7 +241,7 @@ sequenceDiagram
 ### 6.4 Penanganan Perangkat, Izin, dan Kasus Tepi
 
 - **FR-16 — Penanganan Kondisi Perangkat pada Peta:** Sistem modul peta memeriksa status izin lokasi perangkat (*foreground location*), mendeteksi apabila modul GPS dimatikan oleh pengguna, menangani batas waktu (*timeout*) pembacaan koordinat peta, serta menampilkan dialog penjelasan ramah pengguna dan tombol pintas ke Pengaturan Aplikasi tanpa memblokir antarmuka.
-- **FR-17 — Penanganan Kondisi Perangkat Presensi & Notifikasi:** Sistem modul presensi dan notifikasi memeriksa izin notifikasi serta izin geolokasi presensi, mendeteksi ketiadaan sinyal GPS/jaringan saat submit presensi, menangani kegagalan penerimaan push notification, dan menyediakan umpan balik status kesalahan beserta tombol coba lagi (*retry*).
+- **FR-17 — Penanganan Kondisi Perangkat pada Presensi:** Sistem modul presensi memeriksa izin akses geolokasi perangkat, mendeteksi ketiadaan sinyal GPS atau kegagalan koneksi jaringan saat submit presensi, menangani batas waktu (*timeout*) pembacaan koordinat, serta menyediakan umpan balik status kesalahan yang jelas dan tombol coba lagi (*retry*).
 
 ---
 
@@ -409,27 +409,31 @@ $$\text{Presensi Diterima} \iff d \le (\text{radiusMeters} + \text{toleransiAkur
 
 ## 12. Traceability dan Pembagian Modul
 
-Sprint 3 dipimpin oleh **Galang sebagai Project Manager (PM)** yang mengoordinasikan seluruh integrasi dan arsitektur tanpa mengambil ownership kode fitur, sementara implementasi teknis dibagi secara vertikal (*vertical slice*) kepada dua programmer: **Abhi** dan **Al**.
+Sprint 3 dipimpin oleh **Galang sebagai Project Manager (PM)** yang mengoordinasikan seluruh integrasi, kontrak data, konfigurasi native, dan penerimaan sistem tanpa mengambil ownership kode fitur. Implementasi teknis dibagi secara seimbang (*balanced vertical slice*) kepada dua programmer: **Abhi** (8 Kebutuhan Fungsional) dan **Al** (9 Kebutuhan Fungsional).
 
-| Kode FR | Deskripsi Kebutuhan | Penanggung Jawab Utama | Sifat Modul |
+Pembagian ini menyeimbangkan beban kerja secara proporsional:
+- **Abhi** memegang pilar **Peta Interaktif, Pengelolaan Laboratorium, serta Infrastruktur Push Notification (Sesi & Jadwal)**.
+- **Al** memegang pilar **Presensi Berbasis Lokasi (Geofencing & Haversine), Interaksi Navigasi Notifikasi (Deep Linking), serta Notifikasi Keputusan Izin**.
+
+| Kode FR | Deskripsi Kebutuhan | Penanggung Jawab Utama | Sifat Modul & Tanggung Jawab |
 |---|---|:---:|---|
 | **FR-01** | Halaman Presensi Mandiri | **Al** | Feature Screen & UI Presensi Terpisah |
-| **FR-02** | Perolehan Geoposisi Pengguna | **Al** | Hook GPS & Akurasi Presensi |
-| **FR-03** | Perhitungan Jarak & Validasi Radius | **Al** | Geofencing Engine & Formula Haversine |
-| **FR-04** | Umpan Balik Status Kelayakan Presensi | **Al** | UI Validation Feedback & Radius Badge |
-| **FR-05** | Presensi dengan Audit Lokasi | **Al** | Firestore Attendance Service & Audit |
-| **FR-06** | Pencegahan Duplikasi & Pelanggaran Presensi | **Al** | Attendance Security Rules & Validation |
-| **FR-07** | Pengelolaan Data Laboratorium (CRUD) | **Abhi** | Lab Management Feature & Firestore `labs` |
-| **FR-08** | Peta Sebaran Lab Interaktif | **Abhi** | Interactive Maps Screen & Custom Pins |
-| **FR-09** | Live User Marker Dinamis | **Abhi** | Map Location Watcher & Animated Marker |
-| **FR-10** | Info Aktivitas Lab Real-Time | **Abhi** | Lab Activity Sheet & Session Queries |
-| **FR-11** | Registrasi Push Token | **Al** | Push Notification Service & Tokens |
-| **FR-12** | Notifikasi Sesi Dibuka | **Al** | Event Push Service Pembukaan Sesi |
-| **FR-13** | Notifikasi Perubahan Jadwal | **Al** | Event Push Service Perubahan Jadwal |
-| **FR-14** | Notifikasi Keputusan Izin | **Al** | Event Push Service Keputusan Izin |
-| **FR-15** | Deep Linking Notifikasi | **Al** | Notification Route Router |
-| **FR-16** | Penanganan Kondisi Perangkat pada Peta | **Abhi** | Map Permissions, GPS Check, & Error State |
-| **FR-17** | Penanganan Kondisi Perangkat Presensi & Notifikasi | **Al** | Attendance/Notif Perms & Error State |
+| **FR-02** | Perolehan Geoposisi Pengguna Presensi | **Al** | Hook GPS & Akurasi Perangkat Presensi |
+| **FR-03** | Perhitungan Jarak & Validasi Radius (Haversine) | **Al** | Geofencing Engine & Formula Haversine |
+| **FR-04** | Umpan Balik Status Kelayakan Presensi | **Al** | UI Validation Feedback & Badge Status Radius |
+| **FR-05** | Presensi dengan Audit Lokasi | **Al** | Firestore Attendance Service & Audit Geofencing |
+| **FR-06** | Pencegahan Duplikasi & Pelanggaran Presensi | **Al** | Aturan Validasi Idempotensi & Attendance Rules |
+| **FR-07** | Pengelolaan Data Laboratorium (CRUD) | **Abhi** | Modul Master Lab & Firestore Repository `labs` |
+| **FR-08** | Peta Sebaran Lab Interaktif | **Abhi** | Interactive Maps Screen & Custom Pins/Markers |
+| **FR-09** | Live User Marker Dinamis | **Abhi** | Map Location Watcher & Animated Position Marker |
+| **FR-10** | Info Aktivitas Lab Real-Time | **Abhi** | Lab Activity Sheet & Session Query Real-time |
+| **FR-11** | Registrasi & Pengelolaan Push Token | **Abhi** | Push Token Registration & Sync ke `users/{uid}` |
+| **FR-12** | Notifikasi Pembukaan Sesi Praktikum | **Abhi** | Event Push Dispatcher saat Asisten Membuka Sesi |
+| **FR-13** | Notifikasi Perubahan Jadwal Praktikum | **Abhi** | Event Push Dispatcher saat Reschedule/Pindah Lab |
+| **FR-14** | Notifikasi Keputusan Pengajuan Izin | **Al** | Event Push Dispatcher saat Keputusan Izin Terbit |
+| **FR-15** | Interaksi & Deep Linking Navigasi Notifikasi | **Al** | Notification Response Listener & Deep Link Routing |
+| **FR-16** | Penanganan Kondisi Perangkat pada Peta | **Abhi** | Map Permissions, GPS Handling, & Offline Map State |
+| **FR-17** | Penanganan Kondisi Perangkat pada Presensi | **Al** | Attendance Location Permissions, GPS Timeout, & Retry |
 
 ---
 
