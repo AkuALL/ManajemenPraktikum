@@ -162,6 +162,20 @@ export const firestoreLeaveAdapter: LeavePort = {
     }
   },
 
+  async saveClassificationResult(leaveRequestId, { category, confidence }) {
+    try {
+      await updateDoc(doc(db, 'leaveRequests', leaveRequestId), {
+        aiStatus: 'success',
+        aiCategory: category,
+        aiConfidence: confidence,
+        aiClassifiedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      throw mapLeaveError(error);
+    }
+  },
+
   async reviewLeaveRequest(leaveRequestId, reviewerId, decision, reviewNote) {
     try {
       await updateDoc(doc(db, 'leaveRequests', leaveRequestId), {

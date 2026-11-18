@@ -25,6 +25,11 @@ export class LeavePortError extends Error {
 
 export type LeaveListenerMeta = { fromCache: boolean };
 
+export type SaveClassificationInput = {
+  category: 'sakit' | 'keluarga' | 'akademik' | 'darurat' | 'lainnya';
+  confidence: number;
+};
+
 export type CreateLeaveInput = {
   session: SessionSummary;
   user: AuthUser;
@@ -33,6 +38,10 @@ export type CreateLeaveInput = {
 
 export interface LeavePort {
   createLeaveRequest(input: CreateLeaveInput): Promise<LeaveRequest>;
+  saveClassificationResult(
+    leaveRequestId: string,
+    input: SaveClassificationInput,
+  ): Promise<void>;
   markClassificationFailed(leaveRequestId: string): Promise<void>;
   reviewLeaveRequest(
     leaveRequestId: string,
