@@ -85,7 +85,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
   subscribeClasses(
     assistantId: string | undefined,
-    onData: (classes: PracticumClass[]) => void,
+    onData: (classes: PracticumClass[], meta: { fromCache: boolean }) => void,
     onError?: (err: Error) => void,
     studentId?: string
   ): () => void {
@@ -103,6 +103,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
           unsubscribe = onSnapshot(
             q,
+            { includeMetadataChanges: true },
             (snapshot) => {
               const list: PracticumClass[] = snapshot.docs.map((docSnap) => {
                 const data = docSnap.data();
@@ -117,7 +118,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
                   updatedAt: formatTimestamp(data.updatedAt),
                 };
               });
-              onData(list);
+              onData(list, { fromCache: snapshot.metadata.fromCache });
             },
             (err) => {
               onError?.(err);
@@ -132,6 +133,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
           unsubscribe = onSnapshot(
             qMembers,
+            { includeMetadataChanges: true },
             (memberSnap) => {
               classUnsubs.forEach((unsub) => unsub());
               classUnsubs = [];
@@ -145,7 +147,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
               );
 
               if (classIds.length === 0) {
-                onData([]);
+                onData([], { fromCache: memberSnap.metadata.fromCache });
                 return;
               }
 
@@ -155,6 +157,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
               classIds.forEach((cId) => {
                 const unsub = onSnapshot(
                   doc(db, 'classes', cId),
+                  { includeMetadataChanges: true },
                   (docSnap) => {
                     if (docSnap.exists()) {
                       const data = docSnap.data();
@@ -173,7 +176,9 @@ export class FirestorePracticumAdapter implements PracticumPort {
                     }
                     remaining = Math.max(0, remaining - 1);
                     if (remaining === 0) {
-                      onData(Array.from(classMap.values()));
+                      onData(Array.from(classMap.values()), {
+                        fromCache: memberSnap.metadata.fromCache,
+                      });
                     }
                   },
                   (err) => onError?.(err)
@@ -190,7 +195,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
             classUnsubs.forEach((unsub) => unsub());
           };
         } else {
-          onData([]);
+          onData([], { fromCache: false });
         }
       })
       .catch((err) => onError?.(err));
@@ -250,8 +255,75 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
   async deleteClass(classId: string): Promise<void> {
     const db = await this.getDb();
-    const { deleteDoc, doc } = await import('firebase/firestore');
-    await deleteDoc(doc(db, 'classes', classId));
+    const { collection, doc, getDoc, getDocs, limit, query, where, writeBatch } =
+      await import('firebase/firestore');
+
+    const classRef = doc(db, 'classes', classId);
+    const classSnap = await getDoc(classRef);
+    if (!classSnap.exists()) {
+      throw new Error('Kelas tidak ditemukan');
+    }
+
+    // Ambil semua sesi milik kelas ini
+    const sessionsQuery = query(collection(db, 'sessions'), where('classId', '==', classId));
+    const sessionsSnap = await getDocs(sessionsQuery);
+
+    // Pastikan tidak ada sesi yang statusnya bukan scheduled (sedang berjalan atau selesai)
+    const nonScheduled = sessionsSnap.docs.find((d) => d.data().status !== 'scheduled');
+    if (nonScheduled) {
+      throw new Error('Kelas tidak dapat dihapus karena terdapat sesi yang sedang berjalan atau sudah selesai.');
+    }
+
+    // Periksa apakah terdapat data presensi pada kelas ini
+    const attByClassSnap = await getDocs(
+      query(collection(db, 'attendance'), where('classId', '==', classId), limit(1))
+    );
+    if (!attByClassSnap.empty) {
+      throw new Error('Kelas tidak dapat dihapus karena terdapat sesi yang sudah memiliki data presensi.');
+    }
+
+    // Periksa apakah terdapat data pengajuan izin pada kelas ini
+    const leaveByClassSnap = await getDocs(
+      query(collection(db, 'leaveRequests'), where('classId', '==', classId), limit(1))
+    );
+    if (!leaveByClassSnap.empty) {
+      throw new Error('Kelas tidak dapat dihapus karena terdapat sesi yang sudah memiliki data izin.');
+    }
+
+    // Periksa juga per-sessionId untuk memastikan tidak ada presensi/izin yang tertaut
+    for (const sDoc of sessionsSnap.docs) {
+      const attSessionSnap = await getDocs(
+        query(collection(db, 'attendance'), where('sessionId', '==', sDoc.id), limit(1))
+      );
+      if (!attSessionSnap.empty) {
+        throw new Error('Kelas tidak dapat dihapus karena terdapat sesi yang sudah memiliki data presensi.');
+      }
+
+      const leaveSessionSnap = await getDocs(
+        query(collection(db, 'leaveRequests'), where('sessionId', '==', sDoc.id), limit(1))
+      );
+      if (!leaveSessionSnap.empty) {
+        throw new Error('Kelas tidak dapat dihapus karena terdapat sesi yang sudah memiliki data izin.');
+      }
+    }
+
+    // Ambil seluruh anggota kelas dari subkoleksi members
+    const membersSnap = await getDocs(collection(db, 'classes', classId, 'members'));
+
+    // Hapus sesi, anggota subkoleksi, dan kelas dalam batch agar tidak meninggalkan data yatim
+    const batch = writeBatch(db);
+
+    sessionsSnap.docs.forEach((sDoc) => {
+      batch.delete(sDoc.ref);
+    });
+
+    membersSnap.docs.forEach((mDoc) => {
+      batch.delete(mDoc.ref);
+    });
+
+    batch.delete(classRef);
+
+    await batch.commit();
   }
 
   // === ANGGOTA KELAS ===
@@ -381,7 +453,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
     classId: string | undefined,
     studentId: string | undefined,
     role: 'assistant' | 'student',
-    onData: (sessions: PracticumSession[]) => void,
+    onData: (sessions: PracticumSession[], meta: { fromCache: boolean }) => void,
     onError?: (err: Error) => void
   ): () => void {
     let unsubscribe: (() => void) | null = null;
@@ -395,23 +467,28 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
         const subscribeForClassIds = (targetClassIds: string[]): (() => void) => {
           if (targetClassIds.length === 0) {
-            onData([]);
+            onData([], { fromCache: false });
             return () => {};
           }
 
           const byClass = new Map<string, PracticumSession[]>();
+          const fromCacheByClass = new Map<string, boolean>();
           const resolved = new Set<string>();
           const unsubs = targetClassIds.map((cId) =>
             onSnapshot(
               query(sessionsRef, where('classId', '==', cId)),
+              { includeMetadataChanges: true },
               (snapshot) => {
                 byClass.set(
                   cId,
                   snapshot.docs.map((docSnap) => mapSessionDoc(docSnap.id, docSnap.data())),
                 );
+                fromCacheByClass.set(cId, snapshot.metadata.fromCache);
                 resolved.add(cId);
                 if (resolved.size >= targetClassIds.length) {
-                  onData(sortSessionsByStart(Array.from(byClass.values()).flat()));
+                  onData(sortSessionsByStart(Array.from(byClass.values()).flat()), {
+                    fromCache: Array.from(fromCacheByClass.values()).some(Boolean),
+                  });
                 }
               },
               (err) => onError?.(err),
@@ -432,6 +509,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
           const origUnsub = onSnapshot(
             qMembers,
+            { includeMetadataChanges: true },
             (memberSnap) => {
               if (sessionsUnsub) {
                 sessionsUnsub();
@@ -463,6 +541,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
           const origUnsub = onSnapshot(
             qClasses,
+            { includeMetadataChanges: true },
             (classSnap) => {
               if (sessionsUnsub) {
                 sessionsUnsub();
@@ -479,7 +558,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
             if (sessionsUnsub) sessionsUnsub();
           };
         } else {
-          onData([]);
+          onData([], { fromCache: false });
         }
       })
       .catch((err) => onError?.(err));
@@ -621,7 +700,8 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
   async deleteSession(sessionId: string): Promise<void> {
     const db = await this.getDb();
-    const { deleteDoc, doc, getDoc } = await import('firebase/firestore');
+    const { collection, deleteDoc, doc, getDoc, getDocs, limit, query, where } =
+      await import('firebase/firestore');
 
     const sessionRef = doc(db, 'sessions', sessionId);
     const snap = await getDoc(sessionRef);
@@ -630,6 +710,22 @@ export class FirestorePracticumAdapter implements PracticumPort {
     const data = snap.data();
     if (data.status !== 'scheduled') {
       throw new Error('Hanya sesi berstatus "scheduled" (belum dibuka) yang boleh dihapus.');
+    }
+
+    // Periksa apakah sesi sudah memiliki data presensi
+    const attSnap = await getDocs(
+      query(collection(db, 'attendance'), where('sessionId', '==', sessionId), limit(1))
+    );
+    if (!attSnap.empty) {
+      throw new Error('Sesi tidak dapat dihapus karena sudah memiliki data presensi.');
+    }
+
+    // Periksa apakah sesi sudah memiliki data pengajuan izin
+    const leaveSnap = await getDocs(
+      query(collection(db, 'leaveRequests'), where('sessionId', '==', sessionId), limit(1))
+    );
+    if (!leaveSnap.empty) {
+      throw new Error('Sesi tidak dapat dihapus karena sudah memiliki data pengajuan izin.');
     }
 
     await deleteDoc(sessionRef);

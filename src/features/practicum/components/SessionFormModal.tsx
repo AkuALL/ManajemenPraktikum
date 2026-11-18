@@ -14,6 +14,12 @@ import {
 import { PracticumClass, PracticumSession, CreateSessionInput } from '../types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import {
+  defaultSessionDate,
+  sessionDateInput,
+  sessionTimeInput,
+  validateSessionInput,
+} from '../validation';
 
 interface SessionFormModalProps {
   visible: boolean;
@@ -48,41 +54,34 @@ function SessionFormContent({
   const [location, setLocation] = useState(
     initialSession?.location ?? (classes[0]?.lab || 'Lab Komputer 1')
   );
-  const [startsAt, setStartsAt] = useState(initialSession?.startsAt ?? '08:00');
-  const [endsAt, setEndsAt] = useState(initialSession?.endsAt ?? '10:30');
-  const [date, setDate] = useState(initialSession?.date ?? 'Senin, 25 Nov 2026');
+  const [startsAt, setStartsAt] = useState(sessionTimeInput(initialSession?.startsAt, '08:00'));
+  const [endsAt, setEndsAt] = useState(sessionTimeInput(initialSession?.endsAt, '10:30'));
+  const [date, setDate] = useState(
+    sessionDateInput(initialSession?.date, initialSession?.startsAt ?? defaultSessionDate())
+  );
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   const handleSubmit = async () => {
-    if (!selectedClassId) {
-      setErrorMessage('Pilih kelas praktikum terlebih dahulu');
-      return;
-    }
-    if (!title.trim()) {
-      setErrorMessage('Judul / Topik sesi praktikum wajib diisi');
-      return;
-    }
-    if (!location.trim()) {
-      setErrorMessage('Lokasi praktikum wajib diisi');
-      return;
-    }
-    if (!startsAt.trim() || !endsAt.trim()) {
-      setErrorMessage('Waktu mulai dan selesai wajib diisi');
+    if (submitting) return;
+
+    const validation = validateSessionInput({
+      classId: selectedClassId,
+      title,
+      location,
+      date,
+      startsAt,
+      endsAt,
+    });
+    if ('error' in validation) {
+      setErrorMessage(validation.error);
       return;
     }
 
     try {
       setSubmitting(true);
       setErrorMessage('');
-      await onSubmit({
-        classId: selectedClassId,
-        title: title.trim(),
-        location: location.trim(),
-        startsAt: startsAt.trim(),
-        endsAt: endsAt.trim(),
-        date: date.trim(),
-      });
+      await onSubmit(validation.value);
       onClose();
     } catch (err: any) {
       setErrorMessage(err.message ?? 'Gagal menyimpan sesi');
@@ -121,6 +120,7 @@ function SessionFormContent({
                     <TouchableOpacity
                       key={cls.id}
                       onPress={() => setSelectedClassId(cls.id)}
+                      disabled={submitting}
                       style={[
                         styles.chip,
                         {
@@ -161,8 +161,13 @@ function SessionFormContent({
               placeholder="Contoh: Modul 5: REST API & State Management"
               placeholderTextColor={colors.textSecondary}
               value={title}
-              onChangeText={setTitle}
+              onChangeText={(value) => {
+                setTitle(value);
+                setErrorMessage('');
+              }}
               editable={!submitting}
+              maxLength={140}
+              accessibilityLabel="Judul atau topik praktikum"
             />
           </View>
 
@@ -178,25 +183,36 @@ function SessionFormContent({
               placeholder="Contoh: Lab Komputer 2"
               placeholderTextColor={colors.textSecondary}
               value={location}
-              onChangeText={setLocation}
+              onChangeText={(value) => {
+                setLocation(value);
+                setErrorMessage('');
+              }}
               editable={!submitting}
+              maxLength={120}
+              accessibilityLabel="Lokasi praktikum"
             />
           </View>
 
           <View style={styles.fieldGroup}>
             <Text style={[styles.label, { color: colors.textSecondary }]}>
-              Tanggal Pelaksanaan
+              Tanggal Pelaksanaan *
             </Text>
             <TextInput
               style={[
                 styles.input,
                 { color: colors.textPrimary, borderColor: colors.border, backgroundColor: colors.background },
               ]}
-              placeholder="Contoh: Senin, 25 Nov 2026"
+              placeholder="Contoh: 2026-11-25"
               placeholderTextColor={colors.textSecondary}
               value={date}
-              onChangeText={setDate}
+              onChangeText={(value) => {
+                setDate(value);
+                setErrorMessage('');
+              }}
               editable={!submitting}
+              maxLength={10}
+              autoCapitalize="none"
+              accessibilityLabel="Tanggal pelaksanaan, format YYYY-MM-DD"
             />
           </View>
 
@@ -213,8 +229,14 @@ function SessionFormContent({
                 placeholder="08:00"
                 placeholderTextColor={colors.textSecondary}
                 value={startsAt}
-                onChangeText={setStartsAt}
+                onChangeText={(value) => {
+                  setStartsAt(value);
+                  setErrorMessage('');
+                }}
                 editable={!submitting}
+                maxLength={5}
+                keyboardType="numbers-and-punctuation"
+                accessibilityLabel="Waktu mulai, format HH:mm"
               />
             </View>
 
@@ -230,8 +252,14 @@ function SessionFormContent({
                 placeholder="10:30"
                 placeholderTextColor={colors.textSecondary}
                 value={endsAt}
-                onChangeText={setEndsAt}
+                onChangeText={(value) => {
+                  setEndsAt(value);
+                  setErrorMessage('');
+                }}
                 editable={!submitting}
+                maxLength={5}
+                keyboardType="numbers-and-punctuation"
+                accessibilityLabel="Waktu selesai, format HH:mm"
               />
             </View>
           </View>

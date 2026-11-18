@@ -33,14 +33,17 @@ test('leave requests sort newest first and AI labels remain informational', () =
   assert.equal(aiStatusLabel('success'), 'Klasifikasi AI tersedia');
 });
 
-test('leave rules preserve owner-only AI failure and assistant-only decisions', () => {
+test('leave rules preserve owner-only AI updates and assistant-only decisions', () => {
   const rules = fs.readFileSync(path.resolve(process.cwd(), 'firestore.rules'), 'utf8');
   const leaveMatch = rules.slice(rules.indexOf('match /leaveRequests/{leaveId}'), rules.indexOf('match /{document=**}'));
   const failureHelper = rules.slice(rules.indexOf('function validLeaveClassificationFailure()'), rules.indexOf('match /users/{userId}'));
 
   assert.match(leaveMatch, /allow create:\s*if hasRole\('student'\) && validLeaveCreate\(leaveId\);/);
   assert.match(leaveMatch, /isClassAssistant\(resource\.data\.classId\)[\s\S]*validLeaveDecision\(\)/);
-  assert.match(leaveMatch, /request\.auth\.uid == resource\.data\.studentId[\s\S]*validLeaveClassificationFailure\(\)/);
+  assert.match(leaveMatch, /request\.auth\.uid == resource\.data\.studentId[\s\S]*validLeaveClassificationFailure\(\)[\s\S]*validLeaveClassificationSuccess\(\)/);
   assert.match(failureHelper, /resource\.data\.aiStatus == 'pending'/);
   assert.match(failureHelper, /request\.resource\.data\.aiStatus == 'failed'/);
+  assert.match(failureHelper, /function validLeaveClassificationSuccess\(\)/);
+  assert.match(failureHelper, /request\.resource\.data\.aiStatus == 'success'/);
+  assert.match(failureHelper, /request\.resource\.data\.aiConfidence >= 0/);
 });

@@ -8,7 +8,6 @@ import { AccountBar, AuthProvider, useAuth } from '@/features/auth';
 import { LeaveProvider } from '@/features/leave';
 import { RoleTabBar } from '@/features/navigation';
 import { PracticumProvider } from '@/features/practicum';
-import { ScheduleProvider } from '@/features/schedule';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function RootLayout() {
@@ -22,9 +21,7 @@ export default function RootLayout() {
         <AttendanceProvider>
           <PracticumProvider>
             <LeaveProvider>
-              <ScheduleProvider>
-                <RoleAwareApp backgroundColor={colors.background} />
-              </ScheduleProvider>
+              <RoleAwareApp backgroundColor={colors.background} />
             </LeaveProvider>
           </PracticumProvider>
         </AttendanceProvider>

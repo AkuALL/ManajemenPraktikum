@@ -17,6 +17,7 @@ interface SessionLifecycleButtonsProps {
   onOpenSession: (sessionId: string) => Promise<void>;
   onCloseSession: (sessionId: string) => Promise<void>;
   onDeleteSession?: (sessionId: string) => Promise<void>;
+  onBusyChange?: (isBusy: boolean) => void;
 }
 
 export function SessionLifecycleButtons({
@@ -25,6 +26,7 @@ export function SessionLifecycleButtons({
   onOpenSession,
   onCloseSession,
   onDeleteSession,
+  onBusyChange,
 }: SessionLifecycleButtonsProps) {
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
@@ -37,6 +39,8 @@ export function SessionLifecycleButtons({
   }
 
   const handleOpen = () => {
+    if (loading) return;
+
     Alert.alert(
       'Buka Sesi Praktikum',
       `Buka sesi "${session.title}" sekarang? Praktikan yang terdaftar akan dapat melakukan presensi kehadiran secara real-time.`,
@@ -45,13 +49,16 @@ export function SessionLifecycleButtons({
         {
           text: 'Buka Sesi',
           onPress: async () => {
+            if (loading) return;
             try {
               setLoading(true);
+              onBusyChange?.(true);
               await onOpenSession(session.id);
             } catch (err: any) {
               Alert.alert('Gagal Membuka Sesi', err.message ?? 'Terjadi kesalahan');
             } finally {
               setLoading(false);
+              onBusyChange?.(false);
             }
           },
         },
@@ -60,6 +67,8 @@ export function SessionLifecycleButtons({
   };
 
   const handleClose = () => {
+    if (loading) return;
+
     Alert.alert(
       'Tutup Sesi Praktikum',
       'Tutup sesi praktikum ini? Catatan: Sesuai aturan bisnis Sprint 2, sesi yang telah ditutup tidak dapat dibuka kembali.',
@@ -69,13 +78,16 @@ export function SessionLifecycleButtons({
           text: 'Tutup Sesi',
           style: 'destructive',
           onPress: async () => {
+            if (loading) return;
             try {
               setLoading(true);
+              onBusyChange?.(true);
               await onCloseSession(session.id);
             } catch (err: any) {
               Alert.alert('Gagal Menutup Sesi', err.message ?? 'Terjadi kesalahan');
             } finally {
               setLoading(false);
+              onBusyChange?.(false);
             }
           },
         },
@@ -84,7 +96,7 @@ export function SessionLifecycleButtons({
   };
 
   const handleDelete = () => {
-    if (!onDeleteSession) return;
+    if (!onDeleteSession || loading) return;
     Alert.alert(
       'Hapus Sesi Praktikum',
       `Yakin ingin menghapus sesi "${session.title}"?`,
@@ -94,13 +106,16 @@ export function SessionLifecycleButtons({
           text: 'Hapus Sesi',
           style: 'destructive',
           onPress: async () => {
+            if (loading) return;
             try {
               setLoading(true);
+              onBusyChange?.(true);
               await onDeleteSession(session.id);
             } catch (err: any) {
               Alert.alert('Gagal Menghapus Sesi', err.message ?? 'Terjadi kesalahan');
             } finally {
               setLoading(false);
+              onBusyChange?.(false);
             }
           },
         },

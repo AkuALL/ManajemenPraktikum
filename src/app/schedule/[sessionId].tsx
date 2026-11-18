@@ -3,7 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useIdentity } from '@/features/identity';
-import { SessionDetail, useSchedule } from '@/features/schedule';
+import { SessionDetail } from '@/features/schedule/SessionDetail';
 import { StudentAttendanceForm } from '@/features/attendance';
 import { LeaveRequestAction } from '@/features/leave';
 import {
@@ -21,10 +21,8 @@ export default function SessionDetailScreen() {
   const isAssistant = activeIdentity?.role === 'assistant';
 
   const { sessions: practicumSessions, openSession, closeSession, deleteSession } = usePracticum();
-  const { getSessionById } = useSchedule();
 
   const practicumSession = practicumSessions.find((s) => s.id === sessionId);
-  const fallbackSession = getSessionById(sessionId);
 
   // Normalisasi ke LabSession untuk kompatibilitas dengan komponen turunan
   const session: LabSession | null = practicumSession
@@ -47,7 +45,7 @@ export default function SessionDetailScreen() {
               : 'closed',
         assistantName: practicumSession.assistantName ?? 'Asisten Praktikum',
       }
-    : fallbackSession ?? null;
+    : null;
 
   const handleDeleteSession = async (id: string) => {
     await deleteSession(id);

@@ -98,7 +98,12 @@ service cloud.firestore {
           'updatedAt'
         ])
         && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.assistantIds is list
         && request.resource.data.assistantIds.hasAny([request.auth.uid])
+        && validText(request.resource.data.practicumName, 2, 120)
+        && validText(request.resource.data.className, 2, 80)
+        && (!request.resource.data.keys().hasAll(['lab'])
+          || validText(request.resource.data.lab, 2, 120))
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
     }
@@ -113,6 +118,11 @@ service cloud.firestore {
         ])
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.assistantIds == resource.data.assistantIds
+        && validText(request.resource.data.practicumName, 2, 120)
+        && validText(request.resource.data.className, 2, 80)
+        && (!request.resource.data.keys().hasAll(['lab'])
+          || validText(request.resource.data.lab, 2, 120))
         && request.resource.data.updatedAt == request.time;
     }
 
@@ -133,12 +143,27 @@ service cloud.firestore {
         ])
         && request.resource.data.userId == memberId
         && request.resource.data.role == 'student'
+        && exists(userProfilePath(memberId))
+        && get(userProfilePath(memberId)).data.role == 'student'
+        && request.resource.data.displayName
+          == get(userProfilePath(memberId)).data.displayName
+        && request.resource.data.identifier
+          == get(userProfilePath(memberId)).data.identifier
         && request.resource.data.joinedAt == request.time;
     }
 
     function validMemberUpdate() {
       return request.resource.data.diff(resource.data).affectedKeys()
-        .hasOnly(['displayName', 'identifier']);
+        .hasOnly(['displayName', 'identifier'])
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.joinedAt == resource.data.joinedAt
+        && exists(userProfilePath(resource.data.userId))
+        && get(userProfilePath(resource.data.userId)).data.role == 'student'
+        && request.resource.data.displayName
+          == get(userProfilePath(resource.data.userId)).data.displayName
+        && request.resource.data.identifier
+          == get(userProfilePath(resource.data.userId)).data.identifier;
     }
 
     function validSessionCreate() {
@@ -165,6 +190,8 @@ service cloud.firestore {
         ])
         && request.resource.data.status == 'scheduled'
         && request.resource.data.createdBy == request.auth.uid
+        && validText(request.resource.data.title, 2, 140)
+        && validText(request.resource.data.location, 2, 120)
         && request.resource.data.startsAt < request.resource.data.endsAt
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
@@ -205,6 +232,8 @@ service cloud.firestore {
         && request.resource.data.classId == resource.data.classId
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.createdAt == resource.data.createdAt
+        && validText(request.resource.data.title, 2, 140)
+        && validText(request.resource.data.location, 2, 120)
         && request.resource.data.startsAt < request.resource.data.endsAt
         && request.resource.data.updatedAt == request.time
         && validSessionStatusTransition();
@@ -314,6 +343,26 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
     }
 
+    function validLeaveClassificationSuccess() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'aiStatus',
+          'aiCategory',
+          'aiConfidence',
+          'aiClassifiedAt',
+          'updatedAt'
+        ])
+        && resource.data.status == 'pending'
+        && resource.data.aiStatus == 'pending'
+        && request.resource.data.aiStatus == 'success'
+        && ['sakit', 'keluarga', 'akademik', 'darurat', 'lainnya']
+          .hasAny([request.resource.data.aiCategory])
+        && request.resource.data.aiConfidence is number
+        && request.resource.data.aiConfidence >= 0
+        && request.resource.data.aiConfidence <= 1
+        && request.resource.data.aiClassifiedAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
     match /users/{userId} {
       allow get: if signedIn() && request.auth.uid == userId;
       allow list: if false;
@@ -379,7 +428,8 @@ service cloud.firestore {
         && validLeaveDecision()
         || (signedIn()
           && request.auth.uid == resource.data.studentId
-          && validLeaveClassificationFailure());
+          && (validLeaveClassificationFailure()
+            || validLeaveClassificationSuccess()));
       allow delete: if false;
     }
 

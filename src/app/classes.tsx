@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -31,8 +31,10 @@ export default function ClassesScreen() {
   const {
     classes,
     loadingClasses,
+    classesError,
+    classesFromCache,
     error,
-    isFirebaseActive,
+    retryClasses,
     createClass,
     updateClass,
     deleteClass,
@@ -46,6 +48,8 @@ export default function ClassesScreen() {
 
   const [membersModalVisible, setMembersModalVisible] = useState(false);
   const [managingClass, setManagingClass] = useState<PracticumClass | null>(null);
+  const [deletingClassId, setDeletingClassId] = useState<string | null>(null);
+  const deletingClassRef = useRef<string | null>(null);
 
   const handleOpenCreate = () => {
     setEditingClass(null);
@@ -71,10 +75,17 @@ export default function ClassesScreen() {
   };
 
   const handleDeleteClass = async (classId: string) => {
+    if (deletingClassRef.current) return;
+
+    deletingClassRef.current = classId;
+    setDeletingClassId(classId);
     try {
       await deleteClass(classId);
     } catch (err: any) {
       Alert.alert('Gagal Menghapus Kelas', err.message ?? 'Terjadi kesalahan');
+    } finally {
+      deletingClassRef.current = null;
+      setDeletingClassId(null);
     }
   };
 
@@ -120,34 +131,19 @@ export default function ClassesScreen() {
         )}
       </View>
 
-      {/* Mode Badge (Informative) */}
-      <View
-        style={[
-          styles.envBadge,
-          {
-            backgroundColor: isFirebaseActive
-              ? 'rgba(16, 185, 129, 0.1)'
-              : 'rgba(59, 130, 246, 0.1)',
-            borderColor: isFirebaseActive ? '#10b981' : '#3b82f6',
-          },
-        ]}
-      >
-        <Text
-          style={[
-            styles.envBadgeText,
-            { color: isFirebaseActive ? '#10b981' : '#3b82f6' },
-          ]}
-        >
-          {isFirebaseActive
-            ? '● Terhubung ke Cloud Firestore'
-            : 'ℹ Mode Mock Adapter (Siap otomatis beralih ke Firestore saat .env diisi)'}
-        </Text>
-      </View>
+      {classesFromCache ? (
+        <Text style={[styles.cacheNotice, { color: colors.textSecondary }]}>Menampilkan data cache. Menunggu sinkronisasi server.</Text>
+      ) : null}
 
       {/* Error Banner */}
       {error && (
         <View style={styles.errorBanner}>
           <Text style={styles.errorText}>{error}</Text>
+          {classesError ? (
+            <TouchableOpacity onPress={retryClasses} style={styles.retryButton}>
+              <Text style={styles.retryText}>Coba lagi</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       )}
 
@@ -183,6 +179,7 @@ export default function ClassesScreen() {
               onManageMembers={handleOpenMembers}
               onEdit={handleOpenEdit}
               onDelete={handleDeleteClass}
+            isDeleting={deletingClassId === cls.id}
             />
           ))}
         </View>
@@ -252,15 +249,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
-  envBadge: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  envBadgeText: {
+  cacheNotice: {
     fontSize: 12,
-    fontWeight: '600',
+    fontStyle: 'italic',
   },
   errorBanner: {
     backgroundColor: 'rgba(239, 68, 68, 0.1)',
@@ -273,6 +264,8 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     fontSize: 13,
   },
+  retryButton: { alignSelf: 'flex-start', marginTop: 8, paddingVertical: 4 },
+  retryText: { color: '#ef4444', fontSize: 13, fontWeight: '700' },
   loadingContainer: {
     paddingVertical: 48,
     alignItems: 'center',

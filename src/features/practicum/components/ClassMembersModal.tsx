@@ -42,7 +42,10 @@ function ClassMembersContent({
 
   const [members, setMembers] = useState<ClassMember[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
   const [addingMember, setAddingMember] = useState<boolean>(false);
+  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState<boolean>(false);
 
   // Form states
@@ -63,7 +66,7 @@ function ClassMembersContent({
       })
       .catch((err) => {
         if (!isCancelled) {
-          Alert.alert('Error', err.message ?? 'Gagal memuat daftar anggota');
+          setLoadError(err instanceof Error ? err.message : 'Gagal memuat daftar anggota');
           setLoading(false);
         }
       });
@@ -71,19 +74,24 @@ function ClassMembersContent({
     return () => {
       isCancelled = true;
     };
-  }, [fetchMembers, practicumClass.id]);
+  }, [fetchMembers, practicumClass.id, reloadKey]);
 
   const handleAddSubmit = async () => {
-    if (!studentName.trim()) {
-      setFormError('Nama praktikan wajib diisi');
+    if (addingMember) return;
+    if (studentName.trim().length < 2) {
+      setFormError('Nama praktikan minimal 2 karakter');
       return;
     }
-    if (!studentNIM.trim()) {
-      setFormError('NIM praktikan wajib diisi');
+    if (studentNIM.trim().length < 3) {
+      setFormError('NIM praktikan minimal 3 karakter');
+      return;
+    }
+    if (studentUid.trim().length < 3) {
+      setFormError('UID Praktikan wajib diisi dan minimal 3 karakter');
       return;
     }
 
-    const uid = studentUid.trim() || `std-${Date.now()}`;
+    const uid = studentUid.trim();
 
     try {
       setAddingMember(true);
@@ -106,6 +114,8 @@ function ClassMembersContent({
   };
 
   const handleRemove = (member: ClassMember) => {
+    if (removingMemberId) return;
+
     Alert.alert(
       'Hapus Anggota',
       `Keluarkan ${member.displayName} (${member.identifier}) dari kelas ini?`,
@@ -115,11 +125,15 @@ function ClassMembersContent({
           text: 'Hapus',
           style: 'destructive',
           onPress: async () => {
+            if (removingMemberId) return;
             try {
+              setRemovingMemberId(member.userId);
               await onRemoveMember(practicumClass.id, member.userId);
               setMembers((prev) => prev.filter((m) => m.userId !== member.userId));
             } catch (err: any) {
               Alert.alert('Error', err.message ?? 'Gagal menghapus anggota');
+            } finally {
+              setRemovingMemberId(null);
             }
           },
         },
@@ -163,27 +177,43 @@ function ClassMembersContent({
               placeholder="Nama Lengkap Praktikan *"
               placeholderTextColor={colors.textSecondary}
               value={studentName}
-              onChangeText={setStudentName}
+              onChangeText={(value) => {
+                setStudentName(value);
+                setFormError('');
+              }}
+              editable={!addingMember}
+              maxLength={120}
             />
             <TextInput
               style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]}
               placeholder="NIM / Identifier *"
               placeholderTextColor={colors.textSecondary}
               value={studentNIM}
-              onChangeText={setStudentNIM}
+              onChangeText={(value) => {
+                setStudentNIM(value);
+                setFormError('');
+              }}
+              editable={!addingMember}
+              maxLength={40}
             />
             <TextInput
               style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]}
-              placeholder="User ID / UID (opsional, otomatis jika kosong)"
+              placeholder="UID akun Praktikan *"
               placeholderTextColor={colors.textSecondary}
               value={studentUid}
-              onChangeText={setStudentUid}
+              onChangeText={(value) => {
+                setStudentUid(value);
+                setFormError('');
+              }}
+              editable={!addingMember}
+              maxLength={128}
             />
 
             <View style={styles.formButtonRow}>
               <TouchableOpacity
                 style={[styles.smallBtn, { borderColor: colors.border }]}
                 onPress={() => setShowAddForm(false)}
+                disabled={addingMember}
               >
                 <Text style={{ color: colors.textSecondary }}>Batal</Text>
               </TouchableOpacity>
@@ -204,6 +234,7 @@ function ClassMembersContent({
           <TouchableOpacity
             style={[styles.addNewButton, { borderColor: colors.actionPrimary }]}
             onPress={() => setShowAddForm(true)}
+            disabled={loading || Boolean(removingMemberId)}
           >
             <Text style={[styles.addNewText, { color: colors.actionPrimary }]}>
               + Tambah Praktikan
@@ -213,6 +244,20 @@ function ClassMembersContent({
 
         {loading ? (
           <ActivityIndicator style={{ marginVertical: 30 }} size="large" color={colors.actionPrimary} />
+        ) : loadError ? (
+          <View style={styles.emptyContainer}>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{loadError}</Text>
+            <TouchableOpacity
+              style={[styles.retryBtn, { borderColor: colors.actionPrimary }]}
+              onPress={() => {
+                setLoading(true);
+                setLoadError('');
+                setReloadKey((value) => value + 1);
+              }}
+            >
+              <Text style={{ color: colors.actionPrimary, fontWeight: '700' }}>Coba lagi</Text>
+            </TouchableOpacity>
+          </View>
         ) : members.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
@@ -237,8 +282,11 @@ function ClassMembersContent({
                 <TouchableOpacity
                   style={styles.removeBtn}
                   onPress={() => handleRemove(item)}
+                  disabled={Boolean(removingMemberId)}
                 >
-                  <Text style={styles.removeText}>Hapus</Text>
+                  <Text style={styles.removeText}>
+                    {removingMemberId === item.userId ? 'Menghapus...' : 'Hapus'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -357,6 +405,14 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 12,
   },
   memberRow: {
     flexDirection: 'row',

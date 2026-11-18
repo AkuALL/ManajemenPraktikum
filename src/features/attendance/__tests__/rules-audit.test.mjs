@@ -56,6 +56,22 @@ test('firestore.rules preserves all required users and attendance rule invariant
   );
 });
 
+test('firestore.rules validates practicum text and requires a registered student member', () => {
+  const classHelper = extractBlock('function validClassCreate()');
+  const memberHelper = extractBlock('function validMemberCreate(memberId)');
+  const memberUpdateHelper = extractBlock('function validMemberUpdate()');
+  const sessionHelper = extractBlock('function validSessionCreate()');
+
+  assert.match(classHelper, /validText\(request\.resource\.data\.practicumName, 2, 120\)/);
+  assert.match(classHelper, /validText\(request\.resource\.data\.className, 2, 80\)/);
+  assert.match(memberHelper, /exists\(userProfilePath\(memberId\)\)/);
+  assert.match(memberHelper, /get\(userProfilePath\(memberId\)\)\.data\.role == 'student'/);
+  assert.match(memberHelper, /displayName[\s\S]*get\(userProfilePath\(memberId\)\)\.data\.displayName/);
+  assert.match(memberUpdateHelper, /request\.resource\.data\.displayName[\s\S]*get\(userProfilePath\(resource\.data\.userId\)\)\.data\.displayName/);
+  assert.match(sessionHelper, /validText\(request\.resource\.data\.title, 2, 140\)/);
+  assert.match(sessionHelper, /validText\(request\.resource\.data\.location, 2, 120\)/);
+});
+
 // Pure predicate mirror of AL-owned firestore.rules sections for allow/deny matrix verification.
 const SERVER_TIME = 1760000000000;
 const VALID_TEXT = (v, min, max) => typeof v === 'string' && v.length >= min && v.length <= max;
