@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { formatSessionDate, formatSessionTime } from '../port';
@@ -28,6 +28,7 @@ export function SessionCard({
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
+  const [actionBusy, setActionBusy] = useState(false);
 
   const getStatusBadge = () => {
     switch (session.status) {
@@ -110,6 +111,7 @@ export function SessionCard({
           onOpenSession={onOpenSession}
           onCloseSession={onCloseSession}
           onDeleteSession={session.status === 'scheduled' ? onDeleteSession : undefined}
+          onBusyChange={setActionBusy}
         />
       )}
 
@@ -119,6 +121,7 @@ export function SessionCard({
           <TouchableOpacity
             style={[styles.smallBtn, { borderColor: colors.border }]}
             onPress={() => onEditSession(session)}
+            disabled={actionBusy}
           >
             <Text style={[styles.smallBtnText, { color: colors.textSecondary }]}>Edit Sesi</Text>
           </TouchableOpacity>
@@ -132,6 +135,7 @@ export function SessionCard({
               params: { sessionId: session.id },
             })
           }
+          disabled={actionBusy}
         >
           <Text style={[styles.detailBtnText, { color: colors.textPrimary }]}>
             Lihat Detail Sesi ➔

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -48,6 +48,8 @@ export default function ClassesScreen() {
 
   const [membersModalVisible, setMembersModalVisible] = useState(false);
   const [managingClass, setManagingClass] = useState<PracticumClass | null>(null);
+  const [deletingClassId, setDeletingClassId] = useState<string | null>(null);
+  const deletingClassRef = useRef<string | null>(null);
 
   const handleOpenCreate = () => {
     setEditingClass(null);
@@ -73,10 +75,17 @@ export default function ClassesScreen() {
   };
 
   const handleDeleteClass = async (classId: string) => {
+    if (deletingClassRef.current) return;
+
+    deletingClassRef.current = classId;
+    setDeletingClassId(classId);
     try {
       await deleteClass(classId);
     } catch (err: any) {
       Alert.alert('Gagal Menghapus Kelas', err.message ?? 'Terjadi kesalahan');
+    } finally {
+      deletingClassRef.current = null;
+      setDeletingClassId(null);
     }
   };
 
@@ -170,6 +179,7 @@ export default function ClassesScreen() {
               onManageMembers={handleOpenMembers}
               onEdit={handleOpenEdit}
               onDelete={handleDeleteClass}
+            isDeleting={deletingClassId === cls.id}
             />
           ))}
         </View>
