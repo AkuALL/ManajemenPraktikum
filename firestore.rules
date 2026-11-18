@@ -316,8 +316,11 @@ service cloud.firestore {
     }
 
     match /classes/{classId} {
-      allow get, list: if isClassAssistant(classId)
-        || (signedIn() && exists(memberPath(classId, request.auth.uid)));
+      allow get: if signedIn()
+        && (request.auth.uid in resource.data.assistantIds
+          || exists(memberPath(classId, request.auth.uid)));
+      allow list: if signedIn()
+        && request.auth.uid in resource.data.assistantIds;
       allow create: if hasRole('assistant') && validClassCreate();
       allow update: if isClassAssistant(classId) && validClassUpdate();
       allow delete: if isClassAssistant(classId);
