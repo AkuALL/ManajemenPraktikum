@@ -34,9 +34,10 @@ export default function ScheduleScreen() {
     sessions,
     loadingSessions,
     sessionsFromCache,
+    classesError,
     sessionsError,
     error,
-    retrySessions,
+    retryData,
     createSession,
     updateSession,
     deleteSession,
@@ -110,8 +111,8 @@ export default function ScheduleScreen() {
         {error ? (
           <View style={styles.errorCard}>
             <Text style={styles.errorText}>{error}</Text>
-            {sessionsError ? (
-              <TouchableOpacity onPress={retrySessions} style={styles.retryButton}>
+            {sessionsError || classesError ? (
+              <TouchableOpacity onPress={retryData} style={styles.retryButton}>
                 <Text style={styles.retryText}>Coba lagi</Text>
               </TouchableOpacity>
             ) : null}

@@ -5,6 +5,7 @@ import {
   CreateSessionInput,
   PracticumClass,
   PracticumSession,
+  StudentCandidate,
   UpdateClassInput,
   UpdateSessionInput,
 } from './types';
@@ -20,6 +21,28 @@ function formatTimestamp(ts: any): string {
     return ts.toISOString();
   }
   return String(ts);
+}
+
+function parseSessionDate(value: unknown): Date {
+  if (value && typeof (value as { toDate?: unknown }).toDate === 'function') {
+    return (value as { toDate: () => Date }).toDate();
+  }
+  if (value instanceof Date) return value;
+  return new Date(String(value ?? ''));
+}
+
+function mapClassDoc(id: string, data: Record<string, any>): PracticumClass {
+  return {
+    id,
+    courseName: data.practicumName ?? '',
+    className: data.className ?? '',
+    lab: data.lab,
+    assistantIds: Array.isArray(data.assistantIds) ? data.assistantIds : [],
+    memberUids: Array.isArray(data.memberUids) ? data.memberUids : [],
+    createdBy: data.createdBy ?? '',
+    createdAt: formatTimestamp(data.createdAt),
+    updatedAt: formatTimestamp(data.updatedAt),
+  };
 }
 
 function mapSessionDoc(id: string, data: Record<string, any>): PracticumSession {
@@ -68,19 +91,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
       : classesRef;
 
     const snapshot = await getDocs(q);
-    return snapshot.docs.map((docSnap) => {
-      const data = docSnap.data();
-      return {
-        id: docSnap.id,
-        courseName: data.practicumName ?? '',
-        className: data.className ?? '',
-        lab: data.lab,
-        assistantIds: data.assistantIds ?? [],
-        createdBy: data.createdBy ?? '',
-        createdAt: formatTimestamp(data.createdAt),
-        updatedAt: formatTimestamp(data.updatedAt),
-      };
-    });
+    return snapshot.docs.map((docSnap) => mapClassDoc(docSnap.id, docSnap.data()));
   }
 
   subscribeClasses(
@@ -95,105 +106,25 @@ export class FirestorePracticumAdapter implements PracticumPort {
     this.getDb()
       .then(async (db) => {
         if (isCancelled) return;
-        const { collection, collectionGroup, doc, onSnapshot, query, where } = await import('firebase/firestore');
+        const { collection, onSnapshot, query, where } = await import('firebase/firestore');
 
-        if (assistantId) {
+        if (assistantId || studentId) {
           const classesRef = collection(db, 'classes');
-          const q = query(classesRef, where('assistantIds', 'array-contains', assistantId));
+          const q = assistantId
+            ? query(classesRef, where('assistantIds', 'array-contains', assistantId))
+            : query(classesRef, where('memberUids', 'array-contains', studentId));
 
           unsubscribe = onSnapshot(
             q,
             { includeMetadataChanges: true },
             (snapshot) => {
-              const list: PracticumClass[] = snapshot.docs.map((docSnap) => {
-                const data = docSnap.data();
-                return {
-                  id: docSnap.id,
-                  courseName: data.practicumName ?? '',
-                  className: data.className ?? '',
-                  lab: data.lab,
-                  assistantIds: data.assistantIds ?? [],
-                  createdBy: data.createdBy ?? '',
-                  createdAt: formatTimestamp(data.createdAt),
-                  updatedAt: formatTimestamp(data.updatedAt),
-                };
-              });
+              const list = snapshot.docs.map((docSnap) => mapClassDoc(docSnap.id, docSnap.data()));
               onData(list, { fromCache: snapshot.metadata.fromCache });
             },
             (err) => {
               onError?.(err);
             }
           );
-        } else if (studentId) {
-          // Praktikan (FR-06): temukan kelas yang diikutinya melalui subkoleksi members
-          const membersGroup = collectionGroup(db, 'members');
-          const qMembers = query(membersGroup, where('userId', '==', studentId));
-
-          let classUnsubs: (() => void)[] = [];
-
-          unsubscribe = onSnapshot(
-            qMembers,
-            { includeMetadataChanges: true },
-            (memberSnap) => {
-              classUnsubs.forEach((unsub) => unsub());
-              classUnsubs = [];
-
-              const classIds = Array.from(
-                new Set(
-                  memberSnap.docs
-                    .map((d) => d.ref.parent?.parent?.id)
-                    .filter((id): id is string => Boolean(id))
-                )
-              );
-
-              if (classIds.length === 0) {
-                onData([], { fromCache: memberSnap.metadata.fromCache });
-                return;
-              }
-
-              const classMap = new Map<string, PracticumClass>();
-              let remaining = classIds.length;
-
-              classIds.forEach((cId) => {
-                const unsub = onSnapshot(
-                  doc(db, 'classes', cId),
-                  { includeMetadataChanges: true },
-                  (docSnap) => {
-                    if (docSnap.exists()) {
-                      const data = docSnap.data();
-                      classMap.set(cId, {
-                        id: docSnap.id,
-                        courseName: data.practicumName ?? '',
-                        className: data.className ?? '',
-                        lab: data.lab,
-                        assistantIds: data.assistantIds ?? [],
-                        createdBy: data.createdBy ?? '',
-                        createdAt: formatTimestamp(data.createdAt),
-                        updatedAt: formatTimestamp(data.updatedAt),
-                      });
-                    } else {
-                      classMap.delete(cId);
-                    }
-                    remaining = Math.max(0, remaining - 1);
-                    if (remaining === 0) {
-                      onData(Array.from(classMap.values()), {
-                        fromCache: memberSnap.metadata.fromCache,
-                      });
-                    }
-                  },
-                  (err) => onError?.(err)
-                );
-                classUnsubs.push(unsub);
-              });
-            },
-            (err) => onError?.(err)
-          );
-
-          const origUnsub = unsubscribe;
-          unsubscribe = () => {
-            origUnsub();
-            classUnsubs.forEach((unsub) => unsub());
-          };
         } else {
           onData([], { fromCache: false });
         }
@@ -219,6 +150,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
       className: input.className,
       ...(input.lab ? { lab: input.lab } : {}),
       assistantIds,
+      memberUids: [] as string[],
       createdBy: assistantId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -232,6 +164,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
       className: input.className,
       lab: input.lab,
       assistantIds,
+      memberUids: [],
       createdBy: assistantId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -328,6 +261,25 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
   // === ANGGOTA KELAS ===
 
+  async getRegisteredStudents(): Promise<StudentCandidate[]> {
+    const db = await this.getDb();
+    const { collection, getDocs, query, where } = await import('firebase/firestore');
+    const q = query(collection(db, 'users'), where('role', '==', 'student'));
+    const snapshot = await getDocs(q);
+
+    return snapshot.docs
+      .map((d) => {
+        const data = d.data();
+        const nim = String(data.identifier ?? d.id).trim();
+        return {
+          userId: nim,
+          displayName: data.displayName ?? '',
+          identifier: nim,
+        };
+      })
+      .sort((a, b) => a.displayName.localeCompare(b.displayName, 'id'));
+  }
+
   async getClassMembers(classId: string): Promise<ClassMember[]> {
     const db = await this.getDb();
     const { collection, getDocs } = await import('firebase/firestore');
@@ -336,11 +288,12 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
     return snapshot.docs.map((d) => {
       const data = d.data();
+      const nim = String(data.identifier ?? data.userId ?? d.id).trim();
       return {
-        userId: data.userId ?? d.id,
+        userId: nim,
         role: 'student',
         displayName: data.displayName ?? '',
-        identifier: data.identifier ?? '',
+        identifier: nim,
         joinedAt: formatTimestamp(data.joinedAt),
       };
     });
@@ -365,11 +318,12 @@ export class FirestorePracticumAdapter implements PracticumPort {
           (snapshot) => {
             const list: ClassMember[] = snapshot.docs.map((d) => {
               const data = d.data();
+              const nim = String(data.identifier ?? data.userId ?? d.id).trim();
               return {
-                userId: data.userId ?? d.id,
+                userId: nim,
                 role: 'student',
                 displayName: data.displayName ?? '',
-                identifier: data.identifier ?? '',
+                identifier: nim,
                 joinedAt: formatTimestamp(data.joinedAt),
               };
             });
@@ -388,65 +342,64 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
   async addMember(classId: string, input: AddMemberInput): Promise<ClassMember> {
     const db = await this.getDb();
-    const { doc, serverTimestamp, setDoc } = await import('firebase/firestore');
+    const { arrayUnion, doc, serverTimestamp, writeBatch } = await import('firebase/firestore');
 
-    const memberDocRef = doc(db, 'classes', classId, 'members', input.userId);
+    const memberNim = input.identifier.trim() || input.userId.trim();
+    const memberDocRef = doc(db, 'classes', classId, 'members', memberNim);
+    const classDocRef = doc(db, 'classes', classId);
     const payload = {
-      userId: input.userId,
+      userId: memberNim,
       role: 'student',
       displayName: input.displayName,
-      identifier: input.identifier,
+      identifier: memberNim,
       joinedAt: serverTimestamp(),
     };
 
-    await setDoc(memberDocRef, payload);
+    const batch = writeBatch(db);
+    batch.set(memberDocRef, payload);
+    batch.update(classDocRef, {
+      memberUids: arrayUnion(memberNim),
+      updatedAt: serverTimestamp(),
+    });
+    await batch.commit();
 
     return {
-      userId: input.userId,
+      userId: memberNim,
       role: 'student',
       displayName: input.displayName,
-      identifier: input.identifier,
+      identifier: memberNim,
       joinedAt: new Date().toISOString(),
     };
   }
 
   async removeMember(classId: string, memberId: string): Promise<void> {
     const db = await this.getDb();
-    const { deleteDoc, doc } = await import('firebase/firestore');
-    await deleteDoc(doc(db, 'classes', classId, 'members', memberId));
+    const { arrayRemove, doc, serverTimestamp, writeBatch } = await import('firebase/firestore');
+
+    const batch = writeBatch(db);
+    batch.delete(doc(db, 'classes', classId, 'members', memberId));
+    batch.update(doc(db, 'classes', classId), {
+      memberUids: arrayRemove(memberId),
+      updatedAt: serverTimestamp(),
+    });
+    await batch.commit();
   }
 
   // === SESI PRAKTIKUM & JADWAL ===
 
   async getSessions(classId?: string): Promise<PracticumSession[]> {
     const db = await this.getDb();
-    const { collection, getDocs, query, where, orderBy } = await import('firebase/firestore');
+    const { collection, getDocs, query, where } = await import('firebase/firestore');
 
     const sessionsRef = collection(db, 'sessions');
     const q = classId
-      ? query(sessionsRef, where('classId', '==', classId), orderBy('startsAt', 'asc'))
-      : query(sessionsRef, orderBy('startsAt', 'asc'));
+      ? query(sessionsRef, where('classId', '==', classId))
+      : sessionsRef;
 
     const snapshot = await getDocs(q);
-    return snapshot.docs.map((docSnap) => {
-      const data = docSnap.data();
-      return {
-        id: docSnap.id,
-        classId: data.classId,
-        title: data.title ?? '',
-        location: data.location ?? '',
-        startsAt: formatTimestamp(data.startsAt),
-        endsAt: formatTimestamp(data.endsAt),
-        status: data.status,
-        openedBy: data.openedBy,
-        openedAt: data.openedAt ? formatTimestamp(data.openedAt) : undefined,
-        closedBy: data.closedBy,
-        closedAt: data.closedAt ? formatTimestamp(data.closedAt) : undefined,
-        createdBy: data.createdBy,
-        createdAt: formatTimestamp(data.createdAt),
-        updatedAt: formatTimestamp(data.updatedAt),
-      };
-    });
+    return sortSessionsByStart(
+      snapshot.docs.map((docSnap) => mapSessionDoc(docSnap.id, docSnap.data())),
+    );
   }
 
   subscribeSessions(
@@ -462,7 +415,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
     this.getDb()
       .then(async (db) => {
         if (isCancelled) return;
-        const { collection, collectionGroup, onSnapshot, query, where } = await import('firebase/firestore');
+        const { collection, onSnapshot, query, where } = await import('firebase/firestore');
         const sessionsRef = collection(db, 'sessions');
 
         const subscribeForClassIds = (targetClassIds: string[]): (() => void) => {
@@ -502,41 +455,14 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
         if (classId) {
           unsubscribe = subscribeForClassIds([classId]);
-        } else if (role === 'student' && studentId) {
-          // Praktikan (FR-06): cari kelas terdaftar lewat collectionGroup members, lalu subscribe per classId
-          const qMembers = query(collectionGroup(db, 'members'), where('userId', '==', studentId));
-          let sessionsUnsub: (() => void) | null = null;
-
-          const origUnsub = onSnapshot(
-            qMembers,
-            { includeMetadataChanges: true },
-            (memberSnap) => {
-              if (sessionsUnsub) {
-                sessionsUnsub();
-                sessionsUnsub = null;
-              }
-              const classIds = Array.from(
-                new Set(
-                  memberSnap.docs
-                    .map((d) => d.ref.parent?.parent?.id)
-                    .filter((id): id is string => Boolean(id)),
-                ),
-              );
-              sessionsUnsub = subscribeForClassIds(classIds);
-            },
-            (err) => onError?.(err),
-          );
-
-          unsubscribe = () => {
-            origUnsub();
-            if (sessionsUnsub) sessionsUnsub();
-          };
-        } else if (role === 'assistant') {
-          // Asisten: ambil kelas yang dikelola lalu subscribe sesi per classId (hindari query 'in' + index komposit)
+        } else if ((role === 'student' && studentId) || role === 'assistant') {
           const classesRef = collection(db, 'classes');
-          const qClasses = studentId
-            ? query(classesRef, where('assistantIds', 'array-contains', studentId))
-            : classesRef;
+          const qClasses =
+            role === 'student'
+              ? query(classesRef, where('memberUids', 'array-contains', studentId))
+              : studentId
+                ? query(classesRef, where('assistantIds', 'array-contains', studentId))
+                : classesRef;
           let sessionsUnsub: (() => void) | null = null;
 
           const origUnsub = onSnapshot(
@@ -650,6 +576,9 @@ export class FirestorePracticumAdapter implements PracticumPort {
     const startDate = new Date(input.startsAt);
     const endDate = new Date(input.endsAt);
 
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      throw new Error('Format timestamp waktu mulai atau selesai tidak valid');
+    }
     if (startDate >= endDate) {
       throw new Error('Waktu selesai harus lebih lambat dari waktu mulai');
     }
@@ -684,18 +613,39 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
   async updateSession(sessionId: string, input: UpdateSessionInput): Promise<void> {
     const db = await this.getDb();
-    const { doc, serverTimestamp, Timestamp, updateDoc } = await import('firebase/firestore');
+    const { doc, getDoc, serverTimestamp, Timestamp, updateDoc } = await import('firebase/firestore');
 
+    const sessionRef = doc(db, 'sessions', sessionId);
     const updatePayload: Record<string, any> = {
       updatedAt: serverTimestamp(),
     };
 
     if (input.title !== undefined) updatePayload.title = input.title;
     if (input.location !== undefined) updatePayload.location = input.location;
-    if (input.startsAt) updatePayload.startsAt = Timestamp.fromDate(new Date(input.startsAt));
-    if (input.endsAt) updatePayload.endsAt = Timestamp.fromDate(new Date(input.endsAt));
 
-    await updateDoc(doc(db, 'sessions', sessionId), updatePayload);
+    if (input.startsAt !== undefined || input.endsAt !== undefined) {
+      const snap = await getDoc(sessionRef);
+      if (!snap.exists()) {
+        throw new Error('Sesi tidak ditemukan');
+      }
+      const current = snap.data();
+      const startDate =
+        input.startsAt !== undefined ? new Date(input.startsAt) : parseSessionDate(current.startsAt);
+      const endDate =
+        input.endsAt !== undefined ? new Date(input.endsAt) : parseSessionDate(current.endsAt);
+
+      if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+        throw new Error('Format timestamp waktu mulai atau selesai tidak valid');
+      }
+      if (startDate >= endDate) {
+        throw new Error('Waktu selesai harus lebih lambat dari waktu mulai');
+      }
+
+      if (input.startsAt !== undefined) updatePayload.startsAt = Timestamp.fromDate(startDate);
+      if (input.endsAt !== undefined) updatePayload.endsAt = Timestamp.fromDate(endDate);
+    }
+
+    await updateDoc(sessionRef, updatePayload);
   }
 
   async deleteSession(sessionId: string): Promise<void> {

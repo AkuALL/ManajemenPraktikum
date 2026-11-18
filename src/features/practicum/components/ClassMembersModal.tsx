@@ -1,38 +1,48 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
   Modal,
-  View,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  FlatList,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
+  View,
 } from 'react-native';
-import { PracticumClass, ClassMember, AddMemberInput } from '../types';
+
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+
+import { AddMemberInput, ClassMember, PracticumClass, StudentCandidate } from '../types';
+import { COHORT_OPTIONS, extractCohortYear, filterStudentCandidates } from '../validation';
 
 interface ClassMembersModalProps {
   visible: boolean;
   practicumClass: PracticumClass | null;
+  allClasses?: PracticumClass[];
   onClose: () => void;
   fetchMembers: (classId: string) => Promise<ClassMember[]>;
+  fetchStudentCandidates?: () => Promise<StudentCandidate[]>;
   onAddMember: (classId: string, input: AddMemberInput) => Promise<ClassMember>;
   onRemoveMember: (classId: string, memberId: string) => Promise<void>;
 }
 
 function ClassMembersContent({
   practicumClass,
+  allClasses = [],
   onClose,
   fetchMembers,
+  fetchStudentCandidates,
   onAddMember,
   onRemoveMember,
 }: {
   practicumClass: PracticumClass;
+  allClasses?: PracticumClass[];
   onClose: () => void;
   fetchMembers: (classId: string) => Promise<ClassMember[]>;
+  fetchStudentCandidates?: () => Promise<StudentCandidate[]>;
   onAddMember: (classId: string, input: AddMemberInput) => Promise<ClassMember>;
   onRemoveMember: (classId: string, memberId: string) => Promise<void>;
 }) {
@@ -44,15 +54,23 @@ function ClassMembersContent({
   const [loading, setLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
-  const [addingMember, setAddingMember] = useState<boolean>(false);
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
-  const [showAddForm, setShowAddForm] = useState<boolean>(false);
 
-  // Form states
-  const [studentName, setStudentName] = useState('');
-  const [studentNIM, setStudentNIM] = useState('');
-  const [studentUid, setStudentUid] = useState('');
-  const [formError, setFormError] = useState('');
+  // Search & picker states
+  const [showSearchPicker, setShowSearchPicker] = useState<boolean>(false);
+  const [candidates, setCandidates] = useState<StudentCandidate[]>([]);
+  const [loadingCandidates, setLoadingCandidates] = useState<boolean>(false);
+  const [candidatesError, setCandidatesError] = useState('');
+  const [candidateReloadKey, setCandidateReloadKey] = useState(0);
+  const [addingUserId, setAddingUserId] = useState<string | null>(null);
+  const [addFeedback, setAddFeedback] = useState('');
+  const [addError, setAddError] = useState('');
+
+  // Multi-criteria filters (all optional)
+  const [nameFilter, setNameFilter] = useState('');
+  const [nimFilter, setNimFilter] = useState('');
+  const [cohortFilter, setCohortFilter] = useState<string>('Semua Angkatan');
+  const [showCohortDropdown, setShowCohortDropdown] = useState(false);
 
   useEffect(() => {
     let isCancelled = false;
@@ -76,40 +94,66 @@ function ClassMembersContent({
     };
   }, [fetchMembers, practicumClass.id, reloadKey]);
 
-  const handleAddSubmit = async () => {
-    if (addingMember) return;
-    if (studentName.trim().length < 2) {
-      setFormError('Nama praktikan minimal 2 karakter');
-      return;
-    }
-    if (studentNIM.trim().length < 3) {
-      setFormError('NIM praktikan minimal 3 karakter');
-      return;
-    }
-    if (studentUid.trim().length < 3) {
-      setFormError('UID Praktikan wajib diisi dan minimal 3 karakter');
-      return;
-    }
+  useEffect(() => {
+    if (!showSearchPicker || !fetchStudentCandidates) return;
+    let isCancelled = false;
 
-    const uid = studentUid.trim();
+    fetchStudentCandidates()
+      .then((list) => {
+        if (!isCancelled) {
+          setCandidates(list);
+          setLoadingCandidates(false);
+        }
+      })
+      .catch((err) => {
+        if (!isCancelled) {
+          setCandidatesError(
+            err instanceof Error ? err.message : 'Gagal memuat daftar praktikan terdaftar',
+          );
+          setLoadingCandidates(false);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [fetchStudentCandidates, showSearchPicker, candidateReloadKey]);
+
+  const filteredCandidates = useMemo(() => {
+    return filterStudentCandidates(
+      candidates,
+      members.map((m) => m.userId),
+      {
+        name: nameFilter,
+        nim: nimFilter,
+        cohort: cohortFilter,
+      },
+    );
+  }, [candidates, cohortFilter, members, nameFilter, nimFilter]);
+
+  const getOtherEnrolledClasses = (userId: string) =>
+    allClasses.filter(
+      (cls) => cls.id !== practicumClass.id && cls.memberUids?.includes(userId),
+    );
+
+  const handleSelectCandidate = async (candidate: StudentCandidate) => {
+    if (addingUserId) return;
 
     try {
-      setAddingMember(true);
-      setFormError('');
+      setAddingUserId(candidate.userId);
+      setAddError('');
+      setAddFeedback('');
       const newMember = await onAddMember(practicumClass.id, {
-        userId: uid,
-        displayName: studentName.trim(),
-        identifier: studentNIM.trim(),
+        userId: candidate.userId,
+        displayName: candidate.displayName,
+        identifier: candidate.identifier,
       });
       setMembers((prev) => [...prev, newMember]);
-      setStudentName('');
-      setStudentNIM('');
-      setStudentUid('');
-      setShowAddForm(false);
+      setAddFeedback(`${candidate.displayName} berhasil ditambahkan ke kelas.`);
     } catch (err: any) {
-      setFormError(err.message ?? 'Gagal menambah anggota');
+      setAddError(err?.message ?? 'Gagal menambah anggota');
     } finally {
-      setAddingMember(false);
+      setAddingUserId(null);
     }
   };
 
@@ -137,7 +181,7 @@ function ClassMembersContent({
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -165,79 +209,240 @@ function ClassMembersContent({
           </TouchableOpacity>
         </View>
 
-        {showAddForm ? (
-          <View style={[styles.addFormCard, { borderColor: colors.border, backgroundColor: colors.background }]}>
-            <Text style={[styles.formTitle, { color: colors.textPrimary }]}>
-              Tambah Praktikan Baru
-            </Text>
-            {formError ? <Text style={styles.errorText}>{formError}</Text> : null}
-
-            <TextInput
-              style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]}
-              placeholder="Nama Lengkap Praktikan *"
-              placeholderTextColor={colors.textSecondary}
-              value={studentName}
-              onChangeText={(value) => {
-                setStudentName(value);
-                setFormError('');
-              }}
-              editable={!addingMember}
-              maxLength={120}
-            />
-            <TextInput
-              style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]}
-              placeholder="NIM / Identifier *"
-              placeholderTextColor={colors.textSecondary}
-              value={studentNIM}
-              onChangeText={(value) => {
-                setStudentNIM(value);
-                setFormError('');
-              }}
-              editable={!addingMember}
-              maxLength={40}
-            />
-            <TextInput
-              style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]}
-              placeholder="UID akun Praktikan *"
-              placeholderTextColor={colors.textSecondary}
-              value={studentUid}
-              onChangeText={(value) => {
-                setStudentUid(value);
-                setFormError('');
-              }}
-              editable={!addingMember}
-              maxLength={128}
-            />
-
-            <View style={styles.formButtonRow}>
+        {showSearchPicker ? (
+          <View
+            style={[
+              styles.searchPanel,
+              { borderColor: colors.border, backgroundColor: colors.background },
+            ]}
+          >
+            <View style={styles.searchHeader}>
+              <Text style={[styles.formTitle, { color: colors.textPrimary }]}>
+                Cari & Tambah Praktikan
+              </Text>
               <TouchableOpacity
-                style={[styles.smallBtn, { borderColor: colors.border }]}
-                onPress={() => setShowAddForm(false)}
-                disabled={addingMember}
+                onPress={() => {
+                  setShowSearchPicker(false);
+                  setShowCohortDropdown(false);
+                  setAddError('');
+                  setAddFeedback('');
+                }}
               >
-                <Text style={{ color: colors.textSecondary }}>Batal</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.smallBtn, { backgroundColor: colors.actionPrimary }]}
-                onPress={handleAddSubmit}
-                disabled={addingMember}
-              >
-                {addingMember ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={{ color: '#fff', fontWeight: '700' }}>Simpan</Text>
-                )}
+                <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: 13 }}>
+                  Tutup
+                </Text>
               </TouchableOpacity>
             </View>
+
+            {addError ? <Text style={styles.errorText}>{addError}</Text> : null}
+            {addFeedback ? (
+              <Text style={[styles.successText, { color: colors.actionPrimary }]}>
+                {addFeedback}
+              </Text>
+            ) : null}
+
+            <TextInput
+              style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]}
+              placeholder="Filter Nama (opsional)"
+              placeholderTextColor={colors.textSecondary}
+              value={nameFilter}
+              onChangeText={(value) => {
+                setNameFilter(value);
+                setAddError('');
+              }}
+              accessibilityLabel="Filter nama praktikan"
+            />
+
+            <View style={styles.filterRow}>
+              <TextInput
+                style={[
+                  styles.input,
+                  styles.nimInput,
+                  { color: colors.textPrimary, borderColor: colors.border },
+                ]}
+                placeholder="Filter NIM (opsional)"
+                placeholderTextColor={colors.textSecondary}
+                value={nimFilter}
+                onChangeText={(value) => {
+                  setNimFilter(value);
+                  setAddError('');
+                }}
+                accessibilityLabel="Filter NIM praktikan"
+              />
+
+              <TouchableOpacity
+                style={[
+                  styles.cohortButton,
+                  { borderColor: colors.border, backgroundColor: colors.surface },
+                ]}
+                onPress={() => setShowCohortDropdown((prev) => !prev)}
+                accessibilityRole="button"
+                accessibilityLabel="Filter angkatan praktikan"
+              >
+                <Text style={[styles.cohortButtonText, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {cohortFilter} ▾
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {showCohortDropdown ? (
+              <View
+                style={[
+                  styles.dropdownMenu,
+                  { borderColor: colors.border, backgroundColor: colors.surface },
+                ]}
+              >
+                {COHORT_OPTIONS.map((option) => {
+                  const selected = option === cohortFilter;
+                  return (
+                    <TouchableOpacity
+                      key={option}
+                      style={[
+                        styles.dropdownOption,
+                        {
+                          borderBottomColor: colors.border,
+                          backgroundColor: selected ? colors.surfaceMuted : 'transparent',
+                        },
+                      ]}
+                      onPress={() => {
+                        setCohortFilter(option);
+                        setShowCohortDropdown(false);
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: selected ? colors.actionPrimary : colors.textPrimary,
+                          fontWeight: selected ? '700' : '500',
+                          fontSize: 13,
+                        }}
+                      >
+                        {option === 'Semua Angkatan' ? option : `Angkatan ${option}`}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ) : null}
+
+            {!fetchStudentCandidates ? (
+              <Text style={[styles.emptyText, { color: colors.textSecondary, paddingVertical: 12 }]}>
+                Pencarian praktikan tidak tersedia.
+              </Text>
+            ) : loadingCandidates ? (
+              <View style={styles.candidateState}>
+                <ActivityIndicator size="small" color={colors.actionPrimary} />
+                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                  Memuat daftar praktikan terdaftar...
+                </Text>
+              </View>
+            ) : candidatesError ? (
+              <View style={styles.candidateState}>
+                <Text style={styles.errorText}>{candidatesError}</Text>
+                <TouchableOpacity
+                  style={[styles.retryBtn, { borderColor: colors.actionPrimary }]}
+                  onPress={() => {
+                    setLoadingCandidates(true);
+                    setCandidatesError('');
+                    setCandidateReloadKey((v) => v + 1);
+                  }}
+                >
+                  <Text style={{ color: colors.actionPrimary, fontWeight: '700' }}>Coba lagi</Text>
+                </TouchableOpacity>
+              </View>
+            ) : filteredCandidates.length === 0 ? (
+              <View style={styles.candidateState}>
+                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                  Tidak ada praktikan cocok atau semua sudah terdaftar di kelas ini.
+                </Text>
+              </View>
+            ) : (
+              <>
+                <Text style={[styles.resultHint, { color: colors.textSecondary }]}>
+                  {filteredCandidates.length} praktikan tersedia — ketuk untuk menambahkan:
+                </Text>
+                <ScrollView style={styles.candidateList} nestedScrollEnabled>
+                  {filteredCandidates.map((item) => {
+                    const cohort = extractCohortYear(item.identifier);
+                    const otherClasses = getOtherEnrolledClasses(item.userId);
+                    const isAddingThis = addingUserId === item.userId;
+
+                    return (
+                      <TouchableOpacity
+                        key={item.userId}
+                        style={[
+                          styles.candidateRow,
+                          { borderColor: colors.border, backgroundColor: colors.surface },
+                        ]}
+                        onPress={() => handleSelectCandidate(item)}
+                        disabled={Boolean(addingUserId)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Tambahkan ${item.displayName}`}
+                      >
+                        <View style={{ flex: 1, gap: 3 }}>
+                          <Text style={[styles.memberName, { color: colors.textPrimary }]}>
+                            {item.displayName}
+                          </Text>
+                          <Text style={[styles.memberNIM, { color: colors.textSecondary }]}>
+                            {item.identifier} · {cohort ? `Angkatan ${cohort}` : 'Angkatan -'}
+                          </Text>
+                          <View
+                            style={[
+                              styles.statusBadge,
+                              {
+                                backgroundColor:
+                                  otherClasses.length > 0
+                                    ? 'rgba(245, 158, 11, 0.15)'
+                                    : colors.surfaceMuted,
+                                borderColor:
+                                  otherClasses.length > 0 ? '#d97706' : colors.border,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.statusBadgeText,
+                                {
+                                  color:
+                                    otherClasses.length > 0 ? '#b45309' : colors.textSecondary,
+                                },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {otherClasses.length > 0
+                                ? `Terdaftar di ${otherClasses.map((c) => c.className).join(', ')}`
+                                : 'Belum terdaftar di kelas lain'}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.tapAddPill}>
+                          {isAddingThis ? (
+                            <ActivityIndicator size="small" color={colors.actionPrimary} />
+                          ) : (
+                            <Text style={{ color: colors.actionPrimary, fontWeight: '700', fontSize: 12 }}>
+                              + Pilih
+                            </Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </>
+            )}
           </View>
         ) : (
           <TouchableOpacity
             style={[styles.addNewButton, { borderColor: colors.actionPrimary }]}
-            onPress={() => setShowAddForm(true)}
+            onPress={() => {
+              setLoadingCandidates(true);
+              setCandidatesError('');
+              setShowSearchPicker(true);
+            }}
             disabled={loading || Boolean(removingMemberId)}
           >
             <Text style={[styles.addNewText, { color: colors.actionPrimary }]}>
-              + Tambah Praktikan
+              + Cari & Tambah Praktikan
             </Text>
           </TouchableOpacity>
         )}
@@ -268,7 +473,7 @@ function ClassMembersContent({
           <FlatList
             data={members}
             keyExtractor={(item) => item.userId}
-            style={{ maxHeight: 340 }}
+            style={{ maxHeight: showSearchPicker ? 180 : 340 }}
             renderItem={({ item }) => (
               <View style={[styles.memberRow, { borderBottomColor: colors.border }]}>
                 <View style={{ flex: 1 }}>
@@ -300,8 +505,10 @@ function ClassMembersContent({
 export function ClassMembersModal({
   visible,
   practicumClass,
+  allClasses,
   onClose,
   fetchMembers,
+  fetchStudentCandidates,
   onAddMember,
   onRemoveMember,
 }: ClassMembersModalProps) {
@@ -312,8 +519,10 @@ export function ClassMembersModal({
       <ClassMembersContent
         key={practicumClass.id}
         practicumClass={practicumClass}
+        allClasses={allClasses}
         onClose={onClose}
         fetchMembers={fetchMembers}
+        fetchStudentCandidates={fetchStudentCandidates}
         onAddMember={onAddMember}
         onRemoveMember={onRemoveMember}
       />
@@ -331,16 +540,16 @@ const styles = StyleSheet.create({
   },
   container: {
     width: '100%',
-    maxWidth: 500,
+    maxWidth: 520,
     borderRadius: 16,
     borderWidth: 1,
     padding: 20,
-    maxHeight: '85%',
+    maxHeight: '90%',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   title: {
     fontSize: 18,
@@ -365,12 +574,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 14,
   },
-  addFormCard: {
+  searchPanel: {
     borderWidth: 1,
     borderRadius: 10,
-    padding: 14,
+    padding: 12,
     marginBottom: 14,
     gap: 8,
+  },
+  searchHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   formTitle: {
     fontWeight: '700',
@@ -380,31 +594,89 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     fontSize: 12,
   },
+  successText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
   input: {
     borderWidth: 1,
     borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    fontSize: 14,
+    fontSize: 13,
   },
-  formButtonRow: {
+  filterRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
     gap: 8,
-    marginTop: 4,
+    alignItems: 'center',
   },
-  smallBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 6,
+  nimInput: {
+    flex: 1,
+  },
+  cohortButton: {
     borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    minWidth: 130,
+    alignItems: 'center',
+  },
+  cohortButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  dropdownMenu: {
+    borderWidth: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  dropdownOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  candidateState: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    gap: 8,
+  },
+  resultHint: {
+    fontSize: 12,
+  },
+  candidateList: {
+    maxHeight: 200,
+  },
+  candidateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
+    gap: 10,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginTop: 2,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  tapAddPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
   },
   emptyContainer: {
     paddingVertical: 32,
     alignItems: 'center',
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: 13,
     textAlign: 'center',
   },
   retryBtn: {
@@ -412,7 +684,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    marginTop: 12,
+    marginTop: 4,
   },
   memberRow: {
     flexDirection: 'row',

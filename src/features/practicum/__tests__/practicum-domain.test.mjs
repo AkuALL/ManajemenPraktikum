@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { MockPracticumAdapter } from '../mock-adapter.ts';
+import { MockPracticumAdapter, SEED_PRACTICUM_COURSES } from '../mock-adapter.ts';
 import { formatSessionDate, formatSessionTime } from '../port.ts';
 
 test('GA-01 & GA-02: Asisten can create class, add members, and create session', async () => {
@@ -21,17 +21,17 @@ test('GA-01 & GA-02: Asisten can create class, add members, and create session',
   assert.ok(newClass.assistantIds.includes('asisten-1'));
 
   const member = await adapter.addMember(newClass.id, {
-    userId: 'student-galang',
+    userId: '23.11.0001',
     displayName: 'Galang Bintang',
     identifier: '23.11.0001',
   });
 
-  assert.equal(member.userId, 'student-galang');
+  assert.equal(member.userId, '23.11.0001');
   assert.equal(member.role, 'student');
 
   const members = await adapter.getClassMembers(newClass.id);
   assert.equal(members.length, 1);
-  assert.equal(members[0].userId, 'student-galang');
+  assert.equal(members[0].userId, '23.11.0001');
 
   const session = await adapter.createSession(
     {
@@ -64,7 +64,7 @@ test('GA-03 & FR-06: Praktikan only sees sessions from classes they are enrolled
 
   // Daftarkan Galang ke Kelas A saja, bukan Kelas B
   await adapter.addMember(classA.id, {
-    userId: 'student-galang',
+    userId: '23.11.0001',
     displayName: 'Galang',
     identifier: '23.11.0001',
   });
@@ -97,7 +97,7 @@ test('GA-03 & FR-06: Praktikan only sees sessions from classes they are enrolled
   let studentSessionsMeta = null;
   const unsubSessions = adapter.subscribeSessions(
     undefined,
-    'student-galang',
+    '23.11.0001',
     'student',
     (data, meta) => {
       studentSessions = data;
@@ -120,7 +120,7 @@ test('GA-03 & FR-06: Praktikan only sees sessions from classes they are enrolled
       studentClassesMeta = meta;
     },
     undefined,
-    'student-galang'
+    '23.11.0001'
   );
 
   assert.equal(studentClasses.length, 1);
@@ -312,7 +312,7 @@ test('FR-04: Kelas tidak boleh meninggalkan sesi atau member yatim', async () =>
 
   // Tambah anggota ke kelas
   const member = await adapter.addMember(cls.id, {
-    userId: 'std-alpro-1',
+    userId: '23.11.0005',
     displayName: 'Andi',
     identifier: '23.11.0005',
   });
@@ -436,4 +436,88 @@ test('FR-04: Kelas tidak dapat dihapus jika memiliki sesi aktif, sesi dengan pre
     },
     { message: /sudah memiliki data izin/ }
   );
+});
+
+test('memberUids stays synced on addMember/removeMember, getRegisteredStudents returns candidates, and updateSession validates timestamps', async () => {
+  const adapter = new MockPracticumAdapter();
+  const cls = await adapter.createClass(
+    { courseName: 'Pemrograman Web', className: 'PW-A' },
+    'asisten-1',
+  );
+  assert.deepEqual(cls.memberUids, []);
+
+  await adapter.addMember(cls.id, {
+    userId: '2402030202',
+    displayName: 'Anintya Putri',
+    identifier: '2402030202',
+  });
+
+  let classes = await adapter.getClasses('asisten-1');
+  assert.ok(classes.find((c) => c.id === cls.id)?.memberUids?.includes('2402030202'));
+
+  const candidates = await adapter.getRegisteredStudents();
+  assert.ok(candidates.some((s) => s.userId === '2402030202'));
+
+  await adapter.removeMember(cls.id, '2402030202');
+  classes = await adapter.getClasses('asisten-1');
+  assert.equal(classes.find((c) => c.id === cls.id)?.memberUids?.includes('2402030202'), false);
+
+  const session = await adapter.createSession(
+    {
+      classId: cls.id,
+      title: 'Pertemuan 1',
+      location: 'Lab 1',
+      startsAt: '2026-11-25T08:00:00.000Z',
+      endsAt: '2026-11-25T10:00:00.000Z',
+    },
+    'asisten-1',
+  );
+
+  await assert.rejects(
+    async () => {
+      await adapter.updateSession(session.id, { startsAt: 'not-a-timestamp' });
+    },
+    { message: /tidak valid/ },
+  );
+
+  await assert.rejects(
+    async () => {
+      await adapter.updateSession(session.id, {
+        startsAt: '2026-11-25T11:00:00.000Z',
+        endsAt: '2026-11-25T10:00:00.000Z',
+      });
+    },
+    { message: /Waktu selesai harus lebih lambat dari waktu mulai/ },
+  );
+});
+
+test('Seeder provides all 8 practicum courses and 2 student/assistant accounts', async () => {
+  const expectedCourses = [
+    'Sistem Operasi',
+    'Pengembangan Platform Khusus',
+    'Pembelajaran Mesin',
+    'Struktur Data',
+    'Basis Data',
+    'Algoritma Pemrograman',
+    'Dasar Sistem',
+    'Dasar Pemrograman',
+  ];
+
+  assert.deepEqual(
+    SEED_PRACTICUM_COURSES.map((c) => c.courseName),
+    expectedCourses,
+  );
+
+  const adapter = new MockPracticumAdapter();
+  const classes = await adapter.getClasses();
+  for (const name of expectedCourses) {
+    assert.ok(
+      classes.some((c) => c.courseName === name),
+      `Missing seeded course: ${name}`,
+    );
+  }
+
+  const students = await adapter.getRegisteredStudents();
+  assert.ok(students.some((s) => s.identifier === '2402030201'));
+  assert.ok(students.some((s) => s.identifier === '2402030202'));
 });

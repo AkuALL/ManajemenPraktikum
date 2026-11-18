@@ -14,8 +14,11 @@ function extractBlock(marker) {
 
 test('firestore.rules preserves all required users and attendance rule invariants', () => {
   const usersMatch = extractBlock('match /users/{userId}');
-  assert.match(usersMatch, /allow get:\s*if signedIn\(\) && request\.auth\.uid == userId;/);
-  assert.match(usersMatch, /allow list:\s*if false;/);
+  assert.match(
+    usersMatch,
+    /allow get:\s*if signedIn\(\)[\s\S]*request\.auth\.uid == userId[\s\S]*hasRole\('assistant'\) && resource\.data\.role == 'student'/,
+  );
+  assert.match(usersMatch, /allow list:\s*if hasRole\('assistant'\) && resource\.data\.role == 'student';/);
   assert.match(usersMatch, /allow create:\s*if signedIn\(\)[\s\S]*validProfileCreate\(userId\)/);
   assert.match(usersMatch, /allow update:\s*if signedIn\(\)[\s\S]*validProfileUpdate\(\)/);
   assert.match(usersMatch, /allow delete:\s*if false;/);
@@ -46,30 +49,36 @@ test('firestore.rules preserves all required users and attendance rule invariant
   const membersGroupMatch = extractBlock('match /{path=**}/members/{memberId}');
   assert.match(
     membersGroupMatch,
-    /allow read:\s*if signedIn\(\) && resource\.data\.userId == request\.auth\.uid;/,
+    /allow read:\s*if signedIn\(\)[\s\S]*resource\.data\.userId == currentUserIdentifier\(\)/,
   );
 
   const classesMatch = extractBlock('match /classes/{classId}');
   assert.match(
     classesMatch,
-    /allow list:\s*if signedIn\(\)\s*&& request\.auth\.uid in resource\.data\.assistantIds;/,
+    /allow list:\s*if signedIn\(\)[\s\S]*request\.auth\.uid in resource\.data\.assistantIds[\s\S]*currentUserIdentifier\(\) in resource\.data\.memberUids/,
   );
 });
 
-test('firestore.rules validates practicum text and requires a registered student member', () => {
+test('firestore.rules validates practicum text, session timestamps, and requires a registered student member', () => {
   const classHelper = extractBlock('function validClassCreate()');
   const memberHelper = extractBlock('function validMemberCreate(memberId)');
   const memberUpdateHelper = extractBlock('function validMemberUpdate()');
   const sessionHelper = extractBlock('function validSessionCreate()');
+  const sessionUpdateHelper = extractBlock('function validSessionUpdate()');
 
   assert.match(classHelper, /validText\(request\.resource\.data\.practicumName, 2, 120\)/);
   assert.match(classHelper, /validText\(request\.resource\.data\.className, 2, 80\)/);
-  assert.match(memberHelper, /exists\(userProfilePath\(memberId\)\)/);
-  assert.match(memberHelper, /get\(userProfilePath\(memberId\)\)\.data\.role == 'student'/);
-  assert.match(memberHelper, /displayName[\s\S]*get\(userProfilePath\(memberId\)\)\.data\.displayName/);
-  assert.match(memberUpdateHelper, /request\.resource\.data\.displayName[\s\S]*get\(userProfilePath\(resource\.data\.userId\)\)\.data\.displayName/);
+  assert.match(memberHelper, /request\.resource\.data\.userId == memberId/);
+  assert.match(memberHelper, /request\.resource\.data\.identifier == memberId/);
+  assert.match(memberHelper, /validText\(request\.resource\.data\.identifier, 3, 40\)/);
+  assert.match(memberUpdateHelper, /request\.resource\.data\.identifier == resource\.data\.identifier/);
+  assert.match(memberUpdateHelper, /validText\(request\.resource\.data\.identifier, 3, 40\)/);
   assert.match(sessionHelper, /validText\(request\.resource\.data\.title, 2, 140\)/);
   assert.match(sessionHelper, /validText\(request\.resource\.data\.location, 2, 120\)/);
+  assert.match(sessionHelper, /request\.resource\.data\.startsAt is timestamp/);
+  assert.match(sessionHelper, /request\.resource\.data\.endsAt is timestamp/);
+  assert.match(sessionUpdateHelper, /request\.resource\.data\.startsAt is timestamp/);
+  assert.match(sessionUpdateHelper, /request\.resource\.data\.endsAt is timestamp/);
 });
 
 // Pure predicate mirror of AL-owned firestore.rules sections for allow/deny matrix verification.
@@ -77,10 +86,19 @@ const SERVER_TIME = 1760000000000;
 const VALID_TEXT = (v, min, max) => typeof v === 'string' && v.length >= min && v.length <= max;
 
 function evalUsersRule(op, ctx) {
-  const { auth, userId, reqData, existingData } = ctx;
+  const { auth, userId, reqData, existingData, resourceData, db } = ctx;
   if (!auth) return false;
-  if (op === 'get') return auth.uid === userId;
-  if (op === 'list' || op === 'delete') return false;
+  const callerRole = db?.users?.[auth.uid]?.role;
+  if (op === 'get') {
+    return (
+      auth.uid === userId ||
+      (callerRole === 'assistant' && resourceData?.role === 'student')
+    );
+  }
+  if (op === 'list') {
+    return callerRole === 'assistant' && resourceData?.role === 'student';
+  }
+  if (op === 'delete') return false;
   if (op === 'create') {
     const keys = Object.keys(reqData).sort();
     const expected = ['createdAt', 'displayName', 'email', 'identifier', 'role', 'uid'];
@@ -169,10 +187,36 @@ test('users allow/deny matrix covers owner access, role escalation, and field va
     true,
   );
 
-  // Denies
+  // Denies & assistant list student checks
   assert.equal(evalUsersRule('get', { auth: null, userId: 'u1' }), false);
   assert.equal(evalUsersRule('get', { auth: { uid: 'u2' }, userId: 'u1' }), false);
-  assert.equal(evalUsersRule('list', { auth: { uid: 'u1' }, userId: 'u1' }), false);
+  assert.equal(
+    evalUsersRule('list', {
+      auth: { uid: 'u1' },
+      userId: 'u1',
+      resourceData: validProfile,
+      db: { users: { u1: { role: 'student' } } },
+    }),
+    false,
+  );
+  assert.equal(
+    evalUsersRule('list', {
+      auth: { uid: 'ast1' },
+      userId: 'u1',
+      resourceData: validProfile,
+      db: { users: { ast1: { role: 'assistant' } } },
+    }),
+    true,
+  );
+  assert.equal(
+    evalUsersRule('list', {
+      auth: { uid: 'ast1' },
+      userId: 'ast2',
+      resourceData: { ...validProfile, role: 'assistant' },
+      db: { users: { ast1: { role: 'assistant' } } },
+    }),
+    false,
+  );
   assert.equal(evalUsersRule('delete', { auth: { uid: 'u1' }, userId: 'u1' }), false);
   assert.equal(
     evalUsersRule('create', {
@@ -265,5 +309,26 @@ test('attendance allow/deny matrix covers open-session check, membership, determ
       db,
     }),
     false,
+  );
+});
+
+test('firebase.json and firestore.indexes.json configure members.userId COLLECTION_GROUP exemption', () => {
+  const firebaseConfig = JSON.parse(
+    fs.readFileSync(path.resolve(process.cwd(), 'firebase.json'), 'utf8'),
+  );
+  assert.equal(firebaseConfig.firestore?.indexes, 'firestore.indexes.json');
+
+  const indexesConfig = JSON.parse(
+    fs.readFileSync(path.resolve(process.cwd(), 'firestore.indexes.json'), 'utf8'),
+  );
+  const membersOverride = indexesConfig.fieldOverrides?.find(
+    (entry) => entry.collectionGroup === 'members' && entry.fieldPath === 'userId',
+  );
+  assert.ok(membersOverride, 'Missing fieldOverrides entry for members.userId');
+  assert.ok(
+    membersOverride.indexes?.some(
+      (idx) => idx.order === 'ASCENDING' && idx.queryScope === 'COLLECTION_GROUP',
+    ),
+    'Missing ASCENDING COLLECTION_GROUP index on members.userId',
   );
 });

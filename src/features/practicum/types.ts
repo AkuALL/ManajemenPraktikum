@@ -14,10 +14,17 @@ export interface PracticumClass {
   className: string;
   lab?: string;
   assistantIds: string[];
+  memberUids?: string[];
   createdBy: string;
   createdAt: string;
   updatedAt: string;
   memberCount?: number;
+}
+
+export interface StudentCandidate {
+  userId: string;
+  displayName: string;
+  identifier: string;
 }
 
 export interface ClassMember {

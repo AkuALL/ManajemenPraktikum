@@ -5,6 +5,7 @@ import type {
   CreateSessionInput,
   PracticumClass,
   PracticumSession,
+  StudentCandidate,
   UpdateClassInput,
   UpdateSessionInput,
 } from './types';
@@ -14,59 +15,56 @@ type Listener<T> = (data: T) => void;
 
 let mockIdSeq = 1000;
 
+export const SEED_PRACTICUM_COURSES = [
+  { courseName: 'Sistem Operasi', className: 'Kelas A', lab: 'Lab Sistem & Jaringan' },
+  { courseName: 'Pengembangan Platform Khusus', className: 'Kelas A', lab: 'Lab Mobile & IoT' },
+  { courseName: 'Pembelajaran Mesin', className: 'Kelas A', lab: 'Lab Kecerdasan Buatan' },
+  { courseName: 'Struktur Data', className: 'Kelas A', lab: 'Lab Pemrograman 1' },
+  { courseName: 'Basis Data', className: 'Kelas A', lab: 'Lab Basis Data' },
+  { courseName: 'Algoritma Pemrograman', className: 'Kelas A', lab: 'Lab Pemrograman 2' },
+  { courseName: 'Dasar Sistem', className: 'Kelas A', lab: 'Lab Arsitektur Komputer' },
+  { courseName: 'Dasar Pemrograman', className: 'Kelas A', lab: 'Lab Dasar Komputasi' },
+] as const;
+
+const SEED_STUDENT_ACCOUNTS: StudentCandidate[] = [
+  { userId: '2402030201', displayName: 'Anintya Putri', identifier: '2402030201' },
+  { userId: '2402030202', displayName: 'Dimas Saputra', identifier: '2402030202' },
+];
+
 export class MockPracticumAdapter implements PracticumPort {
-  private classes: PracticumClass[] = [
-    {
-      id: 'class-1',
-      courseName: 'Pemrograman Perangkat Bergerak',
-      className: 'Kelas A',
-      lab: 'Lab Komputer 3',
-      assistantIds: ['assistant-demo', 'ast-001', 'assistant-test-uid'],
-      createdBy: 'assistant-demo',
-      createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
-      updatedAt: new Date(Date.now() - 7 * 86400000).toISOString(),
-      memberCount: 2,
-    },
-    {
-      id: 'class-2',
-      courseName: 'Basis Data Lanjut',
-      className: 'Kelas B',
-      lab: 'Lab Software 1',
-      assistantIds: ['assistant-demo', 'ast-001', 'assistant-test-uid'],
-      createdBy: 'assistant-demo',
-      createdAt: new Date(Date.now() - 5 * 86400000).toISOString(),
-      updatedAt: new Date(Date.now() - 5 * 86400000).toISOString(),
-      memberCount: 1,
-    },
+  private classes: PracticumClass[] = SEED_PRACTICUM_COURSES.map((course, idx) => ({
+    id: `class-${idx + 1}`,
+    courseName: course.courseName,
+    className: course.className,
+    lab: course.lab,
+    assistantIds: ['AS-202401', 'AS-202402', 'assistant-demo', 'ast-001', 'assistant-test-uid'],
+    memberUids: SEED_STUDENT_ACCOUNTS.map((student) => student.identifier),
+    createdBy: 'AS-202401',
+    createdAt: new Date(Date.now() - (8 - idx) * 86400000).toISOString(),
+    updatedAt: new Date(Date.now() - (8 - idx) * 86400000).toISOString(),
+    memberCount: SEED_STUDENT_ACCOUNTS.length,
+  }));
+
+  private registeredStudents: StudentCandidate[] = [
+    ...SEED_STUDENT_ACCOUNTS,
+    { userId: '210480003', displayName: 'Ahmad Fauzan', identifier: '210480003' },
+    { userId: '220500001', displayName: 'Budi Santoso', identifier: '220500001' },
+    { userId: '230510005', displayName: 'Dewi Lestari', identifier: '230510005' },
+    { userId: '250550006', displayName: 'Rafi Pratama', identifier: '250550006' },
   ];
 
-  private members: Record<string, ClassMember[]> = {
-    'class-1': [
-      {
-        userId: 'std-001',
-        role: 'student',
-        displayName: 'Budi Santoso',
-        identifier: '22/500001/TK/50001',
+  private members: Record<string, ClassMember[]> = Object.fromEntries(
+    SEED_PRACTICUM_COURSES.map((_, idx) => [
+      `class-${idx + 1}`,
+      SEED_STUDENT_ACCOUNTS.map((student) => ({
+        userId: student.identifier,
+        role: 'student' as const,
+        displayName: student.displayName,
+        identifier: student.identifier,
         joinedAt: new Date(Date.now() - 6 * 86400000).toISOString(),
-      },
-      {
-        userId: 'std-002',
-        role: 'student',
-        displayName: 'Siti Rahma',
-        identifier: '22/500002/TK/50002',
-        joinedAt: new Date(Date.now() - 6 * 86400000).toISOString(),
-      },
-    ],
-    'class-2': [
-      {
-        userId: 'std-001',
-        role: 'student',
-        displayName: 'Budi Santoso',
-        identifier: '22/500001/TK/50001',
-        joinedAt: new Date(Date.now() - 4 * 86400000).toISOString(),
-      },
-    ],
-  };
+      })),
+    ]),
+  );
 
   private sessions: PracticumSession[] = [
     {
@@ -223,6 +221,7 @@ export class MockPracticumAdapter implements PracticumPort {
       assistantIds: input.assistantIds?.length
         ? Array.from(new Set([...input.assistantIds, assistantId]))
         : [assistantId],
+      memberUids: [],
       createdBy: assistantId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -288,6 +287,12 @@ export class MockPracticumAdapter implements PracticumPort {
 
   // === ANGGOTA KELAS ===
 
+  async getRegisteredStudents(): Promise<StudentCandidate[]> {
+    return [...this.registeredStudents].sort((a, b) =>
+      a.displayName.localeCompare(b.displayName, 'id'),
+    );
+  }
+
   async getClassMembers(classId: string): Promise<ClassMember[]> {
     return [...(this.members[classId] || [])];
   }
@@ -312,22 +317,33 @@ export class MockPracticumAdapter implements PracticumPort {
     if (!this.members[classId]) {
       this.members[classId] = [];
     }
-    const existing = this.members[classId].find((m) => m.userId === input.userId);
+    const memberNim = input.identifier.trim() || input.userId.trim();
+    const existing = this.members[classId].find(
+      (m) => m.userId === memberNim || m.identifier === memberNim,
+    );
     if (existing) {
       throw new Error('Praktikan sudah terdaftar di kelas ini');
     }
 
     const newMember: ClassMember = {
-      userId: input.userId,
+      userId: memberNim,
       role: 'student',
       displayName: input.displayName,
-      identifier: input.identifier,
+      identifier: memberNim,
       joinedAt: new Date().toISOString(),
     };
 
     this.members[classId].push(newMember);
+    if (!this.registeredStudents.some((s) => s.userId === memberNim)) {
+      this.registeredStudents.push({
+        userId: memberNim,
+        displayName: input.displayName,
+        identifier: memberNim,
+      });
+    }
     const cls = this.classes.find((c) => c.id === classId);
     if (cls) {
+      cls.memberUids = Array.from(new Set([...(cls.memberUids ?? []), memberNim]));
       cls.memberCount = this.members[classId].length;
       this.notifyClasses();
     }
@@ -340,6 +356,7 @@ export class MockPracticumAdapter implements PracticumPort {
     this.members[classId] = this.members[classId].filter((m) => m.userId !== memberId);
     const cls = this.classes.find((c) => c.id === classId);
     if (cls) {
+      cls.memberUids = (cls.memberUids ?? []).filter((id) => id !== memberId);
       cls.memberCount = this.members[classId].length;
       this.notifyClasses();
     }
@@ -415,7 +432,10 @@ export class MockPracticumAdapter implements PracticumPort {
 
     const startDate = new Date(input.startsAt);
     const endDate = new Date(input.endsAt);
-    if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime()) && startDate >= endDate) {
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      throw new Error('Format timestamp waktu mulai atau selesai tidak valid');
+    }
+    if (startDate >= endDate) {
       throw new Error('Waktu selesai harus lebih lambat dari waktu mulai');
     }
 
@@ -444,6 +464,18 @@ export class MockPracticumAdapter implements PracticumPort {
   async updateSession(sessionId: string, input: UpdateSessionInput): Promise<void> {
     const idx = this.sessions.findIndex((s) => s.id === sessionId);
     if (idx === -1) throw new Error('Sesi tidak ditemukan');
+
+    if (input.startsAt !== undefined || input.endsAt !== undefined) {
+      const current = this.sessions[idx];
+      const startDate = new Date(input.startsAt ?? current.startsAt);
+      const endDate = new Date(input.endsAt ?? current.endsAt);
+      if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+        throw new Error('Format timestamp waktu mulai atau selesai tidak valid');
+      }
+      if (startDate >= endDate) {
+        throw new Error('Waktu selesai harus lebih lambat dari waktu mulai');
+      }
+    }
 
     this.sessions[idx] = {
       ...this.sessions[idx],

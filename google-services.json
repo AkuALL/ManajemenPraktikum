@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "453023334821",
+    "project_id": "manajemenpraktikum",
+    "storage_bucket": "manajemenpraktikum.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:453023334821:android:9969f8174f216a9178a84c",
+        "android_client_info": {
+          "package_name": "com.manajemenpraktikum"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCcb-h2RQdjdpBl6TOALHVBCVEdEoTfNFc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

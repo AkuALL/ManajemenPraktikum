@@ -38,6 +38,7 @@ export default function ClassesScreen() {
     createClass,
     updateClass,
     deleteClass,
+    getRegisteredStudents,
     getClassMembers,
     addMember,
     removeMember,
@@ -197,8 +198,10 @@ export default function ClassesScreen() {
       <ClassMembersModal
         visible={membersModalVisible}
         practicumClass={managingClass}
+        allClasses={classes}
         onClose={() => setMembersModalVisible(false)}
         fetchMembers={getClassMembers}
+        fetchStudentCandidates={getRegisteredStudents}
         onAddMember={addMember}
         onRemoveMember={removeMember}
       />
