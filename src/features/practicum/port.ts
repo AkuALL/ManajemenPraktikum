@@ -9,6 +9,10 @@ import type {
   UpdateSessionInput,
 } from './types';
 
+export type PracticumSnapshotMeta = {
+  fromCache: boolean;
+};
+
 /**
  * Port interface untuk domain Manajemen Praktikum (Hexagonal Architecture)
  * Mengizinkan implementasi fleksibel dengan Mock Adapter maupun Firebase Firestore.
@@ -18,7 +22,7 @@ export interface PracticumPort {
   getClasses(assistantId?: string): Promise<PracticumClass[]>;
   subscribeClasses(
     assistantId: string | undefined,
-    onData: (classes: PracticumClass[]) => void,
+    onData: (classes: PracticumClass[], meta: PracticumSnapshotMeta) => void,
     onError?: (err: Error) => void,
     studentId?: string
   ): () => void;
@@ -42,7 +46,7 @@ export interface PracticumPort {
     classId: string | undefined,
     studentId: string | undefined,
     role: 'assistant' | 'student',
-    onData: (sessions: PracticumSession[]) => void,
+    onData: (sessions: PracticumSession[], meta: PracticumSnapshotMeta) => void,
     onError?: (err: Error) => void
   ): () => void;
   getSession(sessionId: string): Promise<PracticumSession | null>;

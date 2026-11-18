@@ -94,25 +94,30 @@ test('GA-03 & FR-06: Praktikan only sees sessions from classes they are enrolled
 
   // Verifikasi subscribeSessions untuk Praktikan Galang
   let studentSessions = [];
+  let studentSessionsMeta = null;
   const unsubSessions = adapter.subscribeSessions(
     undefined,
     'student-galang',
     'student',
-    (data) => {
+    (data, meta) => {
       studentSessions = data;
+      studentSessionsMeta = meta;
     }
   );
 
   assert.equal(studentSessions.length, 1);
   assert.equal(studentSessions[0].title, 'Sesi Query SQL Kelas A');
   assert.equal(studentSessions[0].classId, classA.id);
+  assert.equal(studentSessionsMeta?.fromCache, false);
 
   // Verifikasi subscribeClasses untuk Praktikan Galang
   let studentClasses = [];
+  let studentClassesMeta = null;
   const unsubClasses = adapter.subscribeClasses(
     undefined,
-    (data) => {
+    (data, meta) => {
       studentClasses = data;
+      studentClassesMeta = meta;
     },
     undefined,
     'student-galang'
@@ -120,6 +125,7 @@ test('GA-03 & FR-06: Praktikan only sees sessions from classes they are enrolled
 
   assert.equal(studentClasses.length, 1);
   assert.equal(studentClasses[0].id, classA.id);
+  assert.equal(studentClassesMeta?.fromCache, false);
 
   unsubSessions();
   unsubClasses();

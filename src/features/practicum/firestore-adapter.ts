@@ -85,7 +85,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
   subscribeClasses(
     assistantId: string | undefined,
-    onData: (classes: PracticumClass[]) => void,
+    onData: (classes: PracticumClass[], meta: { fromCache: boolean }) => void,
     onError?: (err: Error) => void,
     studentId?: string
   ): () => void {
@@ -103,6 +103,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
           unsubscribe = onSnapshot(
             q,
+            { includeMetadataChanges: true },
             (snapshot) => {
               const list: PracticumClass[] = snapshot.docs.map((docSnap) => {
                 const data = docSnap.data();
@@ -117,7 +118,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
                   updatedAt: formatTimestamp(data.updatedAt),
                 };
               });
-              onData(list);
+              onData(list, { fromCache: snapshot.metadata.fromCache });
             },
             (err) => {
               onError?.(err);
@@ -132,6 +133,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
           unsubscribe = onSnapshot(
             qMembers,
+            { includeMetadataChanges: true },
             (memberSnap) => {
               classUnsubs.forEach((unsub) => unsub());
               classUnsubs = [];
@@ -145,7 +147,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
               );
 
               if (classIds.length === 0) {
-                onData([]);
+                onData([], { fromCache: memberSnap.metadata.fromCache });
                 return;
               }
 
@@ -155,6 +157,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
               classIds.forEach((cId) => {
                 const unsub = onSnapshot(
                   doc(db, 'classes', cId),
+                  { includeMetadataChanges: true },
                   (docSnap) => {
                     if (docSnap.exists()) {
                       const data = docSnap.data();
@@ -173,7 +176,9 @@ export class FirestorePracticumAdapter implements PracticumPort {
                     }
                     remaining = Math.max(0, remaining - 1);
                     if (remaining === 0) {
-                      onData(Array.from(classMap.values()));
+                      onData(Array.from(classMap.values()), {
+                        fromCache: memberSnap.metadata.fromCache,
+                      });
                     }
                   },
                   (err) => onError?.(err)
@@ -190,7 +195,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
             classUnsubs.forEach((unsub) => unsub());
           };
         } else {
-          onData([]);
+          onData([], { fromCache: false });
         }
       })
       .catch((err) => onError?.(err));
@@ -448,7 +453,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
     classId: string | undefined,
     studentId: string | undefined,
     role: 'assistant' | 'student',
-    onData: (sessions: PracticumSession[]) => void,
+    onData: (sessions: PracticumSession[], meta: { fromCache: boolean }) => void,
     onError?: (err: Error) => void
   ): () => void {
     let unsubscribe: (() => void) | null = null;
@@ -462,23 +467,28 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
         const subscribeForClassIds = (targetClassIds: string[]): (() => void) => {
           if (targetClassIds.length === 0) {
-            onData([]);
+            onData([], { fromCache: false });
             return () => {};
           }
 
           const byClass = new Map<string, PracticumSession[]>();
+          const fromCacheByClass = new Map<string, boolean>();
           const resolved = new Set<string>();
           const unsubs = targetClassIds.map((cId) =>
             onSnapshot(
               query(sessionsRef, where('classId', '==', cId)),
+              { includeMetadataChanges: true },
               (snapshot) => {
                 byClass.set(
                   cId,
                   snapshot.docs.map((docSnap) => mapSessionDoc(docSnap.id, docSnap.data())),
                 );
+                fromCacheByClass.set(cId, snapshot.metadata.fromCache);
                 resolved.add(cId);
                 if (resolved.size >= targetClassIds.length) {
-                  onData(sortSessionsByStart(Array.from(byClass.values()).flat()));
+                  onData(sortSessionsByStart(Array.from(byClass.values()).flat()), {
+                    fromCache: Array.from(fromCacheByClass.values()).some(Boolean),
+                  });
                 }
               },
               (err) => onError?.(err),
@@ -499,6 +509,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
           const origUnsub = onSnapshot(
             qMembers,
+            { includeMetadataChanges: true },
             (memberSnap) => {
               if (sessionsUnsub) {
                 sessionsUnsub();
@@ -530,6 +541,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
           const origUnsub = onSnapshot(
             qClasses,
+            { includeMetadataChanges: true },
             (classSnap) => {
               if (sessionsUnsub) {
                 sessionsUnsub();
@@ -546,7 +558,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
             if (sessionsUnsub) sessionsUnsub();
           };
         } else {
-          onData([]);
+          onData([], { fromCache: false });
         }
       })
       .catch((err) => onError?.(err));
