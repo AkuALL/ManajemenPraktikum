@@ -33,7 +33,10 @@ export default function ScheduleScreen() {
     classes,
     sessions,
     loadingSessions,
+    sessionsFromCache,
+    sessionsError,
     error,
+    retrySessions,
     createSession,
     updateSession,
     deleteSession,
@@ -107,7 +110,16 @@ export default function ScheduleScreen() {
         {error ? (
           <View style={styles.errorCard}>
             <Text style={styles.errorText}>{error}</Text>
+            {sessionsError ? (
+              <TouchableOpacity onPress={retrySessions} style={styles.retryButton}>
+                <Text style={styles.retryText}>Coba lagi</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
+        ) : null}
+
+        {sessionsFromCache ? (
+          <Text style={[styles.cacheNotice, { color: colors.textSecondary }]}>Menampilkan data cache. Menunggu sinkronisasi server.</Text>
         ) : null}
 
         {/* Filter Kelas */}
@@ -271,6 +283,9 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     fontSize: 13,
   },
+  retryButton: { alignSelf: 'flex-start', marginTop: 8, paddingVertical: 4 },
+  retryText: { color: '#ef4444', fontSize: 13, fontWeight: '700' },
+  cacheNotice: { fontSize: 12, fontStyle: 'italic' },
   filterScroll: {
     flexDirection: 'row',
     marginVertical: 4,

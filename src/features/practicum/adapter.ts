@@ -1,5 +1,4 @@
 import { PracticumPort } from './port';
-import { MockPracticumAdapter } from './mock-adapter';
 import { FirestorePracticumAdapter } from './firestore-adapter';
 
 let adapterInstance: PracticumPort | null = null;
@@ -13,11 +12,9 @@ export function isFirebaseConfigured(): boolean {
 
 export function getPracticumAdapter(): PracticumPort {
   if (!adapterInstance) {
-    if (isFirebaseConfigured()) {
-      adapterInstance = new FirestorePracticumAdapter();
-    } else {
-      adapterInstance = new MockPracticumAdapter();
-    }
+    // Sprint 2 memiliki Firestore sebagai satu-satunya sumber data runtime.
+    // MockPracticumAdapter hanya dipakai oleh test melalui setPracticumAdapter().
+    adapterInstance = new FirestorePracticumAdapter();
   }
   return adapterInstance;
 }

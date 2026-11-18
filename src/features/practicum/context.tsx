@@ -5,9 +5,13 @@ import React, {
   useEffect,
   useMemo,
   useState,
-  ReactNode,
+  type ReactNode,
 } from 'react';
-import {
+
+import { useIdentity } from '@/features/identity';
+
+import { getPracticumAdapter, isFirebaseConfigured } from './adapter';
+import type {
   AddMemberInput,
   ClassMember,
   CreateClassInput,
@@ -17,324 +21,172 @@ import {
   UpdateClassInput,
   UpdateSessionInput,
 } from './types';
-import { getPracticumAdapter, isFirebaseConfigured } from './adapter';
-import { useIdentity } from '@/features/identity';
+
+type SnapshotState<T> = {
+  key: string;
+  items: T[];
+  error: string | null;
+  fromCache: boolean;
+  resolved: boolean;
+};
 
 interface PracticumContextType {
   classes: PracticumClass[];
   sessions: PracticumSession[];
   loadingClasses: boolean;
   loadingSessions: boolean;
+  classesError: string | null;
+  sessionsError: string | null;
+  classesFromCache: boolean;
+  sessionsFromCache: boolean;
   error: string | null;
   isFirebaseActive: boolean;
   clearError: () => void;
-  // Classes
+  retryClasses: () => void;
+  retrySessions: () => void;
+  retryData: () => void;
   createClass: (input: CreateClassInput) => Promise<PracticumClass>;
   updateClass: (classId: string, input: UpdateClassInput) => Promise<void>;
   deleteClass: (classId: string) => Promise<void>;
-  // Members
   getClassMembers: (classId: string) => Promise<ClassMember[]>;
   addMember: (classId: string, input: AddMemberInput) => Promise<ClassMember>;
   removeMember: (classId: string, memberId: string) => Promise<void>;
-  // Sessions
   createSession: (input: CreateSessionInput) => Promise<PracticumSession>;
   updateSession: (sessionId: string, input: UpdateSessionInput) => Promise<void>;
   deleteSession: (sessionId: string) => Promise<void>;
-  // Lifecycle
   openSession: (sessionId: string) => Promise<void>;
   closeSession: (sessionId: string) => Promise<void>;
 }
 
 const PracticumContext = createContext<PracticumContextType | undefined>(undefined);
-
-interface KeyedList<T> {
-  key: string;
-  items: T[];
-}
+const EMPTY_ITEMS: never[] = [];
 
 export function PracticumProvider({ children }: { children: ReactNode }) {
   const { activeIdentity } = useIdentity();
-  const [classesState, setClassesState] = useState<KeyedList<PracticumClass> | null>(null);
-  const [sessionsState, setSessionsState] = useState<KeyedList<PracticumSession> | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [classesState, setClassesState] = useState<SnapshotState<PracticumClass> | null>(null);
+  const [sessionsState, setSessionsState] = useState<SnapshotState<PracticumSession> | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
+  const [classesRetryTick, setClassesRetryTick] = useState(0);
+  const [sessionsRetryTick, setSessionsRetryTick] = useState(0);
 
   const adapter = useMemo(() => getPracticumAdapter(), []);
   const isFirebaseActive = useMemo(() => isFirebaseConfigured(), []);
-
   const currentUserId = activeIdentity?.userId ?? '';
   const currentUserRole = activeIdentity?.role;
-  const activeKey =
-    activeIdentity && currentUserRole ? `${currentUserRole}:${currentUserId}` : null;
+  const activeKey = activeIdentity && currentUserRole ? `${currentUserRole}:${currentUserId}` : null;
+  const classesKey = activeKey ? `${activeKey}:classes:${classesRetryTick}` : null;
+  const sessionsKey = activeKey ? `${activeKey}:sessions:${sessionsRetryTick}` : null;
 
-  const classes = useMemo(
-    () => (activeKey && classesState?.key === activeKey ? classesState.items : []),
-    [activeKey, classesState],
-  );
-  const sessions = useMemo(
-    () => (activeKey && sessionsState?.key === activeKey ? sessionsState.items : []),
-    [activeKey, sessionsState],
-  );
-  const loadingClasses = activeKey !== null && classesState?.key !== activeKey;
-  const loadingSessions = activeKey !== null && sessionsState?.key !== activeKey;
-  const effectiveError = activeKey ? error : null;
-
-  const clearError = useCallback(() => setError(null), []);
-
-  // Subscribe ke Classes dan Sessions secara real-time saat identitas siap.
   useEffect(() => {
-    if (!activeKey || !currentUserRole) return;
+    if (!classesKey || !currentUserRole) return;
 
     const assistantId = currentUserRole === 'assistant' ? currentUserId : undefined;
     const studentId = currentUserRole === 'student' ? currentUserId : undefined;
-
-    const unsubscribeClasses = adapter.subscribeClasses(
+    return adapter.subscribeClasses(
       assistantId,
-      (data) => {
-        setClassesState({ key: activeKey, items: data });
+      (items, meta) => {
+        setClassesState({ key: classesKey, items, error: null, fromCache: meta.fromCache, resolved: true });
       },
-      (err) => {
-        setError(err.message);
-        setClassesState((prev) => ({
-          key: activeKey,
-          items: prev?.key === activeKey ? prev.items : [],
+      (listenerError) => {
+        setClassesState((previous) => ({
+          key: classesKey,
+          items: previous?.key === classesKey ? previous.items : [],
+          error: listenerError.message,
+          fromCache: false,
+          resolved: true,
         }));
       },
-      studentId
+      studentId,
     );
+  }, [adapter, classesKey, currentUserId, currentUserRole]);
 
-    const unsubscribeSessions = adapter.subscribeSessions(
+  useEffect(() => {
+    if (!sessionsKey || !currentUserRole) return;
+
+    return adapter.subscribeSessions(
       undefined,
       currentUserId,
       currentUserRole,
-      (data) => {
-        setSessionsState({ key: activeKey, items: data });
+      (items, meta) => {
+        setSessionsState({ key: sessionsKey, items, error: null, fromCache: meta.fromCache, resolved: true });
       },
-      (err) => {
-        setError(err.message);
-        setSessionsState((prev) => ({
-          key: activeKey,
-          items: prev?.key === activeKey ? prev.items : [],
+      (listenerError) => {
+        setSessionsState((previous) => ({
+          key: sessionsKey,
+          items: previous?.key === sessionsKey ? previous.items : [],
+          error: listenerError.message,
+          fromCache: false,
+          resolved: true,
         }));
-      }
+      },
     );
+  }, [adapter, currentUserId, currentUserRole, sessionsKey]);
 
-    return () => {
-      unsubscribeClasses();
-      unsubscribeSessions();
-    };
-  }, [activeKey, adapter, currentUserId, currentUserRole]);
+  const classSnapshot = classesKey && classesState?.key === classesKey ? classesState : null;
+  const sessionSnapshot = sessionsKey && sessionsState?.key === sessionsKey ? sessionsState : null;
+  const classes = classSnapshot?.items ?? EMPTY_ITEMS;
+  const rawSessions = sessionSnapshot?.items ?? EMPTY_ITEMS;
+  const loadingClasses = Boolean(classesKey) && (!classSnapshot || !classSnapshot.resolved);
+  const loadingSessions = Boolean(sessionsKey) && (!sessionSnapshot || !sessionSnapshot.resolved);
+  const classesError = classSnapshot?.error ?? null;
+  const sessionsError = sessionSnapshot?.error ?? null;
+  const error = operationError ?? classesError ?? sessionsError;
 
-  // === CLASS ACTIONS ===
+  const retryClasses = useCallback(() => setClassesRetryTick((tick) => tick + 1), []);
+  const retrySessions = useCallback(() => setSessionsRetryTick((tick) => tick + 1), []);
+  const retryData = useCallback(() => {
+    retryClasses();
+    retrySessions();
+  }, [retryClasses, retrySessions]);
+  const clearError = useCallback(() => setOperationError(null), []);
 
-  const createClass = useCallback(
-    async (input: CreateClassInput) => {
-      try {
-        setError(null);
-        return await adapter.createClass(input, currentUserId);
-      } catch (err: any) {
-        setError(err.message ?? 'Gagal membuat kelas');
-        throw err;
-      }
-    },
-    [adapter, currentUserId]
-  );
+  const runOperation = useCallback(async <T,>(operation: () => Promise<T>, fallback: string) => {
+    try {
+      setOperationError(null);
+      return await operation();
+    } catch (errorValue) {
+      setOperationError(errorValue instanceof Error ? errorValue.message : fallback);
+      throw errorValue;
+    }
+  }, []);
 
-  const updateClass = useCallback(
-    async (classId: string, input: UpdateClassInput) => {
-      try {
-        setError(null);
-        await adapter.updateClass(classId, input);
-      } catch (err: any) {
-        setError(err.message ?? 'Gagal memperbarui kelas');
-        throw err;
-      }
-    },
-    [adapter]
-  );
+  const createClass = useCallback((input: CreateClassInput) => runOperation(() => adapter.createClass(input, currentUserId), 'Gagal membuat kelas.'), [adapter, currentUserId, runOperation]);
+  const updateClass = useCallback((classId: string, input: UpdateClassInput) => runOperation(() => adapter.updateClass(classId, input), 'Gagal memperbarui kelas.'), [adapter, runOperation]);
+  const deleteClass = useCallback((classId: string) => runOperation(() => adapter.deleteClass(classId), 'Gagal menghapus kelas.'), [adapter, runOperation]);
+  const getClassMembers = useCallback((classId: string) => runOperation(() => adapter.getClassMembers(classId), 'Gagal memuat anggota kelas.'), [adapter, runOperation]);
+  const addMember = useCallback((classId: string, input: AddMemberInput) => runOperation(() => adapter.addMember(classId, input), 'Gagal menambah anggota.'), [adapter, runOperation]);
+  const removeMember = useCallback((classId: string, memberId: string) => runOperation(() => adapter.removeMember(classId, memberId), 'Gagal menghapus anggota.'), [adapter, runOperation]);
+  const createSession = useCallback((input: CreateSessionInput) => runOperation(() => adapter.createSession(input, currentUserId), 'Gagal membuat sesi.'), [adapter, currentUserId, runOperation]);
+  const updateSession = useCallback((sessionId: string, input: UpdateSessionInput) => runOperation(() => adapter.updateSession(sessionId, input), 'Gagal memperbarui sesi.'), [adapter, runOperation]);
+  const deleteSession = useCallback((sessionId: string) => runOperation(() => adapter.deleteSession(sessionId), 'Gagal menghapus sesi.'), [adapter, runOperation]);
+  const openSession = useCallback((sessionId: string) => runOperation(() => adapter.openSession(sessionId, currentUserId), 'Gagal membuka sesi.'), [adapter, currentUserId, runOperation]);
+  const closeSession = useCallback((sessionId: string) => runOperation(() => adapter.closeSession(sessionId, currentUserId), 'Gagal menutup sesi.'), [adapter, currentUserId, runOperation]);
 
-  const deleteClass = useCallback(
-    async (classId: string) => {
-      try {
-        setError(null);
-        await adapter.deleteClass(classId);
-      } catch (err: any) {
-        setError(err.message ?? 'Gagal menghapus kelas');
-        throw err;
-      }
-    },
-    [adapter]
-  );
+  const sessions = useMemo(() => rawSessions.map((session) => {
+    const practicumClass = classes.find((item) => item.id === session.classId);
+    return { ...session, className: session.className ?? practicumClass?.className, courseName: session.courseName ?? practicumClass?.courseName };
+  }), [classes, rawSessions]);
 
-  // === MEMBER ACTIONS ===
-
-  const getClassMembers = useCallback(
-    async (classId: string) => {
-      try {
-        return await adapter.getClassMembers(classId);
-      } catch (err: any) {
-        setError(err.message ?? 'Gagal mengambil anggota kelas');
-        throw err;
-      }
-    },
-    [adapter]
-  );
-
-  const addMember = useCallback(
-    async (classId: string, input: AddMemberInput) => {
-      try {
-        setError(null);
-        return await adapter.addMember(classId, input);
-      } catch (err: any) {
-        setError(err.message ?? 'Gagal menambah anggota');
-        throw err;
-      }
-    },
-    [adapter]
-  );
-
-  const removeMember = useCallback(
-    async (classId: string, memberId: string) => {
-      try {
-        setError(null);
-        await adapter.removeMember(classId, memberId);
-      } catch (err: any) {
-        setError(err.message ?? 'Gagal menghapus anggota');
-        throw err;
-      }
-    },
-    [adapter]
-  );
-
-  // === SESSION ACTIONS ===
-
-  const createSession = useCallback(
-    async (input: CreateSessionInput) => {
-      try {
-        setError(null);
-        return await adapter.createSession(input, currentUserId);
-      } catch (err: any) {
-        setError(err.message ?? 'Gagal membuat sesi');
-        throw err;
-      }
-    },
-    [adapter, currentUserId]
-  );
-
-  const updateSession = useCallback(
-    async (sessionId: string, input: UpdateSessionInput) => {
-      try {
-        setError(null);
-        await adapter.updateSession(sessionId, input);
-      } catch (err: any) {
-        setError(err.message ?? 'Gagal memperbarui sesi');
-        throw err;
-      }
-    },
-    [adapter]
-  );
-
-  const deleteSession = useCallback(
-    async (sessionId: string) => {
-      try {
-        setError(null);
-        await adapter.deleteSession(sessionId);
-      } catch (err: any) {
-        setError(err.message ?? 'Gagal menghapus sesi');
-        throw err;
-      }
-    },
-    [adapter]
-  );
-
-  // === SESSION LIFECYCLE ACTIONS ===
-
-  const openSession = useCallback(
-    async (sessionId: string) => {
-      try {
-        setError(null);
-        await adapter.openSession(sessionId, currentUserId);
-      } catch (err: any) {
-        setError(err.message ?? 'Gagal membuka sesi');
-        throw err;
-      }
-    },
-    [adapter, currentUserId]
-  );
-
-  const closeSession = useCallback(
-    async (sessionId: string) => {
-      try {
-        setError(null);
-        await adapter.closeSession(sessionId, currentUserId);
-      } catch (err: any) {
-        setError(err.message ?? 'Gagal menutup sesi');
-        throw err;
-      }
-    },
-    [adapter, currentUserId]
-  );
-
-  const enrichedSessions = useMemo(() => {
-    return sessions.map((s) => {
-      const cls = classes.find((c) => c.id === s.classId);
-      return {
-        ...s,
-        className: s.className ?? cls?.className,
-        courseName: s.courseName ?? cls?.courseName,
-      };
-    });
-  }, [sessions, classes]);
-
-  const value = useMemo(
-    () => ({
-      classes,
-      sessions: enrichedSessions,
-      loadingClasses,
-      loadingSessions,
-      error: effectiveError,
-      isFirebaseActive,
-      clearError,
-      createClass,
-      updateClass,
-      deleteClass,
-      getClassMembers,
-      addMember,
-      removeMember,
-      createSession,
-      updateSession,
-      deleteSession,
-      openSession,
-      closeSession,
-    }),
-    [
-      classes,
-      enrichedSessions,
-      loadingClasses,
-      loadingSessions,
-      effectiveError,
-      isFirebaseActive,
-      clearError,
-      createClass,
-      updateClass,
-      deleteClass,
-      getClassMembers,
-      addMember,
-      removeMember,
-      createSession,
-      updateSession,
-      deleteSession,
-      openSession,
-      closeSession,
-    ]
-  );
+  const value = useMemo<PracticumContextType>(() => ({
+    classes, sessions, loadingClasses, loadingSessions, classesError, sessionsError,
+    classesFromCache: classSnapshot?.fromCache ?? false,
+    sessionsFromCache: sessionSnapshot?.fromCache ?? false,
+    error, isFirebaseActive, clearError, retryClasses, retrySessions, retryData,
+    createClass, updateClass, deleteClass, getClassMembers, addMember, removeMember,
+    createSession, updateSession, deleteSession, openSession, closeSession,
+  }), [
+    addMember, classes, classesError, classSnapshot?.fromCache, clearError, closeSession,
+    createClass, createSession, deleteClass, deleteSession, error, getClassMembers,
+    isFirebaseActive, loadingClasses, loadingSessions, openSession, removeMember, retryClasses,
+    retryData, retrySessions, sessions, sessionsError, sessionSnapshot?.fromCache, updateClass,
+    updateSession,
+  ]);
 
   return <PracticumContext.Provider value={value}>{children}</PracticumContext.Provider>;
 }
 
 export function usePracticum(): PracticumContextType {
   const context = useContext(PracticumContext);
-  if (!context) {
-    throw new Error('usePracticum must be used within a PracticumProvider');
-  }
+  if (!context) throw new Error('usePracticum must be used within a PracticumProvider.');
   return context;
 }

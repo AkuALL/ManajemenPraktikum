@@ -184,7 +184,7 @@ export class MockPracticumAdapter implements PracticumPort {
 
   subscribeClasses(
     assistantId: string | undefined,
-    onData: (classes: PracticumClass[]) => void,
+    onData: (classes: PracticumClass[], meta: { fromCache: boolean }) => void,
     onError?: (err: Error) => void,
     studentId?: string
   ): () => void {
@@ -193,15 +193,16 @@ export class MockPracticumAdapter implements PracticumPort {
         onData(
           classes.filter(
             (c) => c.assistantIds.includes(assistantId) || c.createdBy === assistantId
-          )
+          ),
+          { fromCache: false },
         );
       } else if (studentId) {
         const enrolledClassIds = Object.entries(this.members)
           .filter(([, memberList]) => memberList.some((m) => m.userId === studentId))
           .map(([cId]) => cId);
-        onData(classes.filter((c) => enrolledClassIds.includes(c.id)));
+        onData(classes.filter((c) => enrolledClassIds.includes(c.id)), { fromCache: false });
       } else {
-        onData(classes);
+        onData(classes, { fromCache: false });
       }
     };
 
@@ -356,7 +357,7 @@ export class MockPracticumAdapter implements PracticumPort {
     classId: string | undefined,
     studentId: string | undefined,
     role: 'assistant' | 'student',
-    onData: (sessions: PracticumSession[]) => void
+    onData: (sessions: PracticumSession[], meta: { fromCache: boolean }) => void
   ): () => void {
     const filterSessions = () => {
       let result = [...this.sessions];
@@ -374,7 +375,7 @@ export class MockPracticumAdapter implements PracticumPort {
     };
 
     const handler = () => {
-      onData(filterSessions());
+      onData(filterSessions(), { fromCache: false });
     };
 
     this.sessionListeners.add(handler);

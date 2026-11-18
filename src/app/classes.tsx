@@ -31,8 +31,10 @@ export default function ClassesScreen() {
   const {
     classes,
     loadingClasses,
+    classesError,
+    classesFromCache,
     error,
-    isFirebaseActive,
+    retryClasses,
     createClass,
     updateClass,
     deleteClass,
@@ -120,34 +122,19 @@ export default function ClassesScreen() {
         )}
       </View>
 
-      {/* Mode Badge (Informative) */}
-      <View
-        style={[
-          styles.envBadge,
-          {
-            backgroundColor: isFirebaseActive
-              ? 'rgba(16, 185, 129, 0.1)'
-              : 'rgba(59, 130, 246, 0.1)',
-            borderColor: isFirebaseActive ? '#10b981' : '#3b82f6',
-          },
-        ]}
-      >
-        <Text
-          style={[
-            styles.envBadgeText,
-            { color: isFirebaseActive ? '#10b981' : '#3b82f6' },
-          ]}
-        >
-          {isFirebaseActive
-            ? '● Terhubung ke Cloud Firestore'
-            : 'ℹ Mode Mock Adapter (Siap otomatis beralih ke Firestore saat .env diisi)'}
-        </Text>
-      </View>
+      {classesFromCache ? (
+        <Text style={[styles.cacheNotice, { color: colors.textSecondary }]}>Menampilkan data cache. Menunggu sinkronisasi server.</Text>
+      ) : null}
 
       {/* Error Banner */}
       {error && (
         <View style={styles.errorBanner}>
           <Text style={styles.errorText}>{error}</Text>
+          {classesError ? (
+            <TouchableOpacity onPress={retryClasses} style={styles.retryButton}>
+              <Text style={styles.retryText}>Coba lagi</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       )}
 
@@ -252,15 +239,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
-  envBadge: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  envBadgeText: {
+  cacheNotice: {
     fontSize: 12,
-    fontWeight: '600',
+    fontStyle: 'italic',
   },
   errorBanner: {
     backgroundColor: 'rgba(239, 68, 68, 0.1)',
@@ -273,6 +254,8 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     fontSize: 13,
   },
+  retryButton: { alignSelf: 'flex-start', marginTop: 8, paddingVertical: 4 },
+  retryText: { color: '#ef4444', fontSize: 13, fontWeight: '700' },
   loadingContainer: {
     paddingVertical: 48,
     alignItems: 'center',

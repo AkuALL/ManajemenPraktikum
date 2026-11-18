@@ -13,7 +13,15 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { sessions, loadingSessions, openSession, closeSession } = usePracticum();
+  const {
+    sessions,
+    loadingSessions,
+    sessionsError,
+    sessionsFromCache,
+    retrySessions,
+    openSession,
+    closeSession,
+  } = usePracticum();
   const isDark = useColorScheme() === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
   const isAssistant = user?.role === 'assistant';
@@ -57,8 +65,17 @@ export default function HomeScreen() {
           <ActivityIndicator size="small" color={colors.textPrimary} />
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Memuat jadwal sesi...</Text>
         </View>
+      ) : sessionsError ? (
+        <View style={[styles.empty, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Jadwal belum dapat dimuat</Text>
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{sessionsError}</Text>
+          <Pressable onPress={retrySessions} style={[styles.retryButton, { borderColor: colors.border }]}>
+            <Text style={[styles.retryText, { color: colors.textPrimary }]}>Coba lagi</Text>
+          </Pressable>
+        </View>
       ) : featuredSession ? (
         <View style={[styles.session, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {sessionsFromCache ? <Text style={[styles.cacheNotice, { color: colors.textSecondary }]}>Data cache — menunggu sinkronisasi server.</Text> : null}
           <View style={styles.sessionTop}>
             <View style={styles.titleGroup}>
               <Text style={[styles.course, { color: colors.textSecondary }]}>{featuredClassLabel}</Text>
@@ -154,4 +171,7 @@ const styles = StyleSheet.create({
   detailButtonText: { fontSize: 14, fontWeight: '600' }, pressed: { opacity: 0.7 },
   empty: { padding: 20, borderWidth: 1, borderRadius: 12, gap: 6 },
   emptyTitle: { fontSize: 16, fontWeight: '700' }, emptyText: { fontSize: 14, lineHeight: 20 },
+  retryButton: { alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center', paddingHorizontal: 12, borderWidth: 1, borderRadius: 8 },
+  retryText: { fontSize: 13, fontWeight: '700' },
+  cacheNotice: { fontSize: 12, fontStyle: 'italic', marginBottom: 4 },
 });
