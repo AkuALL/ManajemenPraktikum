@@ -22,6 +22,29 @@ function formatTimestamp(ts: any): string {
   return String(ts);
 }
 
+function mapSessionDoc(id: string, data: Record<string, any>): PracticumSession {
+  return {
+    id,
+    classId: data.classId,
+    title: data.title ?? '',
+    location: data.location ?? '',
+    startsAt: formatTimestamp(data.startsAt),
+    endsAt: formatTimestamp(data.endsAt),
+    status: data.status,
+    openedBy: data.openedBy,
+    openedAt: data.openedAt ? formatTimestamp(data.openedAt) : undefined,
+    closedBy: data.closedBy,
+    closedAt: data.closedAt ? formatTimestamp(data.closedAt) : undefined,
+    createdBy: data.createdBy,
+    createdAt: formatTimestamp(data.createdAt),
+    updatedAt: formatTimestamp(data.updatedAt),
+  };
+}
+
+function sortSessionsByStart(items: PracticumSession[]): PracticumSession[] {
+  return [...items].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+}
+
 export class FirestorePracticumAdapter implements PracticumPort {
   private firestoreInstance: Firestore | null = null;
 
@@ -367,164 +390,90 @@ export class FirestorePracticumAdapter implements PracticumPort {
     this.getDb()
       .then(async (db) => {
         if (isCancelled) return;
-        const { collection, collectionGroup, onSnapshot, query, where, orderBy } = await import('firebase/firestore');
+        const { collection, collectionGroup, onSnapshot, query, where } = await import('firebase/firestore');
         const sessionsRef = collection(db, 'sessions');
 
-        if (classId) {
-          const q = query(sessionsRef, where('classId', '==', classId), orderBy('startsAt', 'asc'));
-          unsubscribe = onSnapshot(
-            q,
-            (snapshot) => {
-              const list: PracticumSession[] = snapshot.docs.map((docSnap) => {
-                const data = docSnap.data();
-                return {
-                  id: docSnap.id,
-                  classId: data.classId,
-                  title: data.title ?? '',
-                  location: data.location ?? '',
-                  startsAt: formatTimestamp(data.startsAt),
-                  endsAt: formatTimestamp(data.endsAt),
-                  status: data.status,
-                  openedBy: data.openedBy,
-                  openedAt: data.openedAt ? formatTimestamp(data.openedAt) : undefined,
-                  closedBy: data.closedBy,
-                  closedAt: data.closedAt ? formatTimestamp(data.closedAt) : undefined,
-                  createdBy: data.createdBy,
-                  createdAt: formatTimestamp(data.createdAt),
-                  updatedAt: formatTimestamp(data.updatedAt),
-                };
-              });
-              onData(list);
-            },
-            (err) => onError?.(err)
+        const subscribeForClassIds = (targetClassIds: string[]): (() => void) => {
+          if (targetClassIds.length === 0) {
+            onData([]);
+            return () => {};
+          }
+
+          const byClass = new Map<string, PracticumSession[]>();
+          const resolved = new Set<string>();
+          const unsubs = targetClassIds.map((cId) =>
+            onSnapshot(
+              query(sessionsRef, where('classId', '==', cId)),
+              (snapshot) => {
+                byClass.set(
+                  cId,
+                  snapshot.docs.map((docSnap) => mapSessionDoc(docSnap.id, docSnap.data())),
+                );
+                resolved.add(cId);
+                if (resolved.size >= targetClassIds.length) {
+                  onData(sortSessionsByStart(Array.from(byClass.values()).flat()));
+                }
+              },
+              (err) => onError?.(err),
+            ),
           );
+
+          return () => {
+            unsubs.forEach((unsub) => unsub());
+          };
+        };
+
+        if (classId) {
+          unsubscribe = subscribeForClassIds([classId]);
         } else if (role === 'student' && studentId) {
-          // Praktikan (FR-06): cari kelas terdaftar lewat collectionGroup members, lalu subscribe sesi-sesinya
-          const membersGroup = collectionGroup(db, 'members');
-          const qMembers = query(membersGroup, where('userId', '==', studentId));
+          // Praktikan (FR-06): cari kelas terdaftar lewat collectionGroup members, lalu subscribe per classId
+          const qMembers = query(collectionGroup(db, 'members'), where('userId', '==', studentId));
           let sessionsUnsub: (() => void) | null = null;
 
-          unsubscribe = onSnapshot(
+          const origUnsub = onSnapshot(
             qMembers,
             (memberSnap) => {
               if (sessionsUnsub) {
                 sessionsUnsub();
                 sessionsUnsub = null;
               }
-
               const classIds = Array.from(
                 new Set(
                   memberSnap.docs
                     .map((d) => d.ref.parent?.parent?.id)
-                    .filter((id): id is string => Boolean(id))
-                )
+                    .filter((id): id is string => Boolean(id)),
+                ),
               );
-
-              if (classIds.length === 0) {
-                onData([]);
-                return;
-              }
-
-              const q = query(
-                sessionsRef,
-                where('classId', 'in', classIds.slice(0, 30)),
-                orderBy('startsAt', 'asc')
-              );
-
-              sessionsUnsub = onSnapshot(
-                q,
-                (snapshot) => {
-                  const list: PracticumSession[] = snapshot.docs.map((docSnap) => {
-                    const data = docSnap.data();
-                    return {
-                      id: docSnap.id,
-                      classId: data.classId,
-                      title: data.title ?? '',
-                      location: data.location ?? '',
-                      startsAt: formatTimestamp(data.startsAt),
-                      endsAt: formatTimestamp(data.endsAt),
-                      status: data.status,
-                      openedBy: data.openedBy,
-                      openedAt: data.openedAt ? formatTimestamp(data.openedAt) : undefined,
-                      closedBy: data.closedBy,
-                      closedAt: data.closedAt ? formatTimestamp(data.closedAt) : undefined,
-                      createdBy: data.createdBy,
-                      createdAt: formatTimestamp(data.createdAt),
-                      updatedAt: formatTimestamp(data.updatedAt),
-                    };
-                  });
-                  onData(list);
-                },
-                (err) => onError?.(err)
-              );
+              sessionsUnsub = subscribeForClassIds(classIds);
             },
-            (err) => onError?.(err)
+            (err) => onError?.(err),
           );
 
-          const origUnsub = unsubscribe;
           unsubscribe = () => {
             origUnsub();
             if (sessionsUnsub) sessionsUnsub();
           };
         } else if (role === 'assistant') {
-          // Asisten: hanya membaca sesi kelas yang dikelolanya
+          // Asisten: ambil kelas yang dikelola lalu subscribe sesi per classId (hindari query 'in' + index komposit)
           const classesRef = collection(db, 'classes');
           const qClasses = studentId
             ? query(classesRef, where('assistantIds', 'array-contains', studentId))
             : classesRef;
           let sessionsUnsub: (() => void) | null = null;
 
-          unsubscribe = onSnapshot(
+          const origUnsub = onSnapshot(
             qClasses,
             (classSnap) => {
               if (sessionsUnsub) {
                 sessionsUnsub();
                 sessionsUnsub = null;
               }
-
               const classIds = classSnap.docs.map((d) => d.id);
-              if (classIds.length === 0) {
-                onData([]);
-                return;
-              }
-
-              const q = query(
-                sessionsRef,
-                where('classId', 'in', classIds.slice(0, 30)),
-                orderBy('startsAt', 'asc')
-              );
-
-              sessionsUnsub = onSnapshot(
-                q,
-                (snapshot) => {
-                  const list: PracticumSession[] = snapshot.docs.map((docSnap) => {
-                    const data = docSnap.data();
-                    return {
-                      id: docSnap.id,
-                      classId: data.classId,
-                      title: data.title ?? '',
-                      location: data.location ?? '',
-                      startsAt: formatTimestamp(data.startsAt),
-                      endsAt: formatTimestamp(data.endsAt),
-                      status: data.status,
-                      openedBy: data.openedBy,
-                      openedAt: data.openedAt ? formatTimestamp(data.openedAt) : undefined,
-                      closedBy: data.closedBy,
-                      closedAt: data.closedAt ? formatTimestamp(data.closedAt) : undefined,
-                      createdBy: data.createdBy,
-                      createdAt: formatTimestamp(data.createdAt),
-                      updatedAt: formatTimestamp(data.updatedAt),
-                    };
-                  });
-                  onData(list);
-                },
-                (err) => onError?.(err)
-              );
+              sessionsUnsub = subscribeForClassIds(classIds);
             },
-            (err) => onError?.(err)
+            (err) => onError?.(err),
           );
 
-          const origUnsub = unsubscribe;
           unsubscribe = () => {
             origUnsub();
             if (sessionsUnsub) sessionsUnsub();

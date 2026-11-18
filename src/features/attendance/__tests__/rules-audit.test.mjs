@@ -48,6 +48,12 @@ test('firestore.rules preserves all required users and attendance rule invariant
     membersGroupMatch,
     /allow read:\s*if signedIn\(\) && resource\.data\.userId == request\.auth\.uid;/,
   );
+
+  const classesMatch = extractBlock('match /classes/{classId}');
+  assert.match(
+    classesMatch,
+    /allow list:\s*if signedIn\(\)\s*&& request\.auth\.uid in resource\.data\.assistantIds;/,
+  );
 });
 
 // Pure predicate mirror of AL-owned firestore.rules sections for allow/deny matrix verification.
