@@ -86,8 +86,12 @@ function ClassMembersContent({
       setFormError('NIM praktikan minimal 3 karakter');
       return;
     }
+    if (studentUid.trim().length < 3) {
+      setFormError('UID Praktikan wajib diisi dan minimal 3 karakter');
+      return;
+    }
 
-    const uid = studentUid.trim() || `std-${Date.now()}`;
+    const uid = studentUid.trim();
 
     try {
       setAddingMember(true);
@@ -194,7 +198,7 @@ function ClassMembersContent({
             />
             <TextInput
               style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]}
-              placeholder="User ID / UID (opsional, otomatis jika kosong)"
+              placeholder="UID akun Praktikan *"
               placeholderTextColor={colors.textSecondary}
               value={studentUid}
               onChangeText={(value) => {

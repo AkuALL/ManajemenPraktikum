@@ -97,7 +97,11 @@ export function LeaveProvider({
       });
 
       try {
-        await classifyLeaveReason(leaveRequestId);
+        const result = await classifyLeaveReason(leaveRequestId);
+        await port.saveClassificationResult(leaveRequestId, {
+          category: result.category,
+          confidence: result.confidence,
+        });
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Klasifikasi AI tidak dapat diproses.';
