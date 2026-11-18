@@ -217,3 +217,217 @@ test('formatSessionTime and formatSessionDate normalize ISO timestamps and prese
   assert.notEqual(formatSessionDate(undefined, '2026-11-20T08:00:00.000Z'), 'Belum ditentukan');
   assert.equal(formatSessionDate(undefined, '08:00'), 'Belum ditentukan');
 });
+
+test('FR-05: Sesi tidak boleh dapat dihapus jika sudah memiliki presensi atau izin', async () => {
+  const adapter = new MockPracticumAdapter();
+  const cls = await adapter.createClass(
+    { courseName: 'Jaringan Komputer', className: 'JK-1' },
+    'asisten-1'
+  );
+
+  // Buat sesi 1 untuk tes presensi
+  const sessAttendance = await adapter.createSession(
+    {
+      classId: cls.id,
+      title: 'Sesi Topologi Jaringan',
+      location: 'Lab Jaringan',
+      startsAt: '2026-11-25T08:00:00.000Z',
+      endsAt: '2026-11-25T10:00:00.000Z',
+    },
+    'asisten-1'
+  );
+
+  // Buat sesi 2 untuk tes izin
+  const sessLeave = await adapter.createSession(
+    {
+      classId: cls.id,
+      title: 'Sesi Subnetting',
+      location: 'Lab Jaringan',
+      startsAt: '2026-11-26T08:00:00.000Z',
+      endsAt: '2026-11-26T10:00:00.000Z',
+    },
+    'asisten-1'
+  );
+
+  // Buat sesi 3 tanpa presensi/izin
+  const sessClean = await adapter.createSession(
+    {
+      classId: cls.id,
+      title: 'Sesi Routing Dinamis',
+      location: 'Lab Jaringan',
+      startsAt: '2026-11-27T08:00:00.000Z',
+      endsAt: '2026-11-27T10:00:00.000Z',
+    },
+    'asisten-1'
+  );
+
+  // Daftarkan presensi ke sesi 1
+  adapter.addMockAttendance({
+    sessionId: sessAttendance.id,
+    studentId: 'student-galang',
+    classId: cls.id,
+  });
+
+  // Daftarkan izin ke sesi 2
+  adapter.addMockLeaveRequest({
+    sessionId: sessLeave.id,
+    studentId: 'student-budi',
+    classId: cls.id,
+  });
+
+  // Verifikasi penghapusan sesi 1 ditolak karena memiliki presensi
+  await assert.rejects(
+    async () => {
+      await adapter.deleteSession(sessAttendance.id);
+    },
+    { message: /sudah memiliki data presensi/ }
+  );
+
+  // Verifikasi penghapusan sesi 2 ditolak karena memiliki izin
+  await assert.rejects(
+    async () => {
+      await adapter.deleteSession(sessLeave.id);
+    },
+    { message: /sudah memiliki data pengajuan izin/ }
+  );
+
+  // Verifikasi sesi 3 (bersih) berhasil dihapus
+  await adapter.deleteSession(sessClean.id);
+  const deletedSess = await adapter.getSession(sessClean.id);
+  assert.equal(deletedSess, null);
+});
+
+test('FR-04: Kelas tidak boleh meninggalkan sesi atau member yatim', async () => {
+  const adapter = new MockPracticumAdapter();
+  const cls = await adapter.createClass(
+    { courseName: 'Algoritma Pemrograman', className: 'AP-1' },
+    'asisten-1'
+  );
+
+  // Tambah anggota ke kelas
+  const member = await adapter.addMember(cls.id, {
+    userId: 'std-alpro-1',
+    displayName: 'Andi',
+    identifier: '23.11.0005',
+  });
+
+  // Tambah sesi scheduled bersih ke kelas
+  const session = await adapter.createSession(
+    {
+      classId: cls.id,
+      title: 'Modul Pointer & Rekursi',
+      location: 'Lab 2',
+      startsAt: '2026-11-28T08:00:00.000Z',
+      endsAt: '2026-11-28T10:00:00.000Z',
+    },
+    'asisten-1'
+  );
+
+  let initialMembers = await adapter.getClassMembers(cls.id);
+  assert.equal(initialMembers.length, 1);
+  assert.equal(initialMembers[0].userId, member.userId);
+
+  let initialSession = await adapter.getSession(session.id);
+  assert.ok(initialSession !== null);
+
+  // Hapus kelas
+  await adapter.deleteClass(cls.id);
+
+  // Verifikasi kelas sudah terhapus
+  const classes = await adapter.getClasses();
+  assert.equal(classes.find((c) => c.id === cls.id), undefined);
+
+  // Verifikasi anggota kelas tidak yatim (sudah bersih/terhapus)
+  const remainingMembers = await adapter.getClassMembers(cls.id);
+  assert.equal(remainingMembers.length, 0);
+
+  // Verifikasi sesi kelas tidak yatim (sudah bersih/terhapus)
+  const remainingSession = await adapter.getSession(session.id);
+  assert.equal(remainingSession, null);
+  const allSessions = await adapter.getSessions(cls.id);
+  assert.equal(allSessions.length, 0);
+});
+
+test('FR-04: Kelas tidak dapat dihapus jika memiliki sesi aktif, sesi dengan presensi, atau izin', async () => {
+  const adapter = new MockPracticumAdapter();
+
+  // Kasus 1: Kelas dengan sesi yang sudah 'open'
+  const clsActive = await adapter.createClass(
+    { courseName: 'Grafika Komputer', className: 'GK-1' },
+    'asisten-1'
+  );
+  const sessOpen = await adapter.createSession(
+    {
+      classId: clsActive.id,
+      title: 'Sesi Blender 3D',
+      location: 'Lab Grafika',
+      startsAt: '2026-11-29T08:00:00.000Z',
+      endsAt: '2026-11-29T10:00:00.000Z',
+    },
+    'asisten-1'
+  );
+  await adapter.openSession(sessOpen.id, 'asisten-1');
+
+  await assert.rejects(
+    async () => {
+      await adapter.deleteClass(clsActive.id);
+    },
+    { message: /sedang berjalan atau sudah selesai/ }
+  );
+
+  // Kasus 2: Kelas dengan sesi yang memiliki presensi
+  const clsAtt = await adapter.createClass(
+    { courseName: 'Sistem Informasi', className: 'SI-1' },
+    'asisten-1'
+  );
+  const sessAtt = await adapter.createSession(
+    {
+      classId: clsAtt.id,
+      title: 'Sesi Analisis Sistem',
+      location: 'Lab SI',
+      startsAt: '2026-11-30T08:00:00.000Z',
+      endsAt: '2026-11-30T10:00:00.000Z',
+    },
+    'asisten-1'
+  );
+  adapter.addMockAttendance({
+    sessionId: sessAtt.id,
+    studentId: 'student-galang',
+    classId: clsAtt.id,
+  });
+
+  await assert.rejects(
+    async () => {
+      await adapter.deleteClass(clsAtt.id);
+    },
+    { message: /sudah memiliki data presensi/ }
+  );
+
+  // Kasus 3: Kelas dengan sesi yang memiliki izin
+  const clsLeave = await adapter.createClass(
+    { courseName: 'Kecerdasan Buatan', className: 'KB-1' },
+    'asisten-1'
+  );
+  const sessLeave = await adapter.createSession(
+    {
+      classId: clsLeave.id,
+      title: 'Sesi Prompt Engineering',
+      location: 'Lab AI',
+      startsAt: '2026-12-01T08:00:00.000Z',
+      endsAt: '2026-12-01T10:00:00.000Z',
+    },
+    'asisten-1'
+  );
+  adapter.addMockLeaveRequest({
+    sessionId: sessLeave.id,
+    studentId: 'student-galang',
+    classId: clsLeave.id,
+  });
+
+  await assert.rejects(
+    async () => {
+      await adapter.deleteClass(clsLeave.id);
+    },
+    { message: /sudah memiliki data izin/ }
+  );
+});

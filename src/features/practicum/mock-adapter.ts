@@ -130,6 +130,27 @@ export class MockPracticumAdapter implements PracticumPort {
   private sessionDetailListeners: Map<string, Set<Listener<PracticumSession | null>>> = new Map();
   private memberListeners: Map<string, Set<Listener<ClassMember[]>>> = new Map();
 
+  private attendanceRecords: { id: string; sessionId: string; classId?: string; studentId: string }[] = [];
+  private leaveRequests: { id: string; sessionId: string; classId?: string; studentId: string }[] = [];
+
+  addMockAttendance(record: { id?: string; sessionId: string; classId?: string; studentId: string }): void {
+    this.attendanceRecords.push({
+      id: record.id ?? `att-${Date.now()}`,
+      sessionId: record.sessionId,
+      classId: record.classId,
+      studentId: record.studentId,
+    });
+  }
+
+  addMockLeaveRequest(request: { id?: string; sessionId: string; classId?: string; studentId: string }): void {
+    this.leaveRequests.push({
+      id: request.id ?? `leave-${Date.now()}`,
+      sessionId: request.sessionId,
+      classId: request.classId,
+      studentId: request.studentId,
+    });
+  }
+
   private notifyClasses(): void {
     const list = [...this.classes];
     this.classListeners.forEach((cb) => cb(list));
@@ -229,6 +250,34 @@ export class MockPracticumAdapter implements PracticumPort {
   }
 
   async deleteClass(classId: string): Promise<void> {
+    const cls = this.classes.find((c) => c.id === classId);
+    if (!cls) throw new Error('Kelas tidak ditemukan');
+
+    const classSessions = this.sessions.filter((s) => s.classId === classId);
+
+    // Pastikan tidak ada sesi yang statusnya bukan scheduled (misal open atau closed)
+    const nonScheduled = classSessions.find((s) => s.status !== 'scheduled');
+    if (nonScheduled) {
+      throw new Error('Kelas tidak dapat dihapus karena terdapat sesi yang sedang berjalan atau sudah selesai.');
+    }
+
+    // Pastikan tidak ada sesi yang memiliki presensi
+    const hasAttendance = classSessions.some((s) =>
+      this.attendanceRecords.some((a) => a.sessionId === s.id || a.classId === classId)
+    );
+    if (hasAttendance) {
+      throw new Error('Kelas tidak dapat dihapus karena terdapat sesi yang sudah memiliki data presensi.');
+    }
+
+    // Pastikan tidak ada sesi yang memiliki pengajuan izin
+    const hasLeave = classSessions.some((s) =>
+      this.leaveRequests.some((l) => l.sessionId === s.id || l.classId === classId)
+    );
+    if (hasLeave) {
+      throw new Error('Kelas tidak dapat dihapus karena terdapat sesi yang sudah memiliki data izin.');
+    }
+
+    // Hapus sesi dan anggota agar tidak menjadi yatim
     this.classes = this.classes.filter((c) => c.id !== classId);
     delete this.members[classId];
     this.sessions = this.sessions.filter((s) => s.classId !== classId);
@@ -412,6 +461,16 @@ export class MockPracticumAdapter implements PracticumPort {
     if (!session) throw new Error('Sesi tidak ditemukan');
     if (session.status !== 'scheduled') {
       throw new Error('Hanya sesi berstatus "scheduled" (belum dibuka) yang boleh dihapus.');
+    }
+
+    const hasAttendance = this.attendanceRecords.some((a) => a.sessionId === sessionId);
+    if (hasAttendance) {
+      throw new Error('Sesi tidak dapat dihapus karena sudah memiliki data presensi.');
+    }
+
+    const hasLeave = this.leaveRequests.some((l) => l.sessionId === sessionId);
+    if (hasLeave) {
+      throw new Error('Sesi tidak dapat dihapus karena sudah memiliki data pengajuan izin.');
     }
 
     this.sessions = this.sessions.filter((s) => s.id !== sessionId);
