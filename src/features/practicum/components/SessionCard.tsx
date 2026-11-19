@@ -16,7 +16,7 @@ interface SessionCardProps {
   onEditSession?: (session: PracticumSession) => void;
 }
 
-export function SessionCard({
+export const SessionCard = React.memo(function SessionCard({
   session,
   isAssistant,
   onOpenSession,
@@ -144,7 +144,7 @@ export function SessionCard({
       </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

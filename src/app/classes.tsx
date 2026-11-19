@@ -1,13 +1,13 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   Alert,
 } from 'react-native';
+import { CardListSkeleton } from '@/components/ui/skeleton';
 import { Colors, MaxContentWidth } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useIdentity } from '@/features/identity';
@@ -42,7 +42,7 @@ export default function ClassesScreen() {
     getClassMembers,
     addMember,
     removeMember,
-  } = usePracticum();
+  } = usePracticum({ sessions: false });
 
   const [formModalVisible, setFormModalVisible] = useState(false);
   const [editingClass, setEditingClass] = useState<PracticumClass | null>(null);
@@ -52,20 +52,20 @@ export default function ClassesScreen() {
   const [deletingClassId, setDeletingClassId] = useState<string | null>(null);
   const deletingClassRef = useRef<string | null>(null);
 
-  const handleOpenCreate = () => {
+  const handleOpenCreate = useCallback(() => {
     setEditingClass(null);
     setFormModalVisible(true);
-  };
+  }, []);
 
-  const handleOpenEdit = (cls: PracticumClass) => {
+  const handleOpenEdit = useCallback((cls: PracticumClass) => {
     setEditingClass(cls);
     setFormModalVisible(true);
-  };
+  }, []);
 
-  const handleOpenMembers = (cls: PracticumClass) => {
+  const handleOpenMembers = useCallback((cls: PracticumClass) => {
     setManagingClass(cls);
     setMembersModalVisible(true);
-  };
+  }, []);
 
   const handleFormSubmit = async (input: CreateClassInput) => {
     if (editingClass) {
@@ -75,7 +75,7 @@ export default function ClassesScreen() {
     }
   };
 
-  const handleDeleteClass = async (classId: string) => {
+  const handleDeleteClass = useCallback(async (classId: string) => {
     if (deletingClassRef.current) return;
 
     deletingClassRef.current = classId;
@@ -88,7 +88,7 @@ export default function ClassesScreen() {
       deletingClassRef.current = null;
       setDeletingClassId(null);
     }
-  };
+  }, [deleteClass]);
 
   if (!isAssistant) {
     return (
@@ -150,12 +150,7 @@ export default function ClassesScreen() {
 
       {/* List Kelas */}
       {loadingClasses ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.actionPrimary} />
-          <Text style={{ color: colors.textSecondary, marginTop: 12 }}>
-            Memuat daftar kelas...
-          </Text>
-        </View>
+        <CardListSkeleton count={3} showActions label="Memuat daftar kelas" />
       ) : classes.length === 0 ? (
         <View
           style={[

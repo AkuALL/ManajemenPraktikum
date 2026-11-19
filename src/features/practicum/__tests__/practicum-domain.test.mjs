@@ -521,3 +521,44 @@ test('Seeder provides all 8 practicum courses and 2 student/assistant accounts',
   assert.ok(students.some((s) => s.identifier === '2402030201'));
   assert.ok(students.some((s) => s.identifier === '2402030202'));
 });
+
+test('subscribeSessions respects knownClassIds for scoped lazy loading', async () => {
+  const adapter = new MockPracticumAdapter();
+  const classA = await adapter.createClass({ courseName: 'A', className: 'A1' }, 'ast-1');
+  const classB = await adapter.createClass({ courseName: 'B', className: 'B1' }, 'ast-1');
+  await adapter.createSession(
+    {
+      classId: classA.id,
+      title: 'Sesi A',
+      location: 'Lab A',
+      startsAt: '2026-11-25T08:00:00.000Z',
+      endsAt: '2026-11-25T10:00:00.000Z',
+    },
+    'ast-1',
+  );
+  await adapter.createSession(
+    {
+      classId: classB.id,
+      title: 'Sesi B',
+      location: 'Lab B',
+      startsAt: '2026-11-26T08:00:00.000Z',
+      endsAt: '2026-11-26T10:00:00.000Z',
+    },
+    'ast-1',
+  );
+
+  let emptySessions = null;
+  const unsubEmpty = adapter.subscribeSessions(undefined, 'ast-1', 'assistant', (data) => {
+    emptySessions = data;
+  }, undefined, []);
+  assert.deepEqual(emptySessions, []);
+  unsubEmpty();
+
+  let scopedSessions = [];
+  const unsubScoped = adapter.subscribeSessions(undefined, 'ast-1', 'assistant', (data) => {
+    scopedSessions = data;
+  }, undefined, [classA.id]);
+  assert.equal(scopedSessions.length, 1);
+  assert.equal(scopedSessions[0].classId, classA.id);
+  unsubScoped();
+});

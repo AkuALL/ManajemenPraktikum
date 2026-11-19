@@ -107,6 +107,18 @@ test('extractCohortYear and filterStudentCandidates filter by name, NIM, cohort,
     filterStudentCandidates(candidates, [], { cohort: '2022' }).map((s) => s.userId),
     ['u1'],
   );
+  assert.deepEqual(
+    filterStudentCandidates(candidates, [], { query: 'budi' }).map((s) => s.userId),
+    ['u1'],
+  );
+  assert.deepEqual(
+    filterStudentCandidates(candidates, [], { query: '240203' }).map((s) => s.userId),
+    ['u2'],
+  );
+  assert.deepEqual(
+    filterStudentCandidates(candidates, ['u2'], { query: '240203' }).map((s) => s.userId),
+    [],
+  );
 });
 
 test('SESSION_TIME_SLOTS, detectSessionSlotId, and past timestamp validation enforce session rules', () => {

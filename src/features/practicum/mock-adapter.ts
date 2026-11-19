@@ -374,14 +374,17 @@ export class MockPracticumAdapter implements PracticumPort {
     classId: string | undefined,
     studentId: string | undefined,
     role: 'assistant' | 'student',
-    onData: (sessions: PracticumSession[], meta: { fromCache: boolean }) => void
+    onData: (sessions: PracticumSession[], meta: { fromCache: boolean }) => void,
+    _onError?: (err: Error) => void,
+    knownClassIds?: string[]
   ): () => void {
     const filterSessions = () => {
       let result = [...this.sessions];
       if (classId) {
         result = result.filter((s) => s.classId === classId);
-      }
-      if (role === 'student' && studentId) {
+      } else if (knownClassIds !== undefined) {
+        result = result.filter((s) => knownClassIds.includes(s.classId));
+      } else if (role === 'student' && studentId) {
         // Praktikan hanya melihat sesi dari kelas yang diikutinya (FR-06)
         const enrolledClassIds = Object.entries(this.members)
           .filter(([, memberList]) => memberList.some((m) => m.userId === studentId))

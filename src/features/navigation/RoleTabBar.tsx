@@ -43,7 +43,8 @@ export function RoleTabBar() {
 
   const handleTabPress = (route: string) => {
     if (pathname !== route) {
-      router.push(route as any);
+      // Replace top-level tab screens so inactive tabs unmount and release real-time listeners.
+      router.replace(route as any);
     }
   };
 

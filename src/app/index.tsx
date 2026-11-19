@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { CardListSkeleton } from '@/components/ui/skeleton';
 import { Colors, MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
 import {
@@ -61,10 +62,7 @@ export default function HomeScreen() {
       </View>
 
       {loadingSessions && !featuredSession ? (
-        <View style={[styles.empty, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-          <ActivityIndicator size="small" color={colors.textPrimary} />
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Memuat jadwal sesi...</Text>
-        </View>
+        <CardListSkeleton count={1} showActions label="Memuat jadwal sesi" />
       ) : sessionsError ? (
         <View style={[styles.empty, { borderColor: colors.border, backgroundColor: colors.surface }]}>
           <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Jadwal belum dapat dimuat</Text>

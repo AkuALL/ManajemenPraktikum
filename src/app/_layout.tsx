@@ -1,7 +1,8 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppShellSkeleton } from '@/components/ui/skeleton';
 import { Colors } from '@/constants/theme';
 import { AttendanceProvider } from '@/features/attendance';
 import { AccountBar, AuthProvider, useAuth } from '@/features/auth';
@@ -32,17 +33,11 @@ export default function RootLayout() {
 
 function RoleAwareApp({ backgroundColor }: { backgroundColor: string }) {
   const { status, user } = useAuth();
-  const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
 
   if (status === 'loading') {
     return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor }]}>
-        <View style={styles.loadingState}>
-          <ActivityIndicator size="small" color={colors.textPrimary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-            Memeriksa sesi
-          </Text>
-        </View>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor }]} edges={['top', 'bottom']}>
+        <AppShellSkeleton />
       </SafeAreaView>
     );
   }
@@ -87,15 +82,5 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-  },
-  loadingState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-    fontWeight: '400',
   },
 });

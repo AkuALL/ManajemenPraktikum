@@ -1,6 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   ScrollView,
   StyleSheet,
@@ -10,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CardListSkeleton } from '@/components/ui/skeleton';
 import { Colors, MaxContentWidth } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useIdentity } from '@/features/identity';
@@ -67,10 +67,10 @@ export default function ScheduleScreen() {
     setModalVisible(true);
   };
 
-  const handleOpenEdit = (session: PracticumSession) => {
+  const handleOpenEdit = useCallback((session: PracticumSession) => {
     setEditingSession(session);
     setModalVisible(true);
-  };
+  }, []);
 
   const handleFormSubmit = async (input: CreateSessionInput) => {
     if (editingSession) {
@@ -182,12 +182,7 @@ export default function ScheduleScreen() {
 
         {/* List Sesi */}
         {loadingSessions ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={colors.actionPrimary} />
-            <Text style={{ color: colors.textSecondary, marginTop: 12 }}>
-              Memuat jadwal sesi praktikum...
-            </Text>
-          </View>
+          <CardListSkeleton count={3} showActions label="Memuat jadwal sesi praktikum" />
         ) : filteredSessions.length === 0 ? (
           <View style={[styles.emptyBox, { borderColor: colors.border, backgroundColor: colors.surface }]}>
             <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>

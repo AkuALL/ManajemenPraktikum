@@ -407,7 +407,8 @@ export class FirestorePracticumAdapter implements PracticumPort {
     studentId: string | undefined,
     role: 'assistant' | 'student',
     onData: (sessions: PracticumSession[], meta: { fromCache: boolean }) => void,
-    onError?: (err: Error) => void
+    onError?: (err: Error) => void,
+    knownClassIds?: string[]
   ): () => void {
     let unsubscribe: (() => void) | null = null;
     let isCancelled = false;
@@ -455,6 +456,9 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
         if (classId) {
           unsubscribe = subscribeForClassIds([classId]);
+        } else if (knownClassIds !== undefined) {
+          // Reuse already-subscribed class IDs to avoid opening a duplicate classes listener.
+          unsubscribe = subscribeForClassIds(Array.from(new Set(knownClassIds)).filter(Boolean));
         } else if ((role === 'student' && studentId) || role === 'assistant') {
           const classesRef = collection(db, 'classes');
           const qClasses =
@@ -464,16 +468,21 @@ export class FirestorePracticumAdapter implements PracticumPort {
                 ? query(classesRef, where('assistantIds', 'array-contains', studentId))
                 : classesRef;
           let sessionsUnsub: (() => void) | null = null;
+          let prevClassIdsKey: string | null = null;
 
           const origUnsub = onSnapshot(
             qClasses,
             { includeMetadataChanges: true },
             (classSnap) => {
+              const classIds = classSnap.docs.map((d) => d.id);
+              const nextKey = [...classIds].sort().join(',');
+              if (nextKey === prevClassIdsKey) return;
+              prevClassIdsKey = nextKey;
+
               if (sessionsUnsub) {
                 sessionsUnsub();
                 sessionsUnsub = null;
               }
-              const classIds = classSnap.docs.map((d) => d.id);
               sessionsUnsub = subscribeForClassIds(classIds);
             },
             (err) => onError?.(err),

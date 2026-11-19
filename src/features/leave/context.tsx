@@ -47,7 +47,11 @@ type LeaveContextValue = {
   retry: () => void;
 };
 
-const LeaveContext = createContext<LeaveContextValue | undefined>(undefined);
+type LeaveContextInternal = LeaveContextValue & {
+  registerConsumer: () => () => void;
+};
+
+const LeaveContext = createContext<LeaveContextInternal | undefined>(undefined);
 
 export function LeaveProvider({
   children,
@@ -59,12 +63,20 @@ export function LeaveProvider({
   const { status, user } = useAuth();
   const [snapshot, setSnapshot] = useState<LeaveSnapshot | null>(null);
   const [retryTick, setRetryTick] = useState(0);
+  const [consumerCount, setConsumerCount] = useState(0);
   const [classificationErrors, setClassificationErrors] = useState<Record<string, string>>({});
+
+  const registerConsumer = useCallback(() => {
+    setConsumerCount((count) => count + 1);
+    return () => {
+      setConsumerCount((count) => Math.max(0, count - 1));
+    };
+  }, []);
 
   const studentId = status === 'authenticated' && user?.role === 'student' ? user.uid : null;
 
   useEffect(() => {
-    if (!studentId) return;
+    if (!studentId || consumerCount === 0) return;
 
     return port.subscribeStudentLeaveRequests(
       studentId,
@@ -87,7 +99,7 @@ export function LeaveProvider({
         });
       },
     );
-  }, [port, retryTick, studentId]);
+  }, [consumerCount, port, retryTick, studentId]);
 
   const requestClassification = useCallback(
     async (leaveRequestId: string) => {
@@ -162,7 +174,7 @@ export function LeaveProvider({
   const retry = useCallback(() => setRetryTick((tick) => tick + 1), []);
   const active = snapshot?.studentId === studentId ? snapshot : null;
 
-  const value = useMemo<LeaveContextValue>(
+  const value = useMemo<LeaveContextInternal>(
     () => ({
       requests: active?.requests ?? [],
       loading: Boolean(studentId) && (!active || !active.resolved),
@@ -173,8 +185,9 @@ export function LeaveProvider({
       retryClassification,
       reviewLeave,
       retry,
+      registerConsumer,
     }),
-    [active, classificationErrors, retry, retryClassification, reviewLeave, studentId, submitLeave],
+    [active, classificationErrors, registerConsumer, retry, retryClassification, reviewLeave, studentId, submitLeave],
   );
 
   return <LeaveContext.Provider value={value}>{children}</LeaveContext.Provider>;
@@ -183,12 +196,15 @@ export function LeaveProvider({
 export function useLeave(): LeaveContextValue {
   const context = useContext(LeaveContext);
   if (!context) throw new Error('useLeave must be used within a LeaveProvider.');
+  const { registerConsumer } = context;
+  useEffect(() => registerConsumer(), [registerConsumer]);
   return context;
 }
 
 export function useAssistantLeaveRequests(
   classIds: string[],
   port: LeavePort = firestoreLeaveAdapter,
+  enabled = true,
 ) {
   const { status, user } = useAuth();
   const [snapshot, setSnapshot] = useState<{
@@ -201,10 +217,11 @@ export function useAssistantLeaveRequests(
   const [retryTick, setRetryTick] = useState(0);
   const classKey = [...new Set(classIds)].sort().join(',');
   const isAssistant = status === 'authenticated' && user?.role === 'assistant';
+  const shouldSubscribe = isAssistant && enabled;
   const requestKey = `${classKey}:${retryTick}`;
 
   useEffect(() => {
-    if (!isAssistant) return;
+    if (!shouldSubscribe) return;
 
     const ids = classKey ? classKey.split(',') : [];
     return port.subscribeAssistantLeaveRequests(
@@ -228,13 +245,13 @@ export function useAssistantLeaveRequests(
         });
       },
     );
-  }, [classKey, isAssistant, port, requestKey]);
+  }, [classKey, port, requestKey, shouldSubscribe]);
 
-  const active = isAssistant && snapshot?.key === requestKey ? snapshot : null;
+  const active = shouldSubscribe && snapshot?.key === requestKey ? snapshot : null;
 
   return {
     requests: active?.requests ?? [],
-    loading: isAssistant && (!active || !active.resolved),
+    loading: isAssistant && (!enabled || !active || !active.resolved),
     error: active?.error ?? null,
     fromCache: active?.fromCache ?? false,
     retry: () => setRetryTick((tick) => tick + 1),

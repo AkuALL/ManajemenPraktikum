@@ -6,7 +6,6 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +13,7 @@ import {
   View,
 } from 'react-native';
 
+import { CardListSkeleton } from '@/components/ui/skeleton';
 import { Colors, MaxContentWidth } from '@/constants/theme';
 import { sortAttendanceEntries, useAttendance } from '@/features/attendance';
 import { useAuth } from '@/features/auth';
@@ -32,9 +32,10 @@ export default function AttendanceScreen() {
   const [sortAsc, setSortAsc] = useState(false);
 
   const enrichedRecords = useMemo(() => {
+    const sessionById = new Map(sessions.map((item) => [item.id, item]));
     const ordered = sortAttendanceEntries(records, sortAsc);
     return ordered.map((record) => {
-      const session = sessions.find((item) => item.id === record.sessionId);
+      const session = sessionById.get(record.sessionId);
       const classLabel = session
         ? [session.className, session.courseName].filter(Boolean).join(' · ')
         : '';
@@ -149,17 +150,7 @@ export default function AttendanceScreen() {
       </View>
 
       {loading ? (
-        <View
-          style={[
-            styles.stateCard,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}
-        >
-          <ActivityIndicator size="small" color={colors.textPrimary} />
-          <Text style={[styles.stateBody, { color: colors.textSecondary }]}>
-            Memuat riwayat kehadiran
-          </Text>
-        </View>
+        <CardListSkeleton count={3} label="Memuat riwayat kehadiran" />
       ) : error ? (
         <View
           accessibilityRole="alert"

@@ -37,7 +37,11 @@ type SnapshotState = {
   resolved: boolean;
 };
 
-const AttendanceContext = createContext<AttendanceContextValue | undefined>(undefined);
+interface AttendanceContextInternal extends AttendanceContextValue {
+  registerConsumer: () => () => void;
+}
+
+const AttendanceContext = createContext<AttendanceContextInternal | undefined>(undefined);
 
 type AttendanceProviderProps = {
   children: ReactNode;
@@ -51,12 +55,20 @@ export function AttendanceProvider({
   const { status, user } = useAuth();
   const [snapshot, setSnapshot] = useState<SnapshotState | null>(null);
   const [retryTick, setRetryTick] = useState(0);
+  const [consumerCount, setConsumerCount] = useState(0);
+
+  const registerConsumer = useCallback(() => {
+    setConsumerCount((count) => count + 1);
+    return () => {
+      setConsumerCount((count) => Math.max(0, count - 1));
+    };
+  }, []);
 
   const studentUid =
     status === 'authenticated' && user?.role === 'student' ? user.uid : null;
 
   useEffect(() => {
-    if (!studentUid) return;
+    if (!studentUid || consumerCount === 0) return;
 
     const unsubscribe = port.subscribeStudentAttendance(
       studentUid,
@@ -81,7 +93,7 @@ export function AttendanceProvider({
     );
 
     return unsubscribe;
-  }, [port, retryTick, studentUid]);
+  }, [consumerCount, port, retryTick, studentUid]);
 
   const retry = useCallback(() => {
     if (!studentUid) return;
@@ -113,7 +125,7 @@ export function AttendanceProvider({
     [port, user],
   );
 
-  const value = useMemo<AttendanceContextValue>(() => {
+  const value = useMemo<AttendanceContextInternal>(() => {
     if (!studentUid) {
       return {
         records: [],
@@ -122,6 +134,7 @@ export function AttendanceProvider({
         fromCache: false,
         retry,
         submitAttendance,
+        registerConsumer,
       };
     }
 
@@ -133,8 +146,9 @@ export function AttendanceProvider({
       fromCache: active?.fromCache ?? false,
       retry,
       submitAttendance,
+      registerConsumer,
     };
-  }, [retry, snapshot, studentUid, submitAttendance]);
+  }, [registerConsumer, retry, snapshot, studentUid, submitAttendance]);
 
   return (
     <AttendanceContext.Provider value={value}>{children}</AttendanceContext.Provider>
@@ -146,5 +160,7 @@ export function useAttendance(): AttendanceContextValue {
   if (!context) {
     throw new Error('useAttendance must be used within an AttendanceProvider');
   }
+  const { registerConsumer } = context;
+  useEffect(() => registerConsumer(), [registerConsumer]);
   return context;
 }

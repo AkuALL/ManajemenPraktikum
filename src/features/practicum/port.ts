@@ -49,7 +49,8 @@ export interface PracticumPort {
     studentId: string | undefined,
     role: 'assistant' | 'student',
     onData: (sessions: PracticumSession[], meta: PracticumSnapshotMeta) => void,
-    onError?: (err: Error) => void
+    onError?: (err: Error) => void,
+    knownClassIds?: string[]
   ): () => void;
   getSession(sessionId: string): Promise<PracticumSession | null>;
   subscribeSession(

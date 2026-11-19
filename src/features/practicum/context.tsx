@@ -60,7 +60,16 @@ interface PracticumContextType {
   closeSession: (sessionId: string) => Promise<void>;
 }
 
-const PracticumContext = createContext<PracticumContextType | undefined>(undefined);
+export type PracticumSubscriptionOptions = {
+  classes?: boolean;
+  sessions?: boolean;
+};
+
+interface PracticumContextInternal extends PracticumContextType {
+  registerConsumer: (needClasses: boolean, needSessions: boolean) => () => void;
+}
+
+const PracticumContext = createContext<PracticumContextInternal | undefined>(undefined);
 const EMPTY_ITEMS: never[] = [];
 
 export function PracticumProvider({ children }: { children: ReactNode }) {
@@ -70,6 +79,17 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
   const [operationError, setOperationError] = useState<string | null>(null);
   const [classesRetryTick, setClassesRetryTick] = useState(0);
   const [sessionsRetryTick, setSessionsRetryTick] = useState(0);
+  const [classConsumers, setClassConsumers] = useState(0);
+  const [sessionConsumers, setSessionConsumers] = useState(0);
+
+  const registerConsumer = useCallback((needClasses: boolean, needSessions: boolean) => {
+    if (needClasses) setClassConsumers((n) => n + 1);
+    if (needSessions) setSessionConsumers((n) => n + 1);
+    return () => {
+      if (needClasses) setClassConsumers((n) => Math.max(0, n - 1));
+      if (needSessions) setSessionConsumers((n) => Math.max(0, n - 1));
+    };
+  }, []);
 
   const adapter = useMemo(() => getPracticumAdapter(), []);
   const isFirebaseActive = useMemo(() => isFirebaseConfigured(), []);
@@ -82,9 +102,11 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
       : null;
   const classesKey = activeKey ? `${activeKey}:classes:${classesRetryTick}` : null;
   const sessionsKey = activeKey ? `${activeKey}:sessions:${sessionsRetryTick}` : null;
+  const classesNeeded = classConsumers > 0 || sessionConsumers > 0;
+  const sessionsNeeded = sessionConsumers > 0;
 
   useEffect(() => {
-    if (!classesKey || !currentUserRole) return;
+    if (!classesKey || !currentUserRole || !classesNeeded) return;
 
     const assistantId = currentUserRole === 'assistant' ? currentUserId : undefined;
     const studentId = currentUserRole === 'student' ? currentStudentNim : undefined;
@@ -104,11 +126,22 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
       },
       studentId,
     );
-  }, [adapter, classesKey, currentStudentNim, currentUserId, currentUserRole]);
+  }, [adapter, classesKey, classesNeeded, currentStudentNim, currentUserId, currentUserRole]);
+
+  const classSnapshot = classesKey && classesState?.key === classesKey ? classesState : null;
+  const classes = classSnapshot?.items ?? EMPTY_ITEMS;
+  const classesResolved = Boolean(classSnapshot?.resolved);
+  const classesError = classSnapshot?.error ?? null;
+  const knownClassIdsKey = useMemo(
+    () => Array.from(new Set(classes.map((item) => item.id))).sort().join(','),
+    [classes],
+  );
 
   useEffect(() => {
-    if (!sessionsKey || !currentUserRole) return;
+    if (!sessionsKey || !currentUserRole || !sessionsNeeded) return;
+    if (!classesResolved || classesError) return;
 
+    const knownClassIds = knownClassIdsKey ? knownClassIdsKey.split(',') : [];
     return adapter.subscribeSessions(
       undefined,
       currentUserRole === 'student' ? currentStudentNim : currentUserId,
@@ -125,17 +158,28 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
           resolved: true,
         }));
       },
+      knownClassIds,
     );
-  }, [adapter, currentStudentNim, currentUserId, currentUserRole, sessionsKey]);
+  }, [
+    adapter,
+    classesError,
+    classesResolved,
+    currentStudentNim,
+    currentUserId,
+    currentUserRole,
+    knownClassIdsKey,
+    sessionsKey,
+    sessionsNeeded,
+  ]);
 
-  const classSnapshot = classesKey && classesState?.key === classesKey ? classesState : null;
   const sessionSnapshot = sessionsKey && sessionsState?.key === sessionsKey ? sessionsState : null;
-  const classes = classSnapshot?.items ?? EMPTY_ITEMS;
   const rawSessions = sessionSnapshot?.items ?? EMPTY_ITEMS;
   const loadingClasses = Boolean(classesKey) && (!classSnapshot || !classSnapshot.resolved);
-  const loadingSessions = Boolean(sessionsKey) && (!sessionSnapshot || !sessionSnapshot.resolved);
-  const classesError = classSnapshot?.error ?? null;
-  const sessionsError = sessionSnapshot?.error ?? null;
+  const sessionsError = sessionSnapshot?.error ?? classesError;
+  const loadingSessions =
+    Boolean(sessionsKey) &&
+    !classesError &&
+    (!sessionSnapshot || !sessionSnapshot.resolved);
   const error = operationError ?? classesError ?? sessionsError;
 
   const retryClasses = useCallback(() => setClassesRetryTick((tick) => tick + 1), []);
@@ -179,17 +223,17 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
     return { ...session, className: session.className ?? practicumClass?.className, courseName: session.courseName ?? practicumClass?.courseName };
   }), [classes, rawSessions]);
 
-  const value = useMemo<PracticumContextType>(() => ({
+  const value = useMemo<PracticumContextInternal>(() => ({
     classes, sessions, loadingClasses, loadingSessions, classesError, sessionsError,
     classesFromCache: classSnapshot?.fromCache ?? false,
     sessionsFromCache: sessionSnapshot?.fromCache ?? false,
     error, isFirebaseActive, clearError, retryClasses, retrySessions, retryData,
     createClass, updateClass, deleteClass, getRegisteredStudents, getClassMembers, addMember, removeMember,
-    createSession, updateSession, deleteSession, openSession, closeSession,
+    createSession, updateSession, deleteSession, openSession, closeSession, registerConsumer,
   }), [
     addMember, classes, classesError, classSnapshot?.fromCache, clearError, closeSession,
     createClass, createSession, deleteClass, deleteSession, error, getClassMembers, getRegisteredStudents,
-    isFirebaseActive, loadingClasses, loadingSessions, openSession, removeMember, retryClasses,
+    isFirebaseActive, loadingClasses, loadingSessions, openSession, registerConsumer, removeMember, retryClasses,
     retryData, retrySessions, sessions, sessionsError, sessionSnapshot?.fromCache, updateClass,
     updateSession,
   ]);
@@ -197,8 +241,19 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
   return <PracticumContext.Provider value={value}>{children}</PracticumContext.Provider>;
 }
 
-export function usePracticum(): PracticumContextType {
+export function usePracticum(options?: PracticumSubscriptionOptions): PracticumContextType {
   const context = useContext(PracticumContext);
   if (!context) throw new Error('usePracticum must be used within a PracticumProvider.');
+
+  const needClasses = options?.classes ?? true;
+  const needSessions = options?.sessions ?? true;
+  const { registerConsumer } = context;
+
+  useEffect(() => registerConsumer(needClasses, needSessions), [
+    needClasses,
+    needSessions,
+    registerConsumer,
+  ]);
+
   return context;
 }
