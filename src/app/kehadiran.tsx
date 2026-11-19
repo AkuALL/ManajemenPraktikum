@@ -1,51 +1,158 @@
-/**
- * Kehadiran Screen — AL-05 / FR-09
- * Riwayat kehadiran Praktikan aktif secara real-time dari Firestore.
- */
-
+import React, { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
 
+import { AccordionGroup } from '@/components/ui/accordion-group';
+import { AppHeader, getFirstName } from '@/components/ui/app-header';
+import { PickerBottomSheet, type PickerOption } from '@/components/ui/picker-bottom-sheet';
+import { SearchFilterBar } from '@/components/ui/search-filter-bar';
 import { CardListSkeleton } from '@/components/ui/skeleton';
-import { Colors, MaxContentWidth } from '@/constants/theme';
+import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { sortAttendanceEntries, useAttendance } from '@/features/attendance';
 import { useAuth } from '@/features/auth';
-import { usePracticum } from '@/features/practicum';
+import { useLeave } from '@/features/leave';
+import { formatSessionTime, usePracticum } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import type { AttendanceEntry } from '@/types';
 
-type Palette = (typeof Colors)[keyof typeof Colors];
+type FilterMode = 'all' | 'hadir' | 'izin';
 
-export default function AttendanceScreen() {
+type UnifiedHistoryItem = {
+  id: string;
+  courseName: string;
+  title: string;
+  subtitle: string;
+  kind: 'hadir' | 'izin';
+  statusLabel: string;
+  statusTone: 'hadir' | 'pending' | 'approved' | 'rejected';
+  hasUnreadDot?: boolean;
+  sortOrder: number;
+};
+
+const FILTER_OPTIONS: PickerOption[] = [
+  { value: 'all', label: 'Semua', subtitle: 'Tampilkan kehadiran dan status pengajuan izin' },
+  { value: 'hadir', label: 'Hadir', subtitle: 'Hanya presensi yang tercatat hadir' },
+  { value: 'izin', label: 'Izin', subtitle: 'Hanya status pengajuan izin (Pending / Disetujui / Ditolak)' },
+];
+
+function formatLeaveDate(value: number | null, fallbackTime?: string): string {
+  if (value === null) {
+    return fallbackTime ? `${fallbackTime} · Menunggu sinkron` : 'Menunggu waktu server';
+  }
+  return new Date(value).toLocaleString('id-ID', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
+export default function AttendanceHistoryScreen() {
   const router = useRouter();
-  const { user } = useAuth();
-  const { records, loading, error, fromCache, retry } = useAttendance();
-  const { sessions } = usePracticum();
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
-  const [sortAsc, setSortAsc] = useState(false);
+  const { user } = useAuth();
+  const { records, loading: loadingAttendance, error: attendanceError, retry: retryAttendance } =
+    useAttendance();
+  const { requests: leaveRequests, loading: loadingLeave } = useLeave();
+  const { sessions, classes } = usePracticum();
 
-  const enrichedRecords = useMemo(() => {
-    const sessionById = new Map(sessions.map((item) => [item.id, item]));
-    const ordered = sortAttendanceEntries(records, sortAsc);
-    return ordered.map((record) => {
-      const session = sessionById.get(record.sessionId);
-      const classLabel = session
-        ? [session.className, session.courseName].filter(Boolean).join(' · ')
-        : '';
-      return {
-        ...record,
-        sessionName: session?.title ?? record.sessionId,
-        sessionClass: classLabel || record.classId,
-      };
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterMode, setFilterMode] = useState<FilterMode>('all');
+  const [filterSheetVisible, setFilterSheetVisible] = useState(false);
+  const [collapsedCourses, setCollapsedCourses] = useState<Record<string, boolean>>({});
+
+  const sessionById = useMemo(
+    () => new Map(sessions.map((item) => [item.id, item])),
+    [sessions],
+  );
+  const classById = useMemo(
+    () => new Map(classes.map((item) => [item.id, item])),
+    [classes],
+  );
+
+  const groupedCourses = useMemo(() => {
+    const items: UnifiedHistoryItem[] = [];
+
+    sortAttendanceEntries(records, false).forEach((entry) => {
+      const session = sessionById.get(entry.sessionId);
+      const cls = classById.get(entry.classId);
+      const courseName =
+        session?.courseName ?? cls?.courseName ?? session?.className ?? 'Praktikum Lab';
+      const title = session
+        ? `${session.title} · ${session.location}`
+        : `Sesi ${entry.sessionId}`;
+      items.push({
+        id: `att-${entry.id}`,
+        courseName,
+        title,
+        subtitle: entry.hasPendingWrites ? 'Menunggu sinkronisasi server' : entry.attendedAt,
+        kind: 'hadir',
+        statusLabel: 'Hadir',
+        statusTone: 'hadir',
+        sortOrder: entry.attendedAtMs ?? 0,
+      });
     });
-  }, [records, sessions, sortAsc]);
+
+    leaveRequests.forEach((req) => {
+      const session = sessionById.get(req.sessionId);
+      const cls = classById.get(req.classId);
+      const courseName =
+        session?.courseName ?? cls?.courseName ?? session?.className ?? 'Praktikum Lab';
+      const title = `${session?.title ?? 'Sesi Praktikum'} · Pengajuan Izin`;
+      const statusLabel =
+        req.status === 'approved'
+          ? 'Disetujui'
+          : req.status === 'rejected'
+            ? 'Ditolak'
+            : 'Pending';
+      const statusTone =
+        req.status === 'approved'
+          ? 'approved'
+          : req.status === 'rejected'
+            ? 'rejected'
+            : 'pending';
+      items.push({
+        id: `leave-${req.id}`,
+        courseName,
+        title,
+        subtitle: formatLeaveDate(
+          req.createdAtMs,
+          session ? formatSessionTime(session.startsAt) : undefined,
+        ),
+        kind: 'izin',
+        statusLabel,
+        statusTone,
+        hasUnreadDot: req.status === 'pending',
+        sortOrder: req.createdAtMs ?? 0,
+      });
+    });
+
+    const trimmedQuery = searchQuery.trim().toLowerCase();
+    const filtered = items.filter((item) => {
+      if (filterMode === 'hadir' && item.kind !== 'hadir') return false;
+      if (filterMode === 'izin' && item.kind !== 'izin') return false;
+      if (!trimmedQuery) return true;
+      return (
+        item.courseName.toLowerCase().includes(trimmedQuery) ||
+        item.title.toLowerCase().includes(trimmedQuery) ||
+        item.statusLabel.toLowerCase().includes(trimmedQuery)
+      );
+    });
+
+    filtered.sort((a, b) => b.sortOrder - a.sortOrder);
+
+    const groups = new Map<string, UnifiedHistoryItem[]>();
+    filtered.forEach((item) => {
+      const existing = groups.get(item.courseName) ?? [];
+      existing.push(item);
+      groups.set(item.courseName, existing);
+    });
+
+    return Array.from(groups.entries()).map(([courseName, entries]) => ({
+      courseName,
+      entries,
+    }));
+  }, [classById, filterMode, leaveRequests, records, searchQuery, sessionById]);
 
   if (user?.role !== 'student') {
     return (
@@ -54,488 +161,293 @@ export default function AttendanceScreen() {
           Halaman tidak tersedia
         </Text>
         <Text style={[styles.guardBody, { color: colors.textSecondary }]}>
-          Riwayat kehadiran pribadi hanya tersedia untuk Praktikan.
+          Riwayat presensi & izin hanya tersedia untuk Praktikan.
         </Text>
       </View>
     );
   }
 
-  const attendedCount = enrichedRecords.length;
+  const filterLabel =
+    FILTER_OPTIONS.find((opt) => opt.value === filterMode)?.label ?? 'Semua';
+
+  const loading = loadingAttendance || loadingLeave;
 
   return (
-    <ScrollView
-      style={{ backgroundColor: colors.background }}
-      contentContainerStyle={[
-        styles.scrollContent,
-        { maxWidth: MaxContentWidth, alignSelf: 'center', width: '100%' },
-      ]}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.heading}>
-        <View style={styles.headingRow}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Kehadiran saya</Text>
-          <View
-            style={[
-              styles.roleBadge,
-              { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
-            ]}
-          >
-            <Text style={[styles.roleBadgeText, { color: colors.textSecondary }]}>
-              {fromCache ? 'Cache lokal' : 'Sinkron real-time'}
-            </Text>
-          </View>
-        </View>
-        <Text style={[styles.identityText, { color: colors.textSecondary }, styles.tabular]}>
-          {user.displayName} · {user.identifier}
-        </Text>
-      </View>
-
-      <View
-        style={[
-          styles.metricCard,
-          { backgroundColor: colors.surface, borderColor: colors.border },
-        ]}
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.metricLeft}>
-          <View
-            style={[
-              styles.metricIcon,
-              { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
-            ]}
-          >
-            <Text style={[styles.metricIconText, { color: colors.textPrimary }]}>✓</Text>
-          </View>
-          <View style={styles.metricInfo}>
-            <Text style={[styles.metricCount, { color: colors.textPrimary }, styles.tabular]}>
-              {attendedCount} kehadiran tercatat
-            </Text>
-            <Text style={[styles.metricSubtitle, { color: colors.textSecondary }]}>
-              Riwayat presensi akun aktif
-            </Text>
-          </View>
-        </View>
+        <AppHeader
+          eyebrow="Riwayat Presensi & Izin"
+          title={`Hai, ${getFirstName(user.displayName)}`}
+          monoBadge={`NIM ${user.identifier}`}
+          statusBadge="Semester Genap"
+        />
 
-        <View style={styles.metricRight}>
-          <View
-            style={[
-              styles.countRing,
-              { borderColor: attendedCount === 0 ? colors.border : colors.textPrimary },
-            ]}
-          >
-            <Text style={[styles.countRingValue, { color: colors.textPrimary }, styles.tabular]}>
-              {attendedCount}
-            </Text>
-          </View>
-          <Text style={[styles.ringLabel, { color: colors.textSecondary }]}>Total hadir</Text>
-        </View>
-      </View>
+        <View style={styles.bodyContainer}>
+          <SearchFilterBar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="Cari matkul atau modul..."
+            filterLabel={filterLabel}
+            onPressFilter={() => setFilterSheetVisible(true)}
+          />
 
-      <View style={styles.listHeader}>
-        <Text style={[styles.listHeaderTitle, { color: colors.textPrimary }]}>Riwayat sesi</Text>
-        <Pressable
-          onPress={() => setSortAsc((v) => !v)}
-          accessibilityRole="button"
-          accessibilityLabel={`Urutkan ${sortAsc ? 'terbaru' : 'terlama'}`}
-          style={({ pressed }) => [
-            styles.sortButton,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text style={[styles.sortButtonText, { color: colors.textSecondary }]}>Urutkan: </Text>
-          <Text style={[styles.sortButtonText, { color: colors.textPrimary }]}>
-            {sortAsc ? 'Terlama' : 'Terbaru'}
-          </Text>
-        </Pressable>
-      </View>
+          {loading && groupedCourses.length === 0 ? (
+            <CardListSkeleton count={3} label="Memuat riwayat presensi dan izin" />
+          ) : attendanceError ? (
+            <View
+              accessibilityRole="alert"
+              style={[
+                styles.emptyCard,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+                Gagal memuat riwayat
+              </Text>
+              <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
+                {attendanceError}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={retryAttendance}
+                style={({ pressed }) => [
+                  styles.retryBtn,
+                  { backgroundColor: colors.balticSoft },
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={[styles.retryText, { color: colors.baltic }]}>Coba lagi</Text>
+              </Pressable>
+            </View>
+          ) : groupedCourses.length === 0 ? (
+            <View
+              style={[
+                styles.emptyCard,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+                Belum ada riwayat sesi
+              </Text>
+              <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
+                {searchQuery.trim()
+                  ? 'Tidak ada mata kuliah atau modul yang cocok dengan pencarian Anda.'
+                  : 'Catatan hadir dan pengajuan izin Anda akan muncul di sini.'}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push('/schedule')}
+                style={({ pressed }) => [
+                  styles.retryBtn,
+                  { backgroundColor: colors.pacificSoft },
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={[styles.retryText, { color: colors.pacificDark }]}>
+                  Lihat Beranda
+                </Text>
+              </Pressable>
+            </View>
+          ) : (
+            groupedCourses.map((group, index) => {
+              const isExpanded =
+                collapsedCourses[group.courseName] !== undefined
+                  ? !collapsedCourses[group.courseName]
+                  : index === 0;
 
-      {loading ? (
-        <CardListSkeleton count={3} label="Memuat riwayat kehadiran" />
-      ) : error ? (
-        <View
-          accessibilityRole="alert"
-          style={[
-            styles.stateCard,
-            { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
-          ]}
-        >
-          <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>
-            Gagal memuat riwayat
-          </Text>
-          <Text style={[styles.stateBody, { color: colors.textSecondary }]}>{error}</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Muat ulang riwayat kehadiran"
-            onPress={retry}
-            style={({ pressed }) => [
-              styles.retryButton,
-              { backgroundColor: colors.actionPrimary },
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={[styles.retryButtonText, { color: colors.actionSecondary }]}>
-              Coba lagi
-            </Text>
-          </Pressable>
-        </View>
-      ) : enrichedRecords.length === 0 ? (
-        <View
-          style={[
-            styles.stateCard,
-            { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
-          ]}
-        >
-          <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>Belum ada kehadiran</Text>
-          <Text style={[styles.stateBody, { color: colors.textSecondary }]}>
-            Presensi yang Anda catat pada sesi berlangsung akan tampil di sini.
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Lihat jadwal praktikum"
-            onPress={() => router.push('/schedule')}
-            style={({ pressed }) => [
-              styles.retryButton,
-              { backgroundColor: colors.actionPrimary },
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={[styles.retryButtonText, { color: colors.actionSecondary }]}>
-              Lihat jadwal
-            </Text>
-          </Pressable>
-        </View>
-      ) : (
-        <View style={styles.cardList}>
-          {enrichedRecords.map((record) => (
-            <AttendanceCard key={record.id} record={record} colors={colors} />
-          ))}
-        </View>
-      )}
+              const hadirCount = group.entries.filter((e) => e.kind === 'hadir').length;
+              const badgeText =
+                isExpanded
+                  ? `${group.entries.length} entri`
+                  : hadirCount === group.entries.length
+                    ? `${hadirCount} Hadir`
+                    : `${group.entries.length} entri`;
 
-      <View
-        style={[
-          styles.protocolNote,
-          { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
-        ]}
-      >
-        <Text style={[styles.protocolText, { color: colors.textSecondary }]}>
-          Presensi dicatat menggunakan waktu server Firestore dan tetap tersimpan saat aplikasi dibuka ulang.
-        </Text>
-      </View>
-    </ScrollView>
-  );
-}
+              return (
+                <AccordionGroup
+                  key={group.courseName}
+                  title={group.courseName}
+                  badgeText={badgeText}
+                  badgeTone="pacific"
+                  expanded={isExpanded}
+                  onToggle={() =>
+                    setCollapsedCourses((prev) => ({
+                      ...prev,
+                      [group.courseName]: isExpanded,
+                    }))
+                  }
+                >
+                  {group.entries.map((entry) => {
+                    const isRosy =
+                      entry.statusTone === 'pending' || entry.statusTone === 'rejected';
+                    return (
+                      <View
+                        key={entry.id}
+                        style={[styles.entryRow, { backgroundColor: colors.background }]}
+                      >
+                        <View style={styles.entryInfo}>
+                          <Text
+                            style={[styles.entryTitle, { color: colors.textPrimary }]}
+                            numberOfLines={1}
+                          >
+                            {entry.title}
+                          </Text>
+                          <Text
+                            style={[styles.entryMeta, { color: colors.textSubtle }]}
+                            numberOfLines={1}
+                          >
+                            {entry.subtitle}
+                          </Text>
+                        </View>
 
-function AttendanceCard({
-  record,
-  colors,
-}: {
-  record: AttendanceEntry & { sessionName: string; sessionClass?: string };
-  colors: Palette;
-}) {
-  return (
-    <View
-      style={[
-        styles.card,
-        { backgroundColor: colors.surface, borderColor: colors.border },
-      ]}
-    >
-      <View style={styles.cardHeader}>
-        <View style={styles.cardTitleGroup}>
-          <Text style={[styles.cardModulLabel, { color: colors.textSecondary }]}>
-            Sesi praktikum
-          </Text>
-          <Text style={[styles.cardSessionName, { color: colors.textPrimary }]}>
-            {record.sessionName}
-          </Text>
-          {record.sessionClass ? (
-            <Text style={[styles.cardSessionClass, { color: colors.textSecondary }]}>
-              {record.sessionClass}
-            </Text>
-          ) : null}
+                        <View
+                          style={[
+                            styles.statusBadge,
+                            {
+                              backgroundColor: isRosy ? colors.rosySoft : colors.pacificSoft,
+                            },
+                          ]}
+                        >
+                          {entry.hasUnreadDot ? (
+                            <View style={[styles.dot, { backgroundColor: colors.rosy }]} />
+                          ) : null}
+                          <Text
+                            style={[
+                              styles.statusText,
+                              { color: isRosy ? colors.rosyDark : colors.pacificDark },
+                            ]}
+                          >
+                            {entry.statusLabel}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </AccordionGroup>
+              );
+            })
+          )}
         </View>
-        <View
-          style={[
-            styles.hadirBadge,
-            { backgroundColor: colors.actionPrimary },
-          ]}
-        >
-          <Text style={[styles.hadirBadgeText, { color: colors.actionSecondary }]}>
-            ✓ Hadir
-          </Text>
-        </View>
-      </View>
+      </ScrollView>
 
-      <View
-        style={[
-          styles.timeBox,
-          { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
-        ]}
-      >
-        <View style={styles.timeBoxLeft}>
-          <Text style={[styles.timeBoxLabel, { color: colors.textSecondary }]}>
-            Waktu server
-          </Text>
-          <Text style={[styles.timeBoxValue, { color: colors.textPrimary }, styles.tabular]}>
-            {record.attendedAt}
-          </Text>
-        </View>
-        <View style={styles.timeBoxRight}>
-          <Text style={[styles.timeBoxLabel, { color: colors.textSecondary }]}>Status</Text>
-          <Text style={[styles.timeBoxValue, { color: colors.textPrimary }]}>
-            {record.hasPendingWrites ? 'Menunggu sinkron' : 'Tercatat'}
-          </Text>
-        </View>
-      </View>
+      <PickerBottomSheet
+        visible={filterSheetVisible}
+        onClose={() => setFilterSheetVisible(false)}
+        title="Filter Riwayat"
+        subtitle="Pilih jenis catatan yang ingin ditampilkan"
+        searchable={false}
+        options={FILTER_OPTIONS}
+        selectedValue={filterMode}
+        onSelect={(val) => setFilterMode(val as FilterMode)}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
   scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-    gap: 20,
+    paddingBottom: 112,
+    gap: 14,
+  },
+  bodyContainer: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
+    paddingHorizontal: 14,
+    gap: 12,
   },
   guard: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     padding: 32,
     gap: 8,
   },
   guardTitle: {
+    fontFamily: FontFamily.displayBold,
     fontSize: 18,
-    fontWeight: '600',
     textAlign: 'center',
   },
   guardBody: {
-    fontSize: 14,
-    fontWeight: '400',
-    lineHeight: 20,
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 13.5,
     textAlign: 'center',
+    lineHeight: 19,
   },
-  heading: {
-    gap: 8,
-    paddingTop: 8,
-  },
-  headingRow: {
+  entryRow: {
+    borderRadius: 14,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
-    flexWrap: 'wrap',
+    gap: 10,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    lineHeight: 30,
+  entryInfo: {
+    flex: 1,
+    gap: 2,
   },
-  roleBadge: {
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  entryTitle: {
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 13,
   },
-  roleBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  identityText: {
-    fontSize: 14,
-    fontWeight: '400',
-    lineHeight: 20,
-  },
-  tabular: {
+  entryMeta: {
+    fontFamily: FontFamily.monoMedium,
+    fontSize: 11.5,
     fontVariant: ['tabular-nums'],
   },
-  metricCard: {
-    borderRadius: 12,
+  statusBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 11.5,
+  },
+  emptyCard: {
+    borderRadius: 20,
     borderWidth: 1,
-    padding: 16,
-    flexDirection: 'row',
+    padding: 22,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  metricLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  metricIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  metricIconText: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  metricInfo: {
-    flex: 1,
-    gap: 4,
-  },
-  metricCount: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  metricSubtitle: {
-    fontSize: 13,
-    fontWeight: '400',
-    lineHeight: 18,
-  },
-  metricRight: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  countRing: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  countRingValue: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  ringLabel: {
-    fontSize: 12,
-    fontWeight: '400',
-  },
-  listHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  listHeaderTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  sortButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    minHeight: 36,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  sortButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  cardList: {
-    gap: 12,
-  },
-  card: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 16,
-    gap: 12,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
     gap: 8,
   },
-  cardTitleGroup: {
-    flex: 1,
-    gap: 4,
-  },
-  cardModulLabel: {
-    fontSize: 12,
-    fontWeight: '400',
-  },
-  cardSessionName: {
+  emptyTitle: {
+    fontFamily: FontFamily.displayBold,
     fontSize: 16,
-    fontWeight: '600',
-    lineHeight: 22,
-  },
-  cardSessionClass: {
-    fontSize: 13,
-    fontWeight: '400',
-  },
-  hadirBadge: {
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  hadirBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  timeBox: {
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 12,
-  },
-  timeBoxLeft: {
-    flex: 1,
-    gap: 4,
-  },
-  timeBoxRight: {
-    alignItems: 'flex-end',
-    gap: 4,
-  },
-  timeBoxLabel: {
-    fontSize: 12,
-    fontWeight: '400',
-  },
-  timeBoxValue: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  stateCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 24,
-    alignItems: 'center',
-    gap: 12,
-  },
-  stateTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  stateBody: {
-    fontSize: 14,
-    fontWeight: '400',
-    lineHeight: 20,
     textAlign: 'center',
   },
-  retryButton: {
-    minHeight: 44,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+  emptyBody: {
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
   },
-  retryButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
+  retryBtn: {
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    marginTop: 4,
   },
-  protocolNote: {
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 12,
-  },
-  protocolText: {
-    fontSize: 12,
-    fontWeight: '400',
-    lineHeight: 18,
+  retryText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 12.5,
   },
   pressed: {
-    opacity: 0.72,
+    opacity: 0.78,
   },
 });

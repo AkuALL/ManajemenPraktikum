@@ -53,9 +53,16 @@ export function extractCohortYear(identifier: string): string | null {
 export function filterStudentCandidates(
   candidates: StudentCandidate[],
   existingMemberIds: string[],
-  filters: { name?: string; nim?: string; query?: string; cohort?: string },
+  filters: {
+    name?: string;
+    nim?: string;
+    query?: string;
+    cohort?: string;
+    allowedUserIds?: string[];
+  },
 ): StudentCandidate[] {
   const existingSet = new Set(existingMemberIds);
+  const allowedSet = filters.allowedUserIds ? new Set(filters.allowedUserIds) : null;
   const nameQuery = filters.name?.trim().toLowerCase() ?? '';
   const nimQuery = filters.nim?.trim().toLowerCase() ?? '';
   const generalQuery = filters.query?.trim().toLowerCase() ?? '';
@@ -63,6 +70,7 @@ export function filterStudentCandidates(
 
   return candidates.filter((student) => {
     if (existingSet.has(student.userId)) return false;
+    if (allowedSet && !allowedSet.has(student.userId)) return false;
     if (
       generalQuery &&
       !student.displayName.toLowerCase().includes(generalQuery) &&

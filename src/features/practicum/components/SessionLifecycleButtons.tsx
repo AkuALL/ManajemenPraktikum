@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
   ActivityIndicator,
+  Alert,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
-import { PracticumSession } from '../types';
-import { Colors } from '@/constants/theme';
+import { CheckCircle2, Play, Square, Trash2 } from 'lucide-react-native';
+
+import { Colors, FontFamily } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+
+import type { PracticumSession } from '../types';
 
 interface SessionLifecycleButtonsProps {
   session: PracticumSession;
@@ -28,10 +31,7 @@ export function SessionLifecycleButtons({
   onDeleteSession,
   onBusyChange,
 }: SessionLifecycleButtonsProps) {
-  const scheme = useColorScheme();
-  const isDark = scheme === 'dark';
-  const colors = isDark ? Colors.dark : Colors.light;
-
+  const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const [loading, setLoading] = useState(false);
 
   if (!isAssistant) {
@@ -48,21 +48,23 @@ export function SessionLifecycleButtons({
         { text: 'Batal', style: 'cancel' },
         {
           text: 'Buka Sesi',
-          onPress: async () => {
-            if (loading) return;
-            try {
-              setLoading(true);
-              onBusyChange?.(true);
-              await onOpenSession(session.id);
-            } catch (err: any) {
-              Alert.alert('Gagal Membuka Sesi', err.message ?? 'Terjadi kesalahan');
-            } finally {
-              setLoading(false);
-              onBusyChange?.(false);
-            }
+          onPress: () => {
+            void (async () => {
+              if (loading) return;
+              try {
+                setLoading(true);
+                onBusyChange?.(true);
+                await onOpenSession(session.id);
+              } catch (err: any) {
+                Alert.alert('Gagal Membuka Sesi', err.message ?? 'Terjadi kesalahan');
+              } finally {
+                setLoading(false);
+                onBusyChange?.(false);
+              }
+            })();
           },
         },
-      ]
+      ],
     );
   };
 
@@ -71,27 +73,29 @@ export function SessionLifecycleButtons({
 
     Alert.alert(
       'Tutup Sesi Praktikum',
-      'Tutup sesi praktikum ini? Catatan: Sesuai aturan bisnis Sprint 2, sesi yang telah ditutup tidak dapat dibuka kembali.',
+      'Tutup sesi praktikum ini? Sesi yang telah ditutup tidak dapat dibuka kembali.',
       [
         { text: 'Batal', style: 'cancel' },
         {
           text: 'Tutup Sesi',
           style: 'destructive',
-          onPress: async () => {
-            if (loading) return;
-            try {
-              setLoading(true);
-              onBusyChange?.(true);
-              await onCloseSession(session.id);
-            } catch (err: any) {
-              Alert.alert('Gagal Menutup Sesi', err.message ?? 'Terjadi kesalahan');
-            } finally {
-              setLoading(false);
-              onBusyChange?.(false);
-            }
+          onPress: () => {
+            void (async () => {
+              if (loading) return;
+              try {
+                setLoading(true);
+                onBusyChange?.(true);
+                await onCloseSession(session.id);
+              } catch (err: any) {
+                Alert.alert('Gagal Menutup Sesi', err.message ?? 'Terjadi kesalahan');
+              } finally {
+                setLoading(false);
+                onBusyChange?.(false);
+              }
+            })();
           },
         },
-      ]
+      ],
     );
   };
 
@@ -105,120 +109,160 @@ export function SessionLifecycleButtons({
         {
           text: 'Hapus Sesi',
           style: 'destructive',
-          onPress: async () => {
-            if (loading) return;
-            try {
-              setLoading(true);
-              onBusyChange?.(true);
-              await onDeleteSession(session.id);
-            } catch (err: any) {
-              Alert.alert('Gagal Menghapus Sesi', err.message ?? 'Terjadi kesalahan');
-            } finally {
-              setLoading(false);
-              onBusyChange?.(false);
-            }
+          onPress: () => {
+            void (async () => {
+              if (loading) return;
+              try {
+                setLoading(true);
+                onBusyChange?.(true);
+                await onDeleteSession(session.id);
+              } catch (err: any) {
+                Alert.alert('Gagal Menghapus Sesi', err.message ?? 'Terjadi kesalahan');
+              } finally {
+                setLoading(false);
+                onBusyChange?.(false);
+              }
+            })();
           },
         },
-      ]
+      ],
     );
   };
 
   return (
     <View style={styles.container}>
-      {session.status === 'scheduled' && (
+      {session.status === 'scheduled' ? (
         <View style={styles.buttonGroup}>
-          <TouchableOpacity
-            style={[styles.primaryButton, { backgroundColor: '#10b981' }]}
+          <Pressable
+            accessibilityRole="button"
             onPress={handleOpen}
             disabled={loading}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              { backgroundColor: colors.pacific },
+              pressed && styles.pressed,
+            ]}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" size="small" />
+              <ActivityIndicator color="#FCFCFA" size="small" />
             ) : (
-              <Text style={styles.primaryButtonText}>▶ Buka Sesi Praktikum</Text>
+              <>
+                <Play size={14} color="#FCFCFA" strokeWidth={2.3} />
+                <Text style={styles.primaryButtonText}>Buka Sesi Praktikum</Text>
+              </>
             )}
-          </TouchableOpacity>
+          </Pressable>
 
-          {onDeleteSession && (
-            <TouchableOpacity
-              style={[styles.dangerOutlineButton, { borderColor: '#ef4444' }]}
+          {onDeleteSession ? (
+            <Pressable
+              accessibilityRole="button"
               onPress={handleDelete}
               disabled={loading}
+              style={({ pressed }) => [
+                styles.dangerOutlineButton,
+                { backgroundColor: colors.rosySoft, borderColor: colors.rosyBorder },
+                pressed && styles.pressed,
+              ]}
             >
-              <Text style={{ color: '#ef4444', fontWeight: '600', fontSize: 13 }}>
+              <Trash2 size={14} color={colors.rosyDark} strokeWidth={2.1} />
+              <Text style={[styles.dangerOutlineText, { color: colors.rosyDark }]}>
                 Hapus Sesi
               </Text>
-            </TouchableOpacity>
-          )}
+            </Pressable>
+          ) : null}
         </View>
-      )}
+      ) : null}
 
-      {session.status === 'open' && (
-        <TouchableOpacity
-          style={[styles.primaryButton, { backgroundColor: '#f59e0b' }]}
+      {session.status === 'open' ? (
+        <Pressable
+          accessibilityRole="button"
           onPress={handleClose}
           disabled={loading}
+          style={({ pressed }) => [
+            styles.primaryButton,
+            { backgroundColor: colors.baltic },
+            pressed && styles.pressed,
+          ]}
         >
           {loading ? (
-            <ActivityIndicator color="#fff" size="small" />
+            <ActivityIndicator color="#FCFCFA" size="small" />
           ) : (
-            <Text style={styles.primaryButtonText}>⏹ Tutup Sesi Praktikum</Text>
+            <>
+              <Square size={14} color="#FCFCFA" strokeWidth={2.2} />
+              <Text style={styles.primaryButtonText}>Tutup Sesi Praktikum</Text>
+            </>
           )}
-        </TouchableOpacity>
-      )}
+        </Pressable>
+      ) : null}
 
-      {session.status === 'closed' && (
+      {session.status === 'closed' ? (
         <View
           style={[
             styles.closedNotice,
-            { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
+            { backgroundColor: colors.pacificSoft, borderColor: colors.pacificLight },
           ]}
         >
-          <Text style={[styles.closedText, { color: colors.textSecondary }]}>
-            ✓ Sesi ini telah ditutup dan selesai.
+          <CheckCircle2 size={15} color={colors.pacificDark} strokeWidth={2.1} />
+          <Text style={[styles.closedText, { color: colors.pacificDark }]}>
+            Sesi ini telah ditutup dan selesai.
           </Text>
         </View>
-      )}
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 10,
+    marginVertical: 6,
     width: '100%',
   },
   buttonGroup: {
     gap: 8,
   },
   primaryButton: {
-    paddingVertical: 12,
+    height: 44,
     paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: 14,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
   },
   primaryButtonText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
+    color: '#FCFCFA',
+    fontFamily: FontFamily.sansBold,
+    fontSize: 13.5,
   },
   dangerOutlineButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    height: 40,
+    paddingHorizontal: 14,
+    borderRadius: 14,
     borderWidth: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+  },
+  dangerOutlineText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 12.5,
   },
   closedNotice: {
-    padding: 12,
-    borderRadius: 8,
+    height: 42,
+    paddingHorizontal: 12,
+    borderRadius: 14,
     borderWidth: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
   },
   closedText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 12.5,
+  },
+  pressed: {
+    opacity: 0.78,
   },
 });

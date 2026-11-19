@@ -1,6 +1,10 @@
+import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ChevronRight } from 'lucide-react-native';
 
-import { LabSession } from '@/types';
+import { Colors, FontFamily } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import type { LabSession } from '@/types';
 
 import { getStatusPresentation } from './status';
 
@@ -10,11 +14,20 @@ type ScheduleListProps = {
 };
 
 export function ScheduleList({ sessions, onSelectSession }: ScheduleListProps) {
+  const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
+
   if (sessions.length === 0) {
     return (
-      <View style={styles.emptyState}>
-        <Text style={styles.emptyTitle}>Belum ada jadwal praktikum</Text>
-        <Text style={styles.emptyDescription}>
+      <View
+        style={[
+          styles.emptyState,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+        ]}
+      >
+        <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+          Belum ada jadwal praktikum
+        </Text>
+        <Text style={[styles.emptyDescription, { color: colors.textSecondary }]}>
           Jadwal sesi akan muncul di halaman ini saat sudah tersedia.
         </Text>
       </View>
@@ -32,11 +45,20 @@ export function ScheduleList({ sessions, onSelectSession }: ScheduleListProps) {
             accessibilityRole="button"
             accessibilityLabel={`Lihat detail sesi ${session.practicumName}`}
             onPress={() => onSelectSession(session)}
-            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
+            style={({ pressed }) => [
+              styles.card,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              pressed && styles.cardPressed,
+            ]}
+          >
             <View style={styles.cardHeader}>
               <View style={styles.titleGroup}>
-                <Text style={styles.practicumName}>{session.practicumName}</Text>
-                <Text style={styles.className}>{session.courseClass ?? 'Kelas praktikum'}</Text>
+                <Text style={[styles.practicumName, { color: colors.textPrimary }]}>
+                  {session.practicumName}
+                </Text>
+                <Text style={[styles.className, { color: colors.textSecondary }]}>
+                  {session.courseClass ?? 'Kelas praktikum'}
+                </Text>
               </View>
               <View
                 style={[
@@ -45,24 +67,30 @@ export function ScheduleList({ sessions, onSelectSession }: ScheduleListProps) {
                     backgroundColor: status.backgroundColor,
                     borderColor: status.borderColor,
                   },
-                ]}>
+                ]}
+              >
+                <View style={[styles.statusDot, { backgroundColor: status.dotColor }]} />
                 <Text style={[styles.statusText, { color: status.textColor }]}>
-                  {status.icon} {status.label}
+                  {status.label}
                 </Text>
               </View>
             </View>
 
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Waktu</Text>
-              <Text style={styles.infoValue}>
-                {session.date ?? 'Tanggal belum ditentukan'} · {session.startsAt}–{session.endsAt}
+            <View style={[styles.metaStrip, { backgroundColor: colors.background }]}>
+              <Text style={[styles.infoValue, { color: colors.textPrimary }]} numberOfLines={1}>
+                {session.date ?? 'Terjadwal'} · {session.startsAt}–{session.endsAt}
+              </Text>
+              <Text style={[styles.locationValue, { color: colors.textSecondary }]} numberOfLines={1}>
+                {session.location}
               </Text>
             </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Lokasi</Text>
-              <Text style={styles.infoValue}>{session.location}</Text>
+
+            <View style={styles.detailRow}>
+              <Text style={[styles.detailLink, { color: colors.baltic }]}>
+                Lihat detail sesi
+              </Text>
+              <ChevronRight size={15} color={colors.baltic} strokeWidth={2.3} />
             </View>
-            <Text style={styles.detailLink}>Lihat detail sesi →</Text>
           </Pressable>
         );
       })}
@@ -72,18 +100,16 @@ export function ScheduleList({ sessions, onSelectSession }: ScheduleListProps) {
 
 const styles = StyleSheet.create({
   list: {
-    gap: 12,
+    gap: 10,
   },
   card: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#D9E1EC',
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
-    gap: 12,
-    padding: 16,
+    gap: 10,
+    padding: 15,
   },
   cardPressed: {
-    opacity: 0.78,
+    opacity: 0.8,
   },
   cardHeader: {
     alignItems: 'flex-start',
@@ -93,64 +119,79 @@ const styles = StyleSheet.create({
   },
   titleGroup: {
     flex: 1,
-    gap: 3,
+    gap: 2,
   },
   practicumName: {
-    color: '#172033',
-    fontSize: 17,
-    fontWeight: '700',
+    fontFamily: FontFamily.displayBold,
+    fontSize: 16,
+    lineHeight: 20,
   },
   className: {
-    color: '#516078',
-    fontSize: 14,
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 12.5,
   },
   statusBadge: {
     borderRadius: 999,
     borderWidth: 1,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontFamily: FontFamily.sansBold,
+    fontSize: 11,
   },
-  infoRow: {
-    gap: 2,
-  },
-  infoLabel: {
-    color: '#64748B',
-    fontSize: 12,
-    fontWeight: '600',
+  metaStrip: {
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
   },
   infoValue: {
-    color: '#334155',
-    fontSize: 14,
-    lineHeight: 20,
+    flex: 1,
+    fontFamily: FontFamily.monoMedium,
+    fontSize: 12,
+    fontVariant: ['tabular-nums'],
+  },
+  locationValue: {
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 12,
+    maxWidth: '38%',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   detailLink: {
-    color: '#0369A1',
-    fontSize: 14,
-    fontWeight: '700',
+    fontFamily: FontFamily.sansBold,
+    fontSize: 13,
   },
   emptyState: {
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderColor: '#CBD5E1',
-    borderRadius: 16,
-    borderStyle: 'dashed',
+    borderRadius: 20,
     borderWidth: 1,
     gap: 6,
     padding: 24,
   },
   emptyTitle: {
-    color: '#1E293B',
+    fontFamily: FontFamily.displayBold,
     fontSize: 16,
-    fontWeight: '700',
   },
   emptyDescription: {
-    color: '#64748B',
-    fontSize: 14,
-    lineHeight: 20,
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 13.5,
+    lineHeight: 19,
     textAlign: 'center',
   },
 });

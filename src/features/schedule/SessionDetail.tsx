@@ -1,6 +1,9 @@
+import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { LabSession } from '@/types';
+import { Colors, FontFamily } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import type { LabSession } from '@/types';
 
 import { getStatusPresentation } from './status';
 
@@ -10,111 +13,170 @@ type SessionDetailProps = {
 };
 
 export function SessionDetail({ session, showHeader = true }: SessionDetailProps) {
+  const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const status = getStatusPresentation(session.status);
 
   return (
-    <View style={styles.card}>
-      {showHeader && (
-        <>
-          <View style={styles.header}>
-            <View style={styles.titleGroup}>
-              <Text style={styles.eyebrow}>DETAIL SESI</Text>
-              <Text style={styles.title}>{session.practicumName}</Text>
-              <Text style={styles.className}>{session.courseClass ?? 'Kelas praktikum'}</Text>
-            </View>
-            <View
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor: status.backgroundColor,
-                  borderColor: status.borderColor,
-                },
-              ]}>
-              <Text style={[styles.statusText, { color: status.textColor }]}>
-                {status.icon} {status.label}
-              </Text>
-            </View>
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: colors.surface, borderColor: colors.border },
+      ]}
+    >
+      {showHeader ? (
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <View style={styles.titleGroup}>
+            <Text style={[styles.eyebrow, { color: colors.textSubtle }]}>DETAIL SESI</Text>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>
+              {session.practicumName}
+            </Text>
+            <Text style={[styles.className, { color: colors.textSecondary }]}>
+              {session.courseClass ?? 'Kelas praktikum'}
+            </Text>
           </View>
+          <View
+            style={[
+              styles.statusBadge,
+              {
+                backgroundColor: status.backgroundColor,
+                borderColor: status.borderColor,
+              },
+            ]}
+          >
+            <View style={[styles.statusDot, { backgroundColor: status.dotColor }]} />
+            <Text style={[styles.statusText, { color: status.textColor }]}>
+              {status.label}
+            </Text>
+          </View>
+        </View>
+      ) : null}
 
-          <View style={styles.divider} />
-        </>
-      )}
-      <DetailRow label="Tanggal" value={session.date ?? 'Belum ditentukan'} />
-      <DetailRow label="Waktu" value={`${session.startsAt}–${session.endsAt}`} />
-      <DetailRow label="Lokasi" value={session.location} />
-      <DetailRow label="Asisten" value={session.assistantName ?? 'Belum ditentukan'} />
+      <DetailRow label="Ruangan" value={session.location} borderColor={colors.border} colors={colors} />
+      <DetailRow
+        label="Jadwal"
+        value={`${session.date ?? 'Belum ditentukan'} · ${session.startsAt}–${session.endsAt}`}
+        borderColor={colors.border}
+        colors={colors}
+        mono
+      />
+      <DetailRow
+        label="Asisten jaga"
+        value={session.assistantName ?? 'Asisten Praktikum'}
+        borderColor={colors.border}
+        colors={colors}
+        isLast
+      />
     </View>
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: string }) {
+function DetailRow({
+  label,
+  value,
+  borderColor,
+  colors,
+  mono = false,
+  isLast = false,
+}: {
+  label: string;
+  value: string;
+  borderColor: string;
+  colors: (typeof Colors)[keyof typeof Colors];
+  mono?: boolean;
+  isLast?: boolean;
+}) {
   return (
-    <View style={styles.detailRow}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={styles.detailValue}>{value}</Text>
+    <View
+      style={[
+        styles.detailRow,
+        !isLast && { borderBottomWidth: 1, borderBottomColor: borderColor },
+      ]}
+    >
+      <Text style={[styles.detailLabel, { color: colors.textSubtle }]}>{label}</Text>
+      <Text
+        style={[
+          styles.detailValue,
+          { color: colors.textPrimary },
+          mono && styles.monoValue,
+        ]}
+        numberOfLines={2}
+      >
+        {value}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#D9E1EC',
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
-    gap: 16,
-    padding: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
   },
   header: {
     alignItems: 'flex-start',
     flexDirection: 'row',
     gap: 12,
     justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
   },
   titleGroup: {
     flex: 1,
-    gap: 3,
+    gap: 2,
   },
   eyebrow: {
-    color: '#64748B',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
+    fontFamily: FontFamily.sansBold,
+    fontSize: 10.5,
+    letterSpacing: 0.7,
   },
   title: {
-    color: '#172033',
-    fontSize: 22,
-    fontWeight: '800',
+    fontFamily: FontFamily.displayBold,
+    fontSize: 18,
+    lineHeight: 22,
   },
   className: {
-    color: '#516078',
-    fontSize: 15,
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 12.5,
   },
   statusBadge: {
     borderRadius: 999,
     borderWidth: 1,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  divider: {
-    backgroundColor: '#E2E8F0',
-    height: 1,
+    fontFamily: FontFamily.sansBold,
+    fontSize: 11,
   },
   detailRow: {
-    gap: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 13,
   },
   detailLabel: {
-    color: '#64748B',
-    fontSize: 12,
-    fontWeight: '700',
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 12.5,
   },
   detailValue: {
-    color: '#1E293B',
-    fontSize: 16,
-    lineHeight: 22,
+    flex: 1,
+    textAlign: 'right',
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  monoValue: {
+    fontVariant: ['tabular-nums'],
   },
 });

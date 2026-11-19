@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
 import {
-  Modal,
-  View,
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
+  View,
 } from 'react-native';
-import { PracticumClass, CreateClassInput } from '../types';
-import { Colors } from '@/constants/theme';
+
+import { FlyAwayBottomSheet } from '@/components/ui/fly-away-bottom-sheet';
+import { Colors, FontFamily } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+
+import type { CreateClassInput, PracticumClass } from '../types';
 import { validateClassInput } from '../validation';
 
 interface ClassFormModalProps {
@@ -20,20 +21,21 @@ interface ClassFormModalProps {
   initialClass?: PracticumClass | null;
   onClose: () => void;
   onSubmit: (input: CreateClassInput) => Promise<void>;
+  onDelete?: (classId: string) => Promise<void>;
 }
 
 function ClassFormContent({
   initialClass,
   onClose,
   onSubmit,
+  onDelete,
 }: {
   initialClass?: PracticumClass | null;
   onClose: () => void;
   onSubmit: (input: CreateClassInput) => Promise<void>;
+  onDelete?: (classId: string) => Promise<void>;
 }) {
-  const scheme = useColorScheme();
-  const isDark = scheme === 'dark';
-  const colors = isDark ? Colors.dark : Colors.light;
+  const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
 
   const [courseName, setCourseName] = useState(initialClass?.courseName ?? '');
   const [className, setClassName] = useState(initialClass?.className ?? '');
@@ -62,126 +64,170 @@ function ClassFormContent({
     }
   };
 
+  const handleDeletePress = () => {
+    if (!initialClass || !onDelete || submitting) return;
+    Alert.alert(
+      'Hapus Kelas',
+      `Yakin ingin menghapus "${initialClass.courseName} · ${initialClass.className}"?`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setSubmitting(true);
+              try {
+                await onDelete(initialClass.id);
+                onClose();
+              } catch (err: any) {
+                setErrorMessage(err.message ?? 'Gagal menghapus kelas');
+              } finally {
+                setSubmitting(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
+
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.overlay}
-    >
-      <View
-        style={[
-          styles.container,
-          { backgroundColor: colors.surface, borderColor: colors.border },
-        ]}
-      >
-        <Text style={[styles.title, { color: colors.textPrimary }]}>
-          {initialClass ? 'Edit Kelas Praktikum' : 'Tambah Kelas Baru'}
+    <View style={styles.form}>
+      {errorMessage ? (
+        <View
+          accessibilityRole="alert"
+          style={[
+            styles.errorBox,
+            { backgroundColor: colors.rosySoft, borderColor: colors.rosyBorder },
+          ]}
+        >
+          <Text style={[styles.errorText, { color: colors.rosyDark }]}>{errorMessage}</Text>
+        </View>
+      ) : null}
+
+      <View style={styles.fieldGroup}>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>
+          Nama Mata Kuliah / Praktikum
         </Text>
-
-        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-
-        <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>
-            Nama Mata Kuliah / Praktikum *
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                color: colors.textPrimary,
-                borderColor: colors.border,
-                backgroundColor: colors.background,
-              },
-            ]}
-            placeholder="Contoh: Pemrograman Web Lanjut"
-            placeholderTextColor={colors.textSecondary}
-            value={courseName}
-            onChangeText={(value) => {
-              setCourseName(value);
-              setErrorMessage('');
-            }}
-            editable={!submitting}
-            maxLength={120}
-            accessibilityLabel="Nama mata kuliah atau praktikum"
-          />
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>
-            Nama Kelas *
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                color: colors.textPrimary,
-                borderColor: colors.border,
-                backgroundColor: colors.background,
-              },
-            ]}
-            placeholder="Contoh: Kelas B"
-            placeholderTextColor={colors.textSecondary}
-            value={className}
-            onChangeText={(value) => {
-              setClassName(value);
-              setErrorMessage('');
-            }}
-            editable={!submitting}
-            maxLength={80}
-            accessibilityLabel="Nama kelas"
-          />
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>
-            Ruang Laboratorium (Opsional)
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                color: colors.textPrimary,
-                borderColor: colors.border,
-                backgroundColor: colors.background,
-              },
-            ]}
-            placeholder="Contoh: Lab Jaringan Komputer"
-            placeholderTextColor={colors.textSecondary}
-            value={lab}
-            onChangeText={(value) => {
-              setLab(value);
-              setErrorMessage('');
-            }}
-            editable={!submitting}
-            maxLength={120}
-            accessibilityLabel="Ruang laboratorium"
-          />
-        </View>
-
-        <View style={styles.buttonRow}>
-          <TouchableOpacity
-            style={[styles.cancelBtn, { borderColor: colors.border }]}
-            onPress={onClose}
-            disabled={submitting}
-          >
-            <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Batal</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.submitBtn, { backgroundColor: colors.actionPrimary }]}
-            onPress={handleSubmit}
-            disabled={submitting}
-          >
-            {submitting ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.submitBtnText}>
-                {initialClass ? 'Simpan Perubahan' : 'Buat Kelas'}
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        <TextInput
+          style={[
+            styles.input,
+            {
+              color: colors.textPrimary,
+              borderColor: colors.border,
+              backgroundColor: colors.background,
+            },
+          ]}
+          placeholder="Contoh: Jaringan Komputer"
+          placeholderTextColor={colors.textSubtle}
+          value={courseName}
+          onChangeText={(value) => {
+            setCourseName(value);
+            setErrorMessage('');
+          }}
+          editable={!submitting}
+          maxLength={120}
+        />
       </View>
-    </KeyboardAvoidingView>
+
+      <View style={styles.fieldGroup}>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>Nama Kelas</Text>
+        <TextInput
+          style={[
+            styles.input,
+            {
+              color: colors.textPrimary,
+              borderColor: colors.border,
+              backgroundColor: colors.background,
+            },
+          ]}
+          placeholder="Contoh: Kelas B"
+          placeholderTextColor={colors.textSubtle}
+          value={className}
+          onChangeText={(value) => {
+            setClassName(value);
+            setErrorMessage('');
+          }}
+          editable={!submitting}
+          maxLength={80}
+        />
+      </View>
+
+      <View style={styles.fieldGroup}>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>
+          Ruang Laboratorium (Opsional)
+        </Text>
+        <TextInput
+          style={[
+            styles.input,
+            {
+              color: colors.textPrimary,
+              borderColor: colors.border,
+              backgroundColor: colors.background,
+            },
+          ]}
+          placeholder="Contoh: Lab Komp 2"
+          placeholderTextColor={colors.textSubtle}
+          value={lab}
+          onChangeText={(value) => {
+            setLab(value);
+            setErrorMessage('');
+          }}
+          editable={!submitting}
+          maxLength={120}
+        />
+      </View>
+
+      <View style={styles.buttonRow}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onClose}
+          disabled={submitting}
+          style={({ pressed }) => [
+            styles.cancelBtn,
+            { backgroundColor: colors.background, borderColor: colors.border },
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={[styles.cancelBtnText, { color: colors.textSecondary }]}>Batal</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => void handleSubmit()}
+          disabled={submitting}
+          style={({ pressed }) => [
+            styles.submitBtn,
+            { backgroundColor: colors.rosy },
+            pressed && styles.pressed,
+          ]}
+        >
+          {submitting ? (
+            <ActivityIndicator color="#FCFCFA" size="small" />
+          ) : (
+            <Text style={styles.submitBtnText}>
+              {initialClass ? 'Simpan Perubahan' : 'Buat Kelas'}
+            </Text>
+          )}
+        </Pressable>
+      </View>
+
+      {initialClass && onDelete ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={handleDeletePress}
+          disabled={submitting}
+          style={({ pressed }) => [
+            styles.deleteBtn,
+            { backgroundColor: colors.rosySoft, borderColor: colors.rosyBorder },
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={[styles.deleteBtnText, { color: colors.rosyDark }]}>Hapus Kelas Ini</Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -190,82 +236,97 @@ export function ClassFormModal({
   initialClass,
   onClose,
   onSubmit,
+  onDelete,
 }: ClassFormModalProps) {
-  if (!visible) return null;
-
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <FlyAwayBottomSheet
+      visible={visible}
+      onClose={onClose}
+      title={initialClass ? 'Ubah Kelas Praktikum' : 'Tambah Kelas Baru'}
+      subtitle="Lengkapi detail mata kuliah, kelas, dan ruang laboratorium"
+    >
       <ClassFormContent
         key={initialClass?.id ?? 'new-class'}
         initialClass={initialClass}
         onClose={onClose}
         onSubmit={onSubmit}
+        onDelete={onDelete}
       />
-    </Modal>
+    </FlyAwayBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+  form: {
+    gap: 13,
+    paddingBottom: 6,
   },
-  container: {
-    width: '100%',
-    maxWidth: 480,
-    borderRadius: 16,
+  errorBox: {
+    borderRadius: 12,
     borderWidth: 1,
-    padding: 24,
-    gap: 16,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
   },
   errorText: {
-    color: '#ef4444',
-    fontSize: 13,
+    fontFamily: FontFamily.sansMedium,
+    fontSize: 12.5,
   },
   fieldGroup: {
     gap: 6,
   },
   label: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 12,
   },
   input: {
+    height: 44,
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 13.5,
   },
   buttonRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 8,
+    gap: 10,
+    marginTop: 4,
   },
   cancelBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
+    flex: 1,
+    height: 46,
+    borderRadius: 16,
     borderWidth: 1,
-  },
-  submitBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 110,
+  },
+  cancelBtnText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 13.5,
+  },
+  submitBtn: {
+    flex: 1.4,
+    height: 46,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   submitBtnText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
+    color: '#FCFCFA',
+    fontFamily: FontFamily.sansBold,
+    fontSize: 13.5,
+  },
+  deleteBtn: {
+    height: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteBtnText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 12.5,
+  },
+  pressed: {
+    opacity: 0.78,
   },
 });
