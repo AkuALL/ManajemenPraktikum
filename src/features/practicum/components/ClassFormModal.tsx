@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -12,6 +11,7 @@ import {
 import { FlyAwayBottomSheet } from '@/components/ui/fly-away-bottom-sheet';
 import { Colors, FontFamily } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { confirmAction } from '@/lib/cross-platform-alert';
 
 import type { CreateClassInput, PracticumClass } from '../types';
 import { validateClassInput } from '../validation';
@@ -66,30 +66,25 @@ function ClassFormContent({
 
   const handleDeletePress = () => {
     if (!initialClass || !onDelete || submitting) return;
-    Alert.alert(
-      'Hapus Kelas',
-      `Yakin ingin menghapus "${initialClass.courseName} · ${initialClass.className}"?`,
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Hapus',
-          style: 'destructive',
-          onPress: () => {
-            void (async () => {
-              setSubmitting(true);
-              try {
-                await onDelete(initialClass.id);
-                onClose();
-              } catch (err: any) {
-                setErrorMessage(err.message ?? 'Gagal menghapus kelas');
-              } finally {
-                setSubmitting(false);
-              }
-            })();
-          },
-        },
-      ],
-    );
+    confirmAction({
+      title: 'Hapus Kelas',
+      message: `Yakin ingin menghapus "${initialClass.courseName} · ${initialClass.className}"?`,
+      confirmText: 'Hapus',
+      destructive: true,
+      onConfirm: () => {
+        void (async () => {
+          setSubmitting(true);
+          try {
+            await onDelete(initialClass.id);
+            onClose();
+          } catch (err: any) {
+            setErrorMessage(err.message ?? 'Gagal menghapus kelas');
+          } finally {
+            setSubmitting(false);
+          }
+        })();
+      },
+    });
   };
 
   return (

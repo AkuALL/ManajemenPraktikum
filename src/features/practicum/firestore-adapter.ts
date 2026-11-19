@@ -273,6 +273,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
         const nim = String(data.identifier ?? d.id).trim();
         return {
           userId: nim,
+          authUid: d.id,
           displayName: data.displayName ?? '',
           identifier: nim,
         };

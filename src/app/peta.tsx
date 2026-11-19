@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/ui/app-header';
 import { FlyAwayBottomSheet } from '@/components/ui/fly-away-bottom-sheet';
@@ -8,6 +8,7 @@ import { SearchFilterBar } from '@/components/ui/search-filter-bar';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { formatSessionTime, usePracticum } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { showAlert } from '@/lib/cross-platform-alert';
 
 type LabRoomItem = {
   id: string;
@@ -341,7 +342,7 @@ export default function PetaLabScreen() {
             <Pressable
               accessibilityRole="button"
               onPress={() => {
-                Alert.alert(
+                showAlert(
                   `Arah ke ${detailSheetRoom.name}`,
                   `Masuk lobby utama Gedung Lab, naik ke ${detailSheetRoom.floor}, lalu ikuti papan penunjuk menuju ${detailSheetRoom.name}.`,
                 );

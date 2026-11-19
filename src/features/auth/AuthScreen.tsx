@@ -293,16 +293,18 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
             value={email}
           />
 
-          <Field
-            autoCapitalize="none"
-            colors={colors}
-            editable={!submitting}
-            label={identifierLabel}
-            onChangeText={setIdentifier}
-            placeholder={identifierPlaceholder}
-            mono
-            value={identifier}
-          />
+          {isRegister ? (
+            <Field
+              autoCapitalize="none"
+              colors={colors}
+              editable={!submitting}
+              label={identifierLabel}
+              onChangeText={setIdentifier}
+              placeholder={identifierPlaceholder}
+              mono
+              value={identifier}
+            />
+          ) : null}
 
           <Field
             autoCapitalize="none"

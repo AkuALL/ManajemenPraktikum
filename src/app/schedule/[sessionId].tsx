@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { CheckCircle2, FileText, QrCode } from 'lucide-react-native';
 
@@ -18,6 +18,7 @@ import {
 } from '@/features/practicum';
 import { SessionDetail } from '@/features/schedule/SessionDetail';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { showAlert } from '@/lib/cross-platform-alert';
 import type { LabSession } from '@/types';
 
 const DEFAULT_MODULES = ['M1', 'M2', 'M3', 'M4', 'M5', 'M6'] as const;
@@ -235,7 +236,7 @@ export default function SessionDetailScreen() {
                   <Pressable
                     accessibilityRole="button"
                     onPress={() =>
-                      Alert.alert(
+                      showAlert(
                         'Modul Praktikum PDF',
                         `Materi ${session.practicumName} siap dipelajari sebelum praktikum dimulai.`,
                       )

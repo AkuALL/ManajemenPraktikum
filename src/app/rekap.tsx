@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -25,16 +24,27 @@ import {
   formatSessionDate,
   formatSessionTime,
   type PracticumSession,
+  type StudentCandidate,
   usePracticum,
 } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { showAlert } from '@/lib/cross-platform-alert';
+import type { LeaveStatus } from '@/types';
 
-type RecapFilterMode = 'all' | 'hadir' | 'belum';
+type RecapFilterMode = 'all' | 'hadir' | 'izin' | 'belum';
+
+type LeaveMemberRow = {
+  id: string;
+  displayName: string;
+  identifier: string;
+  leaveStatus: LeaveStatus;
+};
 
 const FILTER_OPTIONS: PickerOption[] = [
-  { value: 'hadir', label: 'Hadir', subtitle: 'Fokus daftar hadir tercatat saat ini' },
-  { value: 'all', label: 'Semua', subtitle: 'Tampilkan daftar hadir dan belum scan / izin' },
-  { value: 'belum', label: 'Belum Scan', subtitle: 'Tampilkan mahasiswa yang belum tercatat hadir' },
+  { value: 'all', label: 'Semua', subtitle: 'Tampilkan Hadir, Izin, dan Belum Presensi' },
+  { value: 'hadir', label: 'Hadir', subtitle: 'Fokus praktikan yang sudah tercatat hadir' },
+  { value: 'izin', label: 'Izin', subtitle: 'Praktikan yang mengajukan izin pada sesi ini' },
+  { value: 'belum', label: 'Belum Presensi', subtitle: 'Praktikan yang belum presensi maupun izin' },
 ];
 
 function formatSessionCourseLabel(session: PracticumSession): string {
@@ -42,10 +52,17 @@ function formatSessionCourseLabel(session: PracticumSession): string {
   return parts.join(' · ');
 }
 
+function leaveStatusLabel(status: LeaveStatus): string {
+  if (status === 'approved') return 'Disetujui';
+  if (status === 'rejected') return 'Ditolak';
+  return 'Pending';
+}
+
 export default function RecapScreen() {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const { user } = useAuth();
-  const { classes, sessions, loadingSessions, getClassMembers } = usePracticum();
+  const { classes, sessions, loadingSessions, getClassMembers, getRegisteredStudents } =
+    usePracticum();
 
   const defaultSessionId = useMemo(() => {
     const open = sessions.find((item) => item.status === 'open');
@@ -60,11 +77,13 @@ export default function RecapScreen() {
   const [filterSheetVisible, setFilterSheetVisible] = useState(false);
 
   const [presentExpanded, setPresentExpanded] = useState(true);
-  const [absentExpanded, setAbsentExpanded] = useState(false);
+  const [leaveExpanded, setLeaveExpanded] = useState(true);
+  const [absentExpanded, setAbsentExpanded] = useState(true);
   const [memberSnapshot, setMemberSnapshot] = useState<{
     classId: string;
     members: ClassMember[];
   } | null>(null);
+  const [registeredStudents, setRegisteredStudents] = useState<StudentCandidate[]>([]);
 
   const activeSession = useMemo(() => {
     const targetId = selectedSessionId ?? defaultSessionId;
@@ -82,6 +101,21 @@ export default function RecapScreen() {
     undefined,
     classes.length > 0,
   );
+
+  useEffect(() => {
+    if (user?.role !== 'assistant') return;
+    let cancelled = false;
+    getRegisteredStudents()
+      .then((list) => {
+        if (!cancelled) setRegisteredStudents(list);
+      })
+      .catch(() => {
+        if (!cancelled) setRegisteredStudents([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [getRegisteredStudents, user?.role]);
 
   useEffect(() => {
     const targetClassId = activeSession?.classId;
@@ -111,6 +145,16 @@ export default function RecapScreen() {
     [activeSession, memberSnapshot],
   );
 
+  const studentByKey = useMemo(() => {
+    const map = new Map<string, StudentCandidate>();
+    registeredStudents.forEach((student) => {
+      if (student.authUid) map.set(student.authUid, student);
+      map.set(student.userId, student);
+      map.set(student.identifier.trim().toLowerCase(), student);
+    });
+    return map;
+  }, [registeredStudents]);
+
   const attendedIdentifiers = useMemo(
     () => new Set(records.map((r) => r.studentIdentifier.trim().toLowerCase())),
     [records],
@@ -125,24 +169,62 @@ export default function RecapScreen() {
     [activeSession, leaveRequests],
   );
 
-  const missingMembers = useMemo(() => {
-    return classMembers
-      .filter(
+  const { leaveMembers, notAttendedMembers } = useMemo(() => {
+    const leaveRows: LeaveMemberRow[] = [];
+    const leaveMemberKeys = new Set<string>();
+
+    sessionLeaves.forEach((req) => {
+      const registered = studentByKey.get(req.studentId);
+      const matchedMember = classMembers.find(
         (m) =>
-          !attendedIds.has(m.userId) &&
-          !attendedIdentifiers.has(m.identifier.trim().toLowerCase()),
-      )
-      .map((member) => {
-        const leave = sessionLeaves.find((l) => l.studentId === member.userId);
-        return {
-          ...member,
-          leaveStatus: leave?.status ?? null,
-        };
-      });
-  }, [attendedIdentifiers, attendedIds, classMembers, sessionLeaves]);
+          m.userId === req.studentId ||
+          (registered !== undefined &&
+            (m.userId === registered.userId ||
+              m.identifier.trim().toLowerCase() === registered.identifier.trim().toLowerCase())),
+      );
+
+      const resolvedIdentifier =
+        matchedMember?.identifier ?? registered?.identifier ?? req.studentId;
+      const resolvedName =
+        matchedMember?.displayName ?? registered?.displayName ?? req.studentId;
+      const normalizedIdentifier = resolvedIdentifier.trim().toLowerCase();
+
+      const alreadyPresent =
+        attendedIds.has(req.studentId) ||
+        (matchedMember !== undefined && attendedIds.has(matchedMember.userId)) ||
+        attendedIdentifiers.has(normalizedIdentifier);
+
+      if (matchedMember) {
+        leaveMemberKeys.add(matchedMember.userId);
+      }
+      leaveMemberKeys.add(normalizedIdentifier);
+
+      if (!alreadyPresent) {
+        leaveRows.push({
+          id: req.id,
+          displayName: resolvedName,
+          identifier: resolvedIdentifier,
+          leaveStatus: req.status,
+        });
+      }
+    });
+
+    const missing = classMembers.filter((member) => {
+      const normalized = member.identifier.trim().toLowerCase();
+      if (attendedIds.has(member.userId) || attendedIdentifiers.has(normalized)) {
+        return false;
+      }
+      if (leaveMemberKeys.has(member.userId) || leaveMemberKeys.has(normalized)) {
+        return false;
+      }
+      return true;
+    });
+
+    return { leaveMembers: leaveRows, notAttendedMembers: missing };
+  }, [attendedIdentifiers, attendedIds, classMembers, sessionLeaves, studentByKey]);
 
   const filteredPresent = useMemo(() => {
-    if (filterMode === 'belum') return [];
+    if (filterMode !== 'all' && filterMode !== 'hadir') return [];
     const q = searchQuery.trim().toLowerCase();
     if (!q) return records;
     return records.filter(
@@ -152,16 +234,27 @@ export default function RecapScreen() {
     );
   }, [filterMode, records, searchQuery]);
 
-  const filteredMissing = useMemo(() => {
-    if (filterMode === 'hadir') return [];
+  const filteredLeave = useMemo(() => {
+    if (filterMode !== 'all' && filterMode !== 'izin') return [];
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return missingMembers;
-    return missingMembers.filter(
+    if (!q) return leaveMembers;
+    return leaveMembers.filter(
+      (item) =>
+        item.displayName.toLowerCase().includes(q) ||
+        item.identifier.toLowerCase().includes(q),
+    );
+  }, [filterMode, leaveMembers, searchQuery]);
+
+  const filteredNotAttended = useMemo(() => {
+    if (filterMode !== 'all' && filterMode !== 'belum') return [];
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return notAttendedMembers;
+    return notAttendedMembers.filter(
       (m) =>
         m.displayName.toLowerCase().includes(q) ||
         m.identifier.toLowerCase().includes(q),
     );
-  }, [filterMode, missingMembers, searchQuery]);
+  }, [filterMode, notAttendedMembers, searchQuery]);
 
   const sessionOptions = useMemo<PickerOption[]>(
     () =>
@@ -180,11 +273,15 @@ export default function RecapScreen() {
       (r) =>
         `"${r.studentName.replace(/"/g, '""')}","${r.studentIdentifier}","Hadir","${r.attendedAt}"`,
     );
-    const absentRows = missingMembers.map(
-      (m) =>
-        `"${m.displayName.replace(/"/g, '""')}","${m.identifier}","${m.leaveStatus ? `Izin (${m.leaveStatus})` : 'Belum Scan'}","-"`,
+    const leaveRows = leaveMembers.map(
+      (l) =>
+        `"${l.displayName.replace(/"/g, '""')}","${l.identifier}","Izin (${leaveStatusLabel(l.leaveStatus)})","-"`,
     );
-    const csv = [header, ...presentRows, ...absentRows].join('\n');
+    const notAttendedRows = notAttendedMembers.map(
+      (m) =>
+        `"${m.displayName.replace(/"/g, '""')}","${m.identifier}","Belum Presensi","-"`,
+    );
+    const csv = [header, ...presentRows, ...leaveRows, ...notAttendedRows].join('\n');
 
     if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof Blob !== 'undefined') {
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -205,7 +302,7 @@ export default function RecapScreen() {
         message: csv,
       });
     } catch {
-      Alert.alert('Ekspor CSV', 'Tidak dapat membagikan berkas CSV saat ini.');
+      showAlert('Ekspor CSV', 'Tidak dapat membagikan berkas CSV saat ini.');
     }
   };
 
@@ -328,12 +425,12 @@ export default function RecapScreen() {
                 </View>
               ) : (
                 <>
-                  {filterMode !== 'belum' ? (
+                  {filterMode === 'all' || filterMode === 'hadir' ? (
                     <AccordionGroup
                       title="Terdaftar scan QR"
                       badgeText={`${filteredPresent.length}`}
                       badgeTone="pacific"
-                      expanded={presentExpanded}
+                      expanded={presentExpanded || filterMode === 'hadir'}
                       onToggle={() => setPresentExpanded((v) => !v)}
                     >
                       {filteredPresent.length === 0 ? (
@@ -366,31 +463,24 @@ export default function RecapScreen() {
                     </AccordionGroup>
                   ) : null}
 
-                  {filterMode !== 'hadir' ? (
+                  {filterMode === 'all' || filterMode === 'izin' ? (
                     <AccordionGroup
-                      title="Belum Scan / Izin"
-                      badgeText={`${filteredMissing.length} orang`}
-                      badgeTone="rosy"
-                      expanded={absentExpanded || filterMode === 'belum'}
-                      onToggle={() => setAbsentExpanded((v) => !v)}
+                      title="Izin"
+                      badgeText={`${filteredLeave.length} orang`}
+                      badgeTone="muted"
+                      expanded={leaveExpanded || filterMode === 'izin'}
+                      onToggle={() => setLeaveExpanded((v) => !v)}
                     >
-                      {filteredMissing.length === 0 ? (
+                      {filteredLeave.length === 0 ? (
                         <Text style={[styles.innerEmpty, { color: colors.textSecondary }]}>
-                          Semua anggota terdaftar sudah hadir.
+                          Tidak ada praktikan yang mengajukan izin pada sesi ini.
                         </Text>
                       ) : (
-                        filteredMissing.map((member) => {
-                          const leaveBadge =
-                            member.leaveStatus === 'approved'
-                              ? 'Izin Disetujui'
-                              : member.leaveStatus === 'pending'
-                                ? 'Izin Pending'
-                                : member.leaveStatus === 'rejected'
-                                  ? 'Izin Ditolak'
-                                  : 'Belum Scan';
+                        filteredLeave.map((member) => {
+                          const approved = member.leaveStatus === 'approved';
                           return (
                             <View
-                              key={member.userId}
+                              key={member.id}
                               style={[styles.recapRow, { backgroundColor: colors.background }]}
                             >
                               <View style={styles.recapLeft}>
@@ -408,10 +498,11 @@ export default function RecapScreen() {
                                 style={[
                                   styles.leaveBadge,
                                   {
-                                    backgroundColor:
-                                      member.leaveStatus === 'approved'
-                                        ? colors.pacificSoft
-                                        : colors.rosySoft,
+                                    backgroundColor: approved
+                                      ? colors.pacificSoft
+                                      : member.leaveStatus === 'rejected'
+                                        ? colors.rosySoft
+                                        : colors.balticSoft,
                                   },
                                 ]}
                               >
@@ -419,19 +510,65 @@ export default function RecapScreen() {
                                   style={[
                                     styles.leaveBadgeText,
                                     {
-                                      color:
-                                        member.leaveStatus === 'approved'
-                                          ? colors.pacificDark
-                                          : colors.rosyDark,
+                                      color: approved
+                                        ? colors.pacificDark
+                                        : member.leaveStatus === 'rejected'
+                                          ? colors.rosyDark
+                                          : colors.baltic,
                                     },
                                   ]}
                                 >
-                                  {leaveBadge}
+                                  {leaveStatusLabel(member.leaveStatus)}
                                 </Text>
                               </View>
                             </View>
                           );
                         })
+                      )}
+                    </AccordionGroup>
+                  ) : null}
+
+                  {filterMode === 'all' || filterMode === 'belum' ? (
+                    <AccordionGroup
+                      title="Belum Presensi"
+                      badgeText={`${filteredNotAttended.length} orang`}
+                      badgeTone="rosy"
+                      expanded={absentExpanded || filterMode === 'belum'}
+                      onToggle={() => setAbsentExpanded((v) => !v)}
+                    >
+                      {filteredNotAttended.length === 0 ? (
+                        <Text style={[styles.innerEmpty, { color: colors.textSecondary }]}>
+                          Semua anggota terdaftar sudah melakukan presensi atau izin.
+                        </Text>
+                      ) : (
+                        filteredNotAttended.map((member) => (
+                          <View
+                            key={member.userId}
+                            style={[styles.recapRow, { backgroundColor: colors.background }]}
+                          >
+                            <View style={styles.recapLeft}>
+                              <Text
+                                style={[styles.studentName, { color: colors.textPrimary }]}
+                                numberOfLines={1}
+                              >
+                                {member.displayName}
+                              </Text>
+                              <Text style={[styles.studentNim, { color: colors.textSubtle }]}>
+                                {member.identifier}
+                              </Text>
+                            </View>
+                            <View
+                              style={[
+                                styles.leaveBadge,
+                                { backgroundColor: colors.rosySoft },
+                              ]}
+                            >
+                              <Text style={[styles.leaveBadgeText, { color: colors.rosyDark }]}>
+                                Belum Presensi
+                              </Text>
+                            </View>
+                          </View>
+                        ))
                       )}
                     </AccordionGroup>
                   ) : null}

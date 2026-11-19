@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   FileText,
@@ -25,6 +25,7 @@ import {
 } from '@/features/practicum';
 import { sessionDateInput } from '@/features/practicum/validation';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { showAlert } from '@/lib/cross-platform-alert';
 
 const SHORT_DAY_NAMES = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'] as const;
 
@@ -157,7 +158,7 @@ export function BerandaScreen() {
 
   const handleOpenCreateSession = () => {
     if (classes.length === 0) {
-      Alert.alert(
+      showAlert(
         'Kelas Belum Ada',
         'Buat kelas praktikum terlebih dahulu di tab Kelas sebelum menambahkan sesi.',
       );
@@ -314,91 +315,98 @@ export function BerandaScreen() {
               </Pressable>
             </View>
           ) : featuredSession ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() =>
-                router.push({
-                  pathname: '/schedule/[sessionId]',
-                  params: { sessionId: featuredSession.id },
-                })
-              }
-              style={({ pressed }) => [
+            <View
+              style={[
                 styles.heroSessionCard,
                 { backgroundColor: colors.surface, borderColor: colors.border },
-                pressed && styles.cardPressed,
               ]}
             >
-              <View style={styles.heroCardTop}>
-                <View
-                  style={[
-                    styles.statusTag,
-                    {
-                      backgroundColor:
-                        featuredSession.status === 'closed'
-                          ? colors.pacificSoft
-                          : colors.rosySoft,
-                    },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.statusTagDot,
-                      {
-                        backgroundColor:
-                          featuredSession.status === 'closed' ? colors.pacific : colors.rosy,
-                      },
-                    ]}
-                  />
-                  <Text
-                    style={[
-                      styles.statusTagText,
-                      {
-                        color:
-                          featuredSession.status === 'closed'
-                            ? colors.pacificDark
-                            : colors.rosy,
-                      },
-                    ]}
-                  >
-                    {featuredSession.status === 'open'
-                      ? `BERLANGSUNG · ${formatSessionTime(featuredSession.startsAt)}`
-                      : featuredSession.status === 'closed'
-                        ? 'SELESAI'
-                        : `TERJADWAL · ${formatSessionTime(featuredSession.startsAt)}`}
-                  </Text>
-                </View>
-
-                <View style={[styles.roomTag, { backgroundColor: colors.pacificSoft }]}>
-                  <Text
-                    style={[styles.roomTagText, { color: colors.pacificDark }]}
-                    numberOfLines={1}
-                  >
-                    {featuredSession.location}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={[styles.courseHeading, { color: colors.textPrimary }]}>
-                {featuredSession.courseName ?? featuredSession.className ?? 'Praktikum Lab'}
-              </Text>
-              <Text style={[styles.sessionSubtitle, { color: colors.textSecondary }]}>
-                {featuredSession.title}
-              </Text>
-
-              <View
-                style={[
-                  styles.metaStrip,
-                  { backgroundColor: colors.background },
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Buka detail ${featuredSession.title}`}
+                onPress={() =>
+                  router.push({
+                    pathname: '/schedule/[sessionId]',
+                    params: { sessionId: featuredSession.id },
+                  })
+                }
+                style={({ pressed }) => [
+                  styles.heroCardBody,
+                  pressed && styles.cardPressed,
                 ]}
               >
-                <Text style={[styles.metaStripLeft, { color: colors.textPrimary }]} numberOfLines={1}>
-                  {formatSessionTime(featuredSession.startsAt)} –{' '}
-                  {formatSessionTime(featuredSession.endsAt)} · {featuredSession.location}
+                <View style={styles.heroCardTop}>
+                  <View
+                    style={[
+                      styles.statusTag,
+                      {
+                        backgroundColor:
+                          featuredSession.status === 'closed'
+                            ? colors.pacificSoft
+                            : colors.rosySoft,
+                      },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.statusTagDot,
+                        {
+                          backgroundColor:
+                            featuredSession.status === 'closed' ? colors.pacific : colors.rosy,
+                        },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.statusTagText,
+                        {
+                          color:
+                            featuredSession.status === 'closed'
+                              ? colors.pacificDark
+                              : colors.rosy,
+                        },
+                      ]}
+                    >
+                      {featuredSession.status === 'open'
+                        ? `BERLANGSUNG · ${formatSessionTime(featuredSession.startsAt)}`
+                        : featuredSession.status === 'closed'
+                          ? 'SELESAI'
+                          : `TERJADWAL · ${formatSessionTime(featuredSession.startsAt)}`}
+                    </Text>
+                  </View>
+
+                  <View style={[styles.roomTag, { backgroundColor: colors.pacificSoft }]}>
+                    <Text
+                      style={[styles.roomTagText, { color: colors.pacificDark }]}
+                      numberOfLines={1}
+                    >
+                      {featuredSession.location}
+                    </Text>
+                  </View>
+                </View>
+
+                <Text style={[styles.courseHeading, { color: colors.textPrimary }]}>
+                  {featuredSession.courseName ?? featuredSession.className ?? 'Praktikum Lab'}
                 </Text>
-                <Text style={[styles.metaStripRight, { color: colors.textSecondary }]} numberOfLines={1}>
-                  {featuredSession.assistantName ?? (featuredSession.className ?? 'Asisten')}
+                <Text style={[styles.sessionSubtitle, { color: colors.textSecondary }]}>
+                  {featuredSession.title}
                 </Text>
-              </View>
+
+                <View
+                  style={[
+                    styles.metaStrip,
+                    { backgroundColor: colors.background },
+                  ]}
+                >
+                  <Text style={[styles.metaStripLeft, { color: colors.textPrimary }]} numberOfLines={1}>
+                    {formatSessionTime(featuredSession.startsAt)} –{' '}
+                    {formatSessionTime(featuredSession.endsAt)} · {featuredSession.location}
+                  </Text>
+                  <Text style={[styles.metaStripRight, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {featuredSession.assistantName ?? (featuredSession.className ?? 'Asisten')}
+                  </Text>
+                </View>
+              </Pressable>
 
               {isAssistant ? (
                 <View style={styles.assistantHeroActions}>
@@ -459,7 +467,7 @@ export function BerandaScreen() {
                   </Pressable>
                 </View>
               )}
-            </Pressable>
+            </View>
           ) : (
             <View
               style={[
@@ -646,6 +654,9 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     borderWidth: 1,
     padding: 16,
+    gap: 10,
+  },
+  heroCardBody: {
     gap: 10,
   },
   heroCardTop: {

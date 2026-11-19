@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -15,6 +14,7 @@ import { FlyAwayBottomSheet } from '@/components/ui/fly-away-bottom-sheet';
 import { Colors, FontFamily } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { showAlert } from '@/lib/cross-platform-alert';
 import type { SessionSummary } from '@/types';
 
 import {
@@ -66,7 +66,7 @@ export function LeaveRequestBottomSheet({
       const asset = result.assets[0];
       const sizeBytes = asset.size ?? 0;
       if (sizeBytes > MAX_ATTACHMENT_SIZE_BYTES) {
-        Alert.alert(
+        showAlert(
           'Ukuran berkas terlalu besar',
           'Ukuran lampiran maksimal 2 MB (Image / PDF).',
         );
@@ -81,7 +81,7 @@ export function LeaveRequestBottomSheet({
       });
       setErrorMessage(null);
     } catch {
-      Alert.alert('Gagal memilih berkas', 'Silakan coba pilih berkas gambar atau PDF lain.');
+      showAlert('Gagal memilih berkas', 'Silakan coba pilih berkas gambar atau PDF lain.');
     }
   };
 

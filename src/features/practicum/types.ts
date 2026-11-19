@@ -23,6 +23,7 @@ export interface PracticumClass {
 
 export interface StudentCandidate {
   userId: string;
+  authUid?: string;
   displayName: string;
   identifier: string;
 }
