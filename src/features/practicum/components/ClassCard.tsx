@@ -13,7 +13,7 @@ interface ClassCardProps {
   isDeleting?: boolean;
 }
 
-export function ClassCard({
+export const ClassCard = React.memo(function ClassCard({
   practicumClass,
   isAssistant,
   onManageMembers,
@@ -110,7 +110,7 @@ export function ClassCard({
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

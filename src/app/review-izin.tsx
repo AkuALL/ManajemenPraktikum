@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { CardListSkeleton } from '@/components/ui/skeleton';
 import { Colors, MaxContentWidth } from '@/constants/theme';
 import { aiStatusLabel, useAssistantLeaveRequests, useLeave } from '@/features/leave';
 import { usePracticum } from '@/features/practicum';
@@ -14,7 +15,13 @@ function formatServerDate(value: number | null): string {
 export default function LeaveReviewScreen() {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const { classes, sessions, loadingClasses } = usePracticum();
-  const { requests, loading, error, fromCache, retry } = useAssistantLeaveRequests(classes.map((item) => item.id));
+  const classIds = useMemo(() => classes.map((item) => item.id), [classes]);
+  const sessionById = useMemo(() => new Map(sessions.map((item) => [item.id, item])), [sessions]);
+  const { requests, loading, error, fromCache, retry } = useAssistantLeaveRequests(
+    classIds,
+    undefined,
+    !loadingClasses,
+  );
   const { reviewLeave } = useLeave();
   const [pendingOnly, setPendingOnly] = useState(true);
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -51,11 +58,11 @@ export default function LeaveReviewScreen() {
         <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>{pendingOnly ? 'Menampilkan: pending' : 'Menampilkan: semua status'}</Text>
       </Pressable>
       {fromCache ? <Text style={[styles.cache, { color: colors.textSecondary }]}>Menampilkan data cache. Menunggu sinkronisasi server.</Text> : null}
-      {loading || loadingClasses ? <View style={styles.state}><ActivityIndicator color={colors.actionPrimary} /><Text style={{ color: colors.textSecondary }}>Memuat pengajuan izin...</Text></View> : null}
+      {loading || loadingClasses ? <CardListSkeleton count={3} showActions label="Memuat pengajuan izin" /> : null}
       {error ? <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Izin belum dapat dimuat</Text><Text style={[styles.body, { color: colors.textSecondary }]}>{error}</Text><Pressable onPress={retry} style={[styles.retry, { borderColor: colors.border }]}><Text style={{ color: colors.textPrimary }}>Coba lagi</Text></Pressable></View> : null}
       {!loading && !loadingClasses && !error && displayed.length === 0 ? <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Tidak ada izin {pendingOnly ? 'pending' : ''}</Text><Text style={[styles.body, { color: colors.textSecondary }]}>Pengajuan dari kelas yang Anda kelola akan muncul di sini secara real-time.</Text></View> : null}
       {displayed.map((request) => {
-        const session = sessions.find((item) => item.id === request.sessionId);
+        const session = sessionById.get(request.sessionId);
         const disabled = request.status !== 'pending' || submittingId === request.id;
         return <View key={request.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{session?.title ?? request.sessionId}</Text>

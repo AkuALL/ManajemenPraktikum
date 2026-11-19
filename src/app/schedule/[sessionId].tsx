@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { CardListSkeleton } from '@/components/ui/skeleton';
 import { useIdentity } from '@/features/identity';
 import { SessionDetail } from '@/features/schedule/SessionDetail';
 import { StudentAttendanceForm } from '@/features/attendance';
@@ -20,7 +21,13 @@ export default function SessionDetailScreen() {
   const { activeIdentity } = useIdentity();
   const isAssistant = activeIdentity?.role === 'assistant';
 
-  const { sessions: practicumSessions, openSession, closeSession, deleteSession } = usePracticum();
+  const {
+    sessions: practicumSessions,
+    loadingSessions,
+    openSession,
+    closeSession,
+    deleteSession,
+  } = usePracticum();
 
   const practicumSession = practicumSessions.find((s) => s.id === sessionId);
 
@@ -64,7 +71,9 @@ export default function SessionDetailScreen() {
           <Text style={styles.backButtonText}>← Kembali ke jadwal</Text>
         </Pressable>
 
-        {session ? (
+        {loadingSessions && !session ? (
+          <CardListSkeleton count={1} showActions label="Memuat detail sesi" />
+        ) : session ? (
           <>
             <SessionDetail session={session} />
 

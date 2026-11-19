@@ -5,7 +5,6 @@
 
 import { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,6 +12,7 @@ import {
   View,
 } from 'react-native';
 
+import { CardListSkeleton, RowListSkeleton } from '@/components/ui/skeleton';
 import { Colors, MaxContentWidth } from '@/constants/theme';
 import { useSessionAttendance } from '@/features/attendance';
 import { useAuth } from '@/features/auth';
@@ -100,17 +100,7 @@ export default function RecapScreen() {
       </View>
 
       {loadingSessions && sessions.length === 0 ? (
-        <View
-          style={[
-            styles.stateCard,
-            { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
-          ]}
-        >
-          <ActivityIndicator size="small" color={colors.textPrimary} />
-          <Text style={[styles.stateBody, { color: colors.textSecondary }]}>
-            Memuat daftar sesi praktikum
-          </Text>
-        </View>
+        <CardListSkeleton count={2} label="Memuat daftar sesi praktikum" />
       ) : sessions.length === 0 ? (
         <View
           style={[
@@ -201,12 +191,7 @@ export default function RecapScreen() {
               </View>
 
               {loading ? (
-                <View style={styles.innerState}>
-                  <ActivityIndicator size="small" color={colors.textPrimary} />
-                  <Text style={[styles.stateBody, { color: colors.textSecondary }]}>
-                    Memuat rekap kehadiran
-                  </Text>
-                </View>
+                <RowListSkeleton count={4} label="Memuat rekap kehadiran" />
               ) : error ? (
                 <View accessibilityRole="alert" style={styles.innerState}>
                   <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>

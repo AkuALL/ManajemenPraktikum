@@ -1,7 +1,8 @@
 import {
   collection,
   doc,
-  getDoc,
+  getDocs,
+  limit,
   onSnapshot,
   query,
   serverTimestamp,
@@ -99,9 +100,20 @@ function createSnapshotHandler(
   };
 }
 
-async function readLeaveRequest(id: string): Promise<LeaveRequest | null> {
-  const snapshot = await getDoc(doc(db, 'leaveRequests', id));
-  return snapshot.exists() ? parseLeaveRequest(snapshot.id, snapshot.data(), snapshot.metadata) : null;
+// Use a filtered list query instead of getDoc(id) because Firestore rules reject get on non-existent docs when checking resource.data.studentId.
+async function findExistingLeaveRequest(
+  sessionId: string,
+  studentId: string,
+): Promise<LeaveRequest | null> {
+  const q = query(
+    collection(db, 'leaveRequests'),
+    where('studentId', '==', studentId),
+    where('sessionId', '==', sessionId),
+    limit(1),
+  );
+  const snapshot = await getDocs(q);
+  const first = snapshot.docs[0];
+  return first ? parseLeaveRequest(first.id, first.data(), first.metadata) : null;
 }
 
 export const firestoreLeaveAdapter: LeavePort = {
@@ -116,7 +128,7 @@ export const firestoreLeaveAdapter: LeavePort = {
     const reference = doc(db, 'leaveRequests', id);
 
     try {
-      const existing = await readLeaveRequest(id);
+      const existing = await findExistingLeaveRequest(session.id, user.uid);
       if (existing) {
         throw new LeavePortError('duplicate', 'Izin untuk sesi ini sudah pernah diajukan.');
       }
@@ -132,7 +144,7 @@ export const firestoreLeaveAdapter: LeavePort = {
         updatedAt: serverTimestamp(),
       });
 
-      return (await readLeaveRequest(id)) ?? {
+      return (await findExistingLeaveRequest(session.id, user.uid)) ?? {
         id,
         sessionId: session.id,
         classId: session.classId,
@@ -147,7 +159,14 @@ export const firestoreLeaveAdapter: LeavePort = {
         hasPendingWrites: true,
       };
     } catch (error) {
-      throw mapLeaveError(error);
+      const mapped = mapLeaveError(error);
+      if (mapped.code === 'forbidden') {
+        const existing = await findExistingLeaveRequest(session.id, user.uid).catch(() => null);
+        if (existing) {
+          throw new LeavePortError('duplicate', 'Izin untuk sesi ini sudah pernah diajukan.');
+        }
+      }
+      throw mapped;
     }
   },
 

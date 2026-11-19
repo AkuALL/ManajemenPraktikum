@@ -364,7 +364,7 @@ service cloud.firestore {
           'updatedAt'
         ])
         && resource.data.status == 'pending'
-        && resource.data.aiStatus == 'pending'
+        && ['pending', 'failed'].hasAny([resource.data.aiStatus])
         && request.resource.data.aiStatus == 'success'
         && ['sakit', 'keluarga', 'akademik', 'darurat', 'lainnya']
           .hasAny([request.resource.data.aiCategory])

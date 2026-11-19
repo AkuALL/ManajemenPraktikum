@@ -1,5 +1,7 @@
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useMemo } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { CardListSkeleton } from '@/components/ui/skeleton';
 import { Colors, MaxContentWidth } from '@/constants/theme';
 import { aiStatusLabel, useLeave } from '@/features/leave';
 import { usePracticum } from '@/features/practicum';
@@ -23,6 +25,7 @@ export default function MyLeaveRequestsScreen() {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const { sessions } = usePracticum();
   const { requests, loading, error, fromCache, classificationErrors, retryClassification, retry } = useLeave();
+  const sessionById = useMemo(() => new Map(sessions.map((item) => [item.id, item])), [sessions]);
 
   return (
     <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.container}>
@@ -33,7 +36,7 @@ export default function MyLeaveRequestsScreen() {
       </View>
 
       {fromCache ? <Text style={[styles.cache, { color: colors.textSecondary }]}>Menampilkan data cache. Menunggu sinkronisasi server.</Text> : null}
-      {loading ? <View style={styles.state}><ActivityIndicator color={colors.actionPrimary} /><Text style={{ color: colors.textSecondary }}>Memuat pengajuan izin...</Text></View> : null}
+      {loading ? <CardListSkeleton count={3} label="Memuat pengajuan izin" /> : null}
       {error ? (
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Izin belum dapat dimuat</Text>
@@ -50,7 +53,7 @@ export default function MyLeaveRequestsScreen() {
       ) : null}
 
       {requests.map((request) => {
-        const session = sessions.find((item) => item.id === request.sessionId);
+        const session = sessionById.get(request.sessionId);
         const classificationError = classificationErrors[request.id];
         return (
           <View key={request.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>

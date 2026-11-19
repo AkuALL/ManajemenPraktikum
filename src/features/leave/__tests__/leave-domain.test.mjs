@@ -4,6 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { buildLeaveRequestDocId } from '../../../types/contracts.ts';
+import { parseGeminiClassificationPayload } from '../../../services/classify-leave-reason.ts';
 import {
   aiStatusLabel,
   isLeaveEligibleStatus,
@@ -46,4 +47,17 @@ test('leave rules preserve owner-only AI updates and assistant-only decisions', 
   assert.match(failureHelper, /function validLeaveClassificationSuccess\(\)/);
   assert.match(failureHelper, /request\.resource\.data\.aiStatus == 'success'/);
   assert.match(failureHelper, /request\.resource\.data\.aiConfidence >= 0/);
+});
+
+test('parseGeminiClassificationPayload validates category, clamps confidence, and rejects bad JSON', () => {
+  assert.deepEqual(
+    parseGeminiClassificationPayload('{"category":"sakit","confidence":0.95}'),
+    { category: 'sakit', confidence: 0.95 },
+  );
+  assert.deepEqual(
+    parseGeminiClassificationPayload('{"category":"akademik","confidence":1.4}'),
+    { category: 'akademik', confidence: 1 },
+  );
+  assert.equal(parseGeminiClassificationPayload('{"category":"invalid","confidence":0.5}'), null);
+  assert.equal(parseGeminiClassificationPayload('not-json'), null);
 });
