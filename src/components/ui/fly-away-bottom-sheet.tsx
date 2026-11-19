@@ -53,11 +53,12 @@ export function FlyAwayBottomSheet({
 
   const [translateY] = useState(() => new Animated.Value(visible ? 0 : 440));
   const [backdropOpacity] = useState(() => new Animated.Value(visible ? 1 : 0));
+  const useNativeDriver = Platform.OS !== 'web';
 
   const panResponder = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => !dismissDisabled,
+        onStartShouldSetPanResponder: () => false,
         onMoveShouldSetPanResponder: (_, gesture) =>
           !dismissDisabled && gesture.dy > 6 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
         onPanResponderMove: (_, gesture) => {
@@ -74,7 +75,7 @@ export function FlyAwayBottomSheet({
             toValue: 0,
             damping: 22,
             stiffness: 240,
-            useNativeDriver: true,
+            useNativeDriver,
           }).start();
         },
         onPanResponderTerminate: () => {
@@ -82,11 +83,11 @@ export function FlyAwayBottomSheet({
             toValue: 0,
             damping: 22,
             stiffness: 240,
-            useNativeDriver: true,
+            useNativeDriver,
           }).start();
         },
       }),
-    [dismissDisabled, onClose, translateY],
+    [dismissDisabled, onClose, translateY, useNativeDriver],
   );
 
   useEffect(() => {
@@ -99,13 +100,13 @@ export function FlyAwayBottomSheet({
           damping: 24,
           stiffness: 240,
           mass: 0.9,
-          useNativeDriver: true,
+          useNativeDriver,
         }),
         Animated.timing(backdropOpacity, {
           toValue: 1,
           duration: 240,
           easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
+          useNativeDriver,
         }),
       ]).start();
     } else if (mounted) {
@@ -114,13 +115,13 @@ export function FlyAwayBottomSheet({
           toValue: 460,
           duration: 200,
           easing: Easing.in(Easing.cubic),
-          useNativeDriver: true,
+          useNativeDriver,
         }),
         Animated.timing(backdropOpacity, {
           toValue: 0,
           duration: 200,
           easing: Easing.in(Easing.cubic),
-          useNativeDriver: true,
+          useNativeDriver,
         }),
       ]).start(({ finished }) => {
         if (finished) {
@@ -128,7 +129,7 @@ export function FlyAwayBottomSheet({
         }
       });
     }
-  }, [backdropOpacity, mounted, translateY, visible]);
+  }, [backdropOpacity, mounted, translateY, useNativeDriver, visible]);
 
   if (!mounted) return null;
 

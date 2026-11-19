@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,6 +20,7 @@ import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
 import { usePracticum } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { showAlert } from '@/lib/cross-platform-alert';
 
 type MasterLabItem = {
   id: string;
@@ -129,7 +129,7 @@ export default function MasterLabScreen() {
   const handleSave = async () => {
     const trimmedName = draftName.trim();
     if (trimmedName.length < 2) {
-      Alert.alert('Nama lab tidak valid', 'Masukkan nama laboratorium minimal 2 karakter.');
+      showAlert('Nama lab tidak valid', 'Masukkan nama laboratorium minimal 2 karakter.');
       return;
     }
 
@@ -153,9 +153,9 @@ export default function MasterLabScreen() {
         nextLab,
       ]);
       setSelectedLabId(nextLab.id);
-      Alert.alert('Berhasil', 'Perubahan ruang laboratorium disimpan.');
+      showAlert('Berhasil', 'Perubahan ruang laboratorium disimpan.');
     } catch (err: any) {
-      Alert.alert('Gagal menyimpan', err?.message ?? 'Silakan coba lagi.');
+      showAlert('Gagal menyimpan', err?.message ?? 'Silakan coba lagi.');
     } finally {
       setSaving(false);
     }

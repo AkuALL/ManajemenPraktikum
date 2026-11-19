@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -30,6 +29,7 @@ import {
   usePracticum,
 } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { confirmAction, showAlert } from '@/lib/cross-platform-alert';
 import type { LeaveRequest } from '@/types';
 
 type ReviewFilterMode = 'pending' | 'all' | 'done';
@@ -131,28 +131,27 @@ export default function LeaveReviewScreen() {
 
   const decide = (request: LeaveRequest, decision: 'approved' | 'rejected') => {
     const verb = decision === 'approved' ? 'menyetujui' : 'menolak';
-    Alert.alert('Konfirmasi Keputusan', `Anda akan ${verb} pengajuan izin ini.`, [
-      { text: 'Batal', style: 'cancel' },
-      {
-        text: decision === 'approved' ? 'Setujui' : 'Tolak',
-        style: decision === 'rejected' ? 'destructive' : 'default',
-        onPress: () => {
-          void (async () => {
-            setSubmittingId(request.id);
-            try {
-              await reviewLeave(request.id, decision);
-            } catch (decisionError) {
-              Alert.alert(
-                'Keputusan gagal disimpan',
-                decisionError instanceof Error ? decisionError.message : 'Silakan coba lagi.',
-              );
-            } finally {
-              setSubmittingId(null);
-            }
-          })();
-        },
+    confirmAction({
+      title: 'Konfirmasi Keputusan',
+      message: `Anda akan ${verb} pengajuan izin ini.`,
+      confirmText: decision === 'approved' ? 'Setujui' : 'Tolak',
+      destructive: decision === 'rejected',
+      onConfirm: () => {
+        void (async () => {
+          setSubmittingId(request.id);
+          try {
+            await reviewLeave(request.id, decision);
+          } catch (decisionError) {
+            showAlert(
+              'Keputusan gagal disimpan',
+              decisionError instanceof Error ? decisionError.message : 'Silakan coba lagi.',
+            );
+          } finally {
+            setSubmittingId(null);
+          }
+        })();
       },
-    ]);
+    });
   };
 
   const primaryLab = classes[0]?.lab ?? 'Asisten Lab';

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,6 +21,7 @@ import { FlyAwayBottomSheet } from '@/components/ui/fly-away-bottom-sheet';
 import { RowListSkeleton } from '@/components/ui/skeleton';
 import { Colors, FontFamily } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { confirmAction, showAlert } from '@/lib/cross-platform-alert';
 
 import type {
   AddMemberInput,
@@ -268,30 +268,25 @@ function ClassMembersContent({
 
   const handleRemoveMember = (member: ClassMember) => {
     if (removingId) return;
-    Alert.alert(
-      'Keluarkan Praktikan',
-      `Keluarkan ${member.displayName} (${member.identifier}) dari kelas ini?`,
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Keluarkan',
-          style: 'destructive',
-          onPress: () => {
-            void (async () => {
-              setRemovingId(member.userId);
-              try {
-                await onRemoveMember(practicumClass.id, member.userId);
-                setMembers((prev) => prev.filter((m) => m.userId !== member.userId));
-              } catch (err: any) {
-                Alert.alert('Gagal menghapus', err?.message ?? 'Silakan coba lagi.');
-              } finally {
-                setRemovingId(null);
-              }
-            })();
-          },
-        },
-      ],
-    );
+    confirmAction({
+      title: 'Keluarkan Praktikan',
+      message: `Keluarkan ${member.displayName} (${member.identifier}) dari kelas ini?`,
+      confirmText: 'Keluarkan',
+      destructive: true,
+      onConfirm: () => {
+        void (async () => {
+          setRemovingId(member.userId);
+          try {
+            await onRemoveMember(practicumClass.id, member.userId);
+            setMembers((prev) => prev.filter((m) => m.userId !== member.userId));
+          } catch (err: any) {
+            showAlert('Gagal menghapus', err?.message ?? 'Silakan coba lagi.');
+          } finally {
+            setRemovingId(null);
+          }
+        })();
+      },
+    });
   };
 
   const classFilterShortLabel =

@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Plus, SlidersHorizontal } from 'lucide-react-native';
 
 import { AppHeader, getFirstName } from '@/components/ui/app-header';
@@ -20,6 +20,7 @@ import {
   usePracticum,
 } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { showAlert } from '@/lib/cross-platform-alert';
 
 type ClassFilterMode = 'all' | 'active' | 'live';
 
@@ -142,7 +143,7 @@ export default function ClassesScreen() {
       try {
         await deleteClass(classId);
       } catch (err: any) {
-        Alert.alert('Gagal Menghapus Kelas', err.message ?? 'Terjadi kesalahan');
+        showAlert('Gagal Menghapus Kelas', err.message ?? 'Terjadi kesalahan');
       } finally {
         deletingClassRef.current = null;
         setDeletingClassId(null);

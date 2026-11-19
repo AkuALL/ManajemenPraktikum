@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -27,6 +26,7 @@ import { validateLeaveReason } from '@/features/leave/port';
 import { APP_ROUTES } from '@/features/navigation';
 import { formatSessionTime, usePracticum } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { showAlert } from '@/lib/cross-platform-alert';
 
 export default function LeaveRequestScreen() {
   const router = useRouter();
@@ -71,7 +71,7 @@ export default function LeaveRequestScreen() {
       const asset = result.assets[0];
       const sizeBytes = asset.size ?? 0;
       if (sizeBytes > MAX_ATTACHMENT_SIZE_BYTES) {
-        Alert.alert(
+        showAlert(
           'Ukuran berkas terlalu besar',
           'Ukuran lampiran maksimal 2 MB (Image / PDF).',
         );
@@ -85,7 +85,7 @@ export default function LeaveRequestScreen() {
         uri: asset.uri,
       });
     } catch {
-      Alert.alert('Gagal memilih berkas', 'Silakan pilih berkas gambar atau PDF lain.');
+      showAlert('Gagal memilih berkas', 'Silakan pilih berkas gambar atau PDF lain.');
     }
   };
 
