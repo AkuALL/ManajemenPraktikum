@@ -102,18 +102,20 @@ export function LeaveProvider({
   }, [consumerCount, port, retryTick, studentId]);
 
   const requestClassification = useCallback(
-    async (leaveRequestId: string) => {
+    async (leaveRequestId: string, reason?: string) => {
       setClassificationErrors((current) => {
         const { [leaveRequestId]: _discarded, ...rest } = current;
         return rest;
       });
 
       try {
-        const result = await classifyLeaveReason(leaveRequestId);
-        await port.saveClassificationResult(leaveRequestId, {
-          category: result.category,
-          confidence: result.confidence,
-        });
+        const result = await classifyLeaveReason(leaveRequestId, reason);
+        if (!result.persistedByServer) {
+          await port.saveClassificationResult(leaveRequestId, {
+            category: result.category,
+            confidence: result.confidence,
+          });
+        }
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Klasifikasi AI tidak dapat diproses.';
@@ -135,7 +137,7 @@ export function LeaveProvider({
 
       try {
         const request = await port.createLeaveRequest({ session, user, reason });
-        void requestClassification(request.id);
+        void requestClassification(request.id, request.reason);
         return { ok: true, request };
       } catch (error) {
         return {
@@ -152,9 +154,10 @@ export function LeaveProvider({
 
   const retryClassification = useCallback(
     async (leaveRequestId: string) => {
-      await requestClassification(leaveRequestId);
+      const target = snapshot?.requests.find((item) => item.id === leaveRequestId);
+      await requestClassification(leaveRequestId, target?.reason);
     },
-    [requestClassification],
+    [requestClassification, snapshot?.requests],
   );
 
   const reviewLeave = useCallback(
