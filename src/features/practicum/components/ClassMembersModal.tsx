@@ -2,24 +2,38 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  Plus,
+  Search,
+  Trash2,
+} from 'lucide-react-native';
 
+import { FlyAwayBottomSheet } from '@/components/ui/fly-away-bottom-sheet';
 import { RowListSkeleton } from '@/components/ui/skeleton';
-import { Colors } from '@/constants/theme';
+import { Colors, FontFamily } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-import { AddMemberInput, ClassMember, PracticumClass, StudentCandidate } from '../types';
-import { COHORT_OPTIONS, extractCohortYear, filterStudentCandidates } from '../validation';
+import type {
+  AddMemberInput,
+  ClassMember,
+  PracticumClass,
+  StudentCandidate,
+} from '../types';
+import {
+  COHORT_OPTIONS,
+  extractCohortYear,
+  filterStudentCandidates,
+} from '../validation';
 
 interface ClassMembersModalProps {
   visible: boolean;
@@ -32,847 +46,681 @@ interface ClassMembersModalProps {
   onRemoveMember: (classId: string, memberId: string) => Promise<void>;
 }
 
+const ALL_CLASSES_FILTER = 'Semua Kelas';
+const UNENROLLED_FILTER = 'Belum Terdaftar';
+
 function ClassMembersContent({
   practicumClass,
   allClasses = [],
-  onClose,
   fetchMembers,
   fetchStudentCandidates,
   onAddMember,
   onRemoveMember,
-}: {
+}: Omit<ClassMembersModalProps, 'visible' | 'onClose'> & {
   practicumClass: PracticumClass;
-  allClasses?: PracticumClass[];
-  onClose: () => void;
-  fetchMembers: (classId: string) => Promise<ClassMember[]>;
-  fetchStudentCandidates?: () => Promise<StudentCandidate[]>;
-  onAddMember: (classId: string, input: AddMemberInput) => Promise<ClassMember>;
-  onRemoveMember: (classId: string, memberId: string) => Promise<void>;
 }) {
-  const scheme = useColorScheme();
-  const isDark = scheme === 'dark';
-  const colors = isDark ? Colors.dark : Colors.light;
+  const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
 
   const [members, setMembers] = useState<ClassMember[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [loadError, setLoadError] = useState('');
-  const [reloadKey, setReloadKey] = useState(0);
-  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
+  const [loadingMembers, setLoadingMembers] = useState(true);
+  const [membersError, setMembersError] = useState('');
+  const [reloadTick, setReloadTick] = useState(0);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
-  // Add-praktikan picker states
-  const [showSearchPicker, setShowSearchPicker] = useState<boolean>(false);
+  const [mode, setMode] = useState<'list' | 'add'>('list');
   const [candidates, setCandidates] = useState<StudentCandidate[]>([]);
-  const [loadingCandidates, setLoadingCandidates] = useState<boolean>(false);
+  const [loadingCandidates, setLoadingCandidates] = useState(false);
   const [candidatesError, setCandidatesError] = useState('');
-  const [candidateReloadKey, setCandidateReloadKey] = useState(0);
-  const [addingUserId, setAddingUserId] = useState<string | null>(null);
-  const [addingBatch, setAddingBatch] = useState<boolean>(false);
-  const [addFeedback, setAddFeedback] = useState('');
+  const [candidateSearch, setCandidateSearch] = useState('');
+  const [cohortFilter, setCohortFilter] = useState<string>('Semua');
+  const [classFilter, setClassFilter] = useState<string>(ALL_CLASSES_FILTER);
+  const [activeDropdown, setActiveDropdown] = useState<'cohort' | 'class' | null>(null);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [addingBatch, setAddingBatch] = useState(false);
+  const [feedback, setFeedback] = useState('');
   const [addError, setAddError] = useState('');
 
-  // 1) Cohort filter -> 2) Multi-select student dropdown -> 3) Name/NIM search
-  const [cohortFilter, setCohortFilter] = useState<string>('Semua Angkatan');
-  const [showCohortDropdown, setShowCohortDropdown] = useState(false);
-  const [showStudentDropdown, setShowStudentDropdown] = useState(false);
-  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-
   useEffect(() => {
-    let isCancelled = false;
-
+    let cancelled = false;
     fetchMembers(practicumClass.id)
-      .then((data) => {
-        if (!isCancelled) {
-          setMembers(data);
-          setLoading(false);
+      .then((list) => {
+        if (!cancelled) {
+          setMembers(list);
+          setLoadingMembers(false);
         }
       })
       .catch((err) => {
-        if (!isCancelled) {
-          setLoadError(err instanceof Error ? err.message : 'Gagal memuat daftar anggota');
-          setLoading(false);
+        if (!cancelled) {
+          setMembersError(err instanceof Error ? err.message : 'Gagal memuat anggota kelas');
+          setLoadingMembers(false);
         }
       });
-
     return () => {
-      isCancelled = true;
+      cancelled = true;
     };
-  }, [fetchMembers, practicumClass.id, reloadKey]);
+  }, [fetchMembers, practicumClass.id, reloadTick]);
 
   useEffect(() => {
-    if (!showSearchPicker || !fetchStudentCandidates) return;
-    let isCancelled = false;
-
+    if (mode !== 'add' || !fetchStudentCandidates) return;
+    let cancelled = false;
     fetchStudentCandidates()
       .then((list) => {
-        if (!isCancelled) {
+        if (!cancelled) {
           setCandidates(list);
           setLoadingCandidates(false);
         }
       })
       .catch((err) => {
-        if (!isCancelled) {
+        if (!cancelled) {
           setCandidatesError(
             err instanceof Error ? err.message : 'Gagal memuat daftar praktikan terdaftar',
           );
           setLoadingCandidates(false);
         }
       });
-
     return () => {
-      isCancelled = true;
+      cancelled = true;
     };
-  }, [fetchStudentCandidates, showSearchPicker, candidateReloadKey]);
+  }, [fetchStudentCandidates, mode]);
 
   const memberIds = useMemo(() => members.map((m) => m.userId), [members]);
-  const memberIdSet = useMemo(() => new Set(memberIds), [memberIds]);
+
+  const filteredMembers = useMemo(() => {
+    const q = memberSearch.trim().toLowerCase();
+    if (!q) return members;
+    return members.filter(
+      (m) =>
+        m.displayName.toLowerCase().includes(q) ||
+        m.identifier.toLowerCase().includes(q),
+    );
+  }, [memberSearch, members]);
 
   const cohortOptions = useMemo(() => {
-    const baseOptions: readonly string[] = COHORT_OPTIONS;
     const extras = candidates
-      .map((candidate) => extractCohortYear(candidate.identifier))
-      .filter((year): year is string => year !== null && !baseOptions.includes(year));
-    return [...COHORT_OPTIONS, ...Array.from(new Set(extras)).sort()];
+      .map((c) => extractCohortYear(c.identifier))
+      .filter((y): y is string => y !== null);
+    const merged = Array.from(
+      new Set([
+        ...COHORT_OPTIONS.filter((c) => c !== 'Semua Angkatan'),
+        ...extras,
+      ]),
+    ).sort();
+    return ['Semua', ...merged];
   }, [candidates]);
 
-  const cohortCandidates = useMemo(() => {
-    return filterStudentCandidates(candidates, memberIds, { cohort: cohortFilter });
-  }, [candidates, cohortFilter, memberIds]);
+  const otherClasses = useMemo(
+    () => allClasses.filter((cls) => cls.id !== practicumClass.id),
+    [allClasses, practicumClass.id],
+  );
 
-  const selectedCandidates = useMemo(() => {
+  const classFilterOptions = useMemo(() => {
+    const dynamic = otherClasses.map((cls) => ({
+      value: cls.id,
+      label: `${cls.courseName} · ${cls.className}`,
+    }));
+    return [
+      { value: ALL_CLASSES_FILTER, label: ALL_CLASSES_FILTER },
+      { value: UNENROLLED_FILTER, label: UNENROLLED_FILTER },
+      ...dynamic,
+    ];
+  }, [otherClasses]);
+
+  const allowedUserIdsByClass = useMemo(() => {
+    if (classFilter === ALL_CLASSES_FILTER) return undefined;
+    if (classFilter === UNENROLLED_FILTER) {
+      const enrolledAnywhere = new Set(
+        allClasses.flatMap((cls) => cls.memberUids ?? []),
+      );
+      return candidates
+        .filter((c) => !enrolledAnywhere.has(c.userId))
+        .map((c) => c.userId);
+    }
+    const targetCls = otherClasses.find((cls) => cls.id === classFilter);
+    return targetCls?.memberUids ?? [];
+  }, [allClasses, candidates, classFilter, otherClasses]);
+
+  const filteredCandidates = useMemo(() => {
+    return filterStudentCandidates(candidates, memberIds, {
+      query: candidateSearch,
+      cohort: cohortFilter === 'Semua' ? 'Semua Angkatan' : cohortFilter,
+      allowedUserIds: allowedUserIdsByClass,
+    });
+  }, [allowedUserIdsByClass, candidateSearch, candidates, cohortFilter, memberIds]);
+
+  const candidateIdSet = useMemo(
+    () => new Set(filteredCandidates.map((c) => c.userId)),
+    [filteredCandidates],
+  );
+
+  const selectedValidCandidates = useMemo(() => {
     const selectedSet = new Set(selectedUserIds);
     return candidates.filter(
-      (candidate) => selectedSet.has(candidate.userId) && !memberIdSet.has(candidate.userId),
+      (c) => selectedSet.has(c.userId) && !memberIds.includes(c.userId),
     );
-  }, [candidates, memberIdSet, selectedUserIds]);
+  }, [candidates, memberIds, selectedUserIds]);
 
-  const allCohortSelected =
-    cohortCandidates.length > 0 &&
-    cohortCandidates.every((candidate) => selectedUserIds.includes(candidate.userId));
+  const allFilteredSelected =
+    filteredCandidates.length > 0 &&
+    filteredCandidates.every((c) => selectedUserIds.includes(c.userId));
 
-  const trimmedSearchQuery = searchQuery.trim();
-  const searchCandidates = useMemo(() => {
-    if (!trimmedSearchQuery) return [];
-    return filterStudentCandidates(candidates, memberIds, { query: trimmedSearchQuery });
-  }, [candidates, memberIds, trimmedSearchQuery]);
+  const getCandidateClassTag = (userId: string): string => {
+    const match = otherClasses.find((cls) => cls.memberUids?.includes(userId));
+    return match ? match.className : 'Terdaftar';
+  };
 
-  const isAdding = addingBatch || Boolean(addingUserId);
-
-  const getOtherEnrolledClasses = (userId: string) =>
-    allClasses.filter(
-      (cls) => cls.id !== practicumClass.id && cls.memberUids?.includes(userId),
-    );
-
-  const toggleCandidateSelection = (userId: string) => {
+  const toggleCandidate = (userId: string) => {
     setAddError('');
-    setAddFeedback('');
     setSelectedUserIds((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
     );
   };
 
-  const toggleSelectAllCohort = () => {
-    const cohortIds = cohortCandidates.map((candidate) => candidate.userId);
-    const cohortIdSet = new Set(cohortIds);
-    setAddError('');
-    setAddFeedback('');
+  const toggleSelectAllFiltered = () => {
+    const visibleIds = filteredCandidates.map((c) => c.userId);
     setSelectedUserIds((prev) => {
-      if (allCohortSelected) {
-        return prev.filter((id) => !cohortIdSet.has(id));
+      if (allFilteredSelected) {
+        return prev.filter((id) => !candidateIdSet.has(id));
       }
-      return Array.from(new Set([...prev, ...cohortIds]));
+      return Array.from(new Set([...prev, ...visibleIds]));
     });
   };
 
-  // shortcut: sequential onAddMember calls; move to a single Firestore writeBatch if class adds regularly exceed ~30 students
-  const handleAddSelected = async () => {
-    if (isAdding || selectedCandidates.length === 0) return;
+  const handleBatchAdd = async () => {
+    if (addingBatch || selectedValidCandidates.length === 0) return;
 
     setAddingBatch(true);
     setAddError('');
-    setAddFeedback('');
-
-    const addedMembers: ClassMember[] = [];
-    const addedIds = new Set<string>();
+    const added: ClassMember[] = [];
     let firstError = '';
 
-    try {
-      for (const candidate of selectedCandidates) {
-        try {
-          const newMember = await onAddMember(practicumClass.id, {
-            userId: candidate.userId,
-            displayName: candidate.displayName,
-            identifier: candidate.identifier,
-          });
-          addedMembers.push(newMember);
-          addedIds.add(candidate.userId);
-        } catch (err: any) {
-          if (!firstError) {
-            firstError = err?.message ?? `Gagal menambah ${candidate.displayName}`;
-          }
-        }
-      }
-
-      if (addedMembers.length > 0) {
-        setMembers((prev) => {
-          const existingIds = new Set(prev.map((m) => m.userId));
-          const uniqueAdded = addedMembers.filter((m) => !existingIds.has(m.userId));
-          return [...prev, ...uniqueAdded];
+    for (const candidate of selectedValidCandidates) {
+      try {
+        const member = await onAddMember(practicumClass.id, {
+          userId: candidate.userId,
+          displayName: candidate.displayName,
+          identifier: candidate.identifier,
         });
-        setSelectedUserIds((prev) => prev.filter((id) => !addedIds.has(id)));
-        if (addedMembers.length === selectedCandidates.length) {
-          setShowStudentDropdown(false);
+        added.push(member);
+      } catch (err: any) {
+        if (!firstError) {
+          firstError = err?.message ?? `Gagal menambah ${candidate.displayName}`;
         }
-        setAddFeedback(
-          addedMembers.length === 1
-            ? `${addedMembers[0].displayName} berhasil ditambahkan ke kelas.`
-            : `${addedMembers.length} praktikan berhasil ditambahkan ke kelas.`,
-        );
       }
-
-      if (firstError) {
-        setAddError(
-          addedMembers.length > 0
-            ? `${addedMembers.length} berhasil, sebagian gagal: ${firstError}`
-            : firstError,
-        );
-      }
-    } finally {
-      setAddingBatch(false);
     }
-  };
 
-  const handleSelectCandidate = async (candidate: StudentCandidate) => {
-    if (isAdding) return;
-
-    try {
-      setAddingUserId(candidate.userId);
-      setAddError('');
-      setAddFeedback('');
-      const newMember = await onAddMember(practicumClass.id, {
-        userId: candidate.userId,
-        displayName: candidate.displayName,
-        identifier: candidate.identifier,
+    if (added.length > 0) {
+      setMembers((prev) => {
+        const existing = new Set(prev.map((m) => m.userId));
+        return [...prev, ...added.filter((m) => !existing.has(m.userId))];
       });
-      setMembers((prev) =>
-        prev.some((m) => m.userId === newMember.userId) ? prev : [...prev, newMember],
-      );
-      setSelectedUserIds((prev) => prev.filter((id) => id !== candidate.userId));
-      setAddFeedback(`${candidate.displayName} berhasil ditambahkan ke kelas.`);
-    } catch (err: any) {
-      setAddError(err?.message ?? 'Gagal menambah anggota');
-    } finally {
-      setAddingUserId(null);
+      setSelectedUserIds([]);
+      setFeedback(`${added.length} praktikan ditambahkan ke kelas.`);
+      if (!firstError) {
+        setMode('list');
+      }
     }
+    if (firstError) {
+      setAddError(firstError);
+    }
+    setAddingBatch(false);
   };
 
-  const handleClosePicker = () => {
-    setShowSearchPicker(false);
-    setShowCohortDropdown(false);
-    setShowStudentDropdown(false);
-    setSelectedUserIds([]);
-    setSearchQuery('');
-    setAddError('');
-    setAddFeedback('');
-  };
-
-  const handleRemove = (member: ClassMember) => {
-    if (removingMemberId) return;
-
+  const handleRemoveMember = (member: ClassMember) => {
+    if (removingId) return;
     Alert.alert(
-      'Hapus Anggota',
+      'Keluarkan Praktikan',
       `Keluarkan ${member.displayName} (${member.identifier}) dari kelas ini?`,
       [
         { text: 'Batal', style: 'cancel' },
         {
-          text: 'Hapus',
+          text: 'Keluarkan',
           style: 'destructive',
-          onPress: async () => {
-            if (removingMemberId) return;
-            try {
-              setRemovingMemberId(member.userId);
-              await onRemoveMember(practicumClass.id, member.userId);
-              setMembers((prev) => prev.filter((m) => m.userId !== member.userId));
-            } catch (err: any) {
-              Alert.alert('Error', err.message ?? 'Gagal menghapus anggota');
-            } finally {
-              setRemovingMemberId(null);
-            }
+          onPress: () => {
+            void (async () => {
+              setRemovingId(member.userId);
+              try {
+                await onRemoveMember(practicumClass.id, member.userId);
+                setMembers((prev) => prev.filter((m) => m.userId !== member.userId));
+              } catch (err: any) {
+                Alert.alert('Gagal menghapus', err?.message ?? 'Silakan coba lagi.');
+              } finally {
+                setRemovingId(null);
+              }
+            })();
           },
         },
       ],
     );
   };
 
-  return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.overlay}
-    >
-      <View
-        style={[
-          styles.container,
-          { backgroundColor: colors.surface, borderColor: colors.border },
-        ]}
-      >
-        <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.title, { color: colors.textPrimary }]}>
-              Daftar Anggota Kelas
-            </Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              {practicumClass.className} - {practicumClass.courseName}
-            </Text>
-          </View>
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn} accessibilityLabel="Tutup modal">
-            <Text style={{ color: colors.textSecondary, fontSize: 18, fontWeight: '700' }}>
-              ✕
-            </Text>
-          </TouchableOpacity>
+  const classFilterShortLabel =
+    classFilter === ALL_CLASSES_FILTER
+      ? 'Semua'
+      : classFilter === UNENROLLED_FILTER
+        ? 'Belum'
+        : otherClasses.find((c) => c.id === classFilter)?.className ?? 'Kelas';
+
+  if (mode === 'add') {
+    return (
+      <View style={styles.sheetBody}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            setMode('list');
+            setActiveDropdown(null);
+          }}
+          style={({ pressed }) => [styles.backLink, pressed && styles.pressed]}
+        >
+          <ArrowLeft size={14} color={colors.baltic} strokeWidth={2.2} />
+          <Text style={[styles.backLinkText, { color: colors.baltic }]}>
+            Kembali ke Anggota ({members.length})
+          </Text>
+        </Pressable>
+
+        <View
+          style={[
+            styles.searchBox,
+            { backgroundColor: colors.background, borderColor: colors.border },
+          ]}
+        >
+          <Search size={15} color={colors.textSubtle} strokeWidth={2} />
+          <TextInput
+            value={candidateSearch}
+            onChangeText={setCandidateSearch}
+            placeholder="Ketik nama atau NIM (opsional)..."
+            placeholderTextColor={colors.textSubtle}
+            style={[styles.searchInput, { color: colors.textPrimary }]}
+          />
         </View>
 
-        {showSearchPicker ? (
-          <View
-            style={[
-              styles.searchPanel,
-              { borderColor: colors.border, backgroundColor: colors.background },
+        <View style={styles.dualFilterRow}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              setActiveDropdown((prev) => (prev === 'cohort' ? null : 'cohort'))
+            }
+            style={({ pressed }) => [
+              styles.filterBtn,
+              {
+                backgroundColor: colors.background,
+                borderColor: activeDropdown === 'cohort' ? colors.pacific : colors.border,
+              },
+              pressed && styles.pressed,
             ]}
           >
-            <View style={styles.searchHeader}>
-              <Text style={[styles.formTitle, { color: colors.textPrimary }]}>
-                Tambah Praktikan
+            <Text style={[styles.filterPrefix, { color: colors.textSecondary }]}>
+              Angkatan:{' '}
+              <Text style={[styles.filterValue, { color: colors.textPrimary }]}>
+                {cohortFilter}
               </Text>
-              <TouchableOpacity onPress={handleClosePicker} disabled={isAdding}>
-                <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: 13 }}>
-                  Tutup
-                </Text>
-              </TouchableOpacity>
-            </View>
+            </Text>
+            <ChevronDown size={14} color={colors.baltic} strokeWidth={2.2} />
+          </Pressable>
 
-            {addError ? <Text style={styles.errorText}>{addError}</Text> : null}
-            {addFeedback ? (
-              <Text style={[styles.successText, { color: colors.actionPrimary }]}>
-                {addFeedback}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              setActiveDropdown((prev) => (prev === 'class' ? null : 'class'))
+            }
+            style={({ pressed }) => [
+              styles.filterBtn,
+              {
+                backgroundColor: colors.background,
+                borderColor: activeDropdown === 'class' ? colors.pacific : colors.border,
+              },
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={[styles.filterPrefix, { color: colors.textSecondary }]} numberOfLines={1}>
+              Kelas:{' '}
+              <Text style={[styles.filterValue, { color: colors.textPrimary }]}>
+                {classFilterShortLabel}
               </Text>
-            ) : null}
+            </Text>
+            <ChevronDown size={14} color={colors.baltic} strokeWidth={2.2} />
+          </Pressable>
+        </View>
 
-            {!fetchStudentCandidates ? (
-              <Text style={[styles.emptyText, { color: colors.textSecondary, paddingVertical: 12 }]}>
-                Pencarian praktikan tidak tersedia.
-              </Text>
-            ) : loadingCandidates ? (
-              <View style={styles.candidateState}>
-                <ActivityIndicator size="small" color={colors.actionPrimary} />
-                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-                  Memuat daftar praktikan terdaftar...
-                </Text>
-              </View>
-            ) : candidatesError ? (
-              <View style={styles.candidateState}>
-                <Text style={styles.errorText}>{candidatesError}</Text>
-                <TouchableOpacity
-                  style={[styles.retryBtn, { borderColor: colors.actionPrimary }]}
-                  onPress={() => {
-                    setLoadingCandidates(true);
-                    setCandidatesError('');
-                    setCandidateReloadKey((v) => v + 1);
-                  }}
-                >
-                  <Text style={{ color: colors.actionPrimary, fontWeight: '700' }}>Coba lagi</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <ScrollView
-                style={styles.searchPanelScroll}
-                contentContainerStyle={styles.searchPanelContent}
-                nestedScrollEnabled
-                keyboardShouldPersistTaps="handled"
-              >
-                {/* 1. Filter Angkatan */}
-                <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-                    1. Filter Angkatan
-                  </Text>
-                  <TouchableOpacity
-                    style={[
-                      styles.selectorButton,
-                      { borderColor: colors.border, backgroundColor: colors.surface },
-                    ]}
+        {activeDropdown === 'cohort' ? (
+          <View
+            style={[
+              styles.inlineDropdown,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <View style={styles.chipWrap}>
+              {cohortOptions.map((cohort) => {
+                const selected = cohort === cohortFilter;
+                return (
+                  <Pressable
+                    key={cohort}
                     onPress={() => {
-                      setShowCohortDropdown((prev) => !prev);
-                      setShowStudentDropdown(false);
+                      setCohortFilter(cohort);
+                      setActiveDropdown(null);
                     }}
-                    disabled={isAdding}
-                    accessibilityRole="button"
-                    accessibilityLabel="Filter angkatan praktikan"
-                  >
-                    <Text
-                      style={[styles.selectorPrimary, { color: colors.textPrimary, flex: 1 }]}
-                      numberOfLines={1}
-                    >
-                      {cohortFilter === 'Semua Angkatan'
-                        ? 'Semua Angkatan'
-                        : `Angkatan ${cohortFilter}`}
-                    </Text>
-                    <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '700' }}>
-                      {showCohortDropdown ? '▲' : '▼'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {showCohortDropdown ? (
-                    <View
-                      style={[
-                        styles.dropdownMenu,
-                        { borderColor: colors.border, backgroundColor: colors.surface },
-                      ]}
-                    >
-                      <ScrollView style={styles.cohortDropdownScroll} nestedScrollEnabled>
-                        {cohortOptions.map((option) => {
-                          const selected = option === cohortFilter;
-                          return (
-                            <TouchableOpacity
-                              key={option}
-                              style={[
-                                styles.dropdownOption,
-                                {
-                                  borderBottomColor: colors.border,
-                                  backgroundColor: selected ? colors.surfaceMuted : 'transparent',
-                                },
-                              ]}
-                              onPress={() => {
-                                setCohortFilter(option);
-                                setShowCohortDropdown(false);
-                              }}
-                            >
-                              <Text
-                                style={{
-                                  color: selected ? colors.actionPrimary : colors.textPrimary,
-                                  fontWeight: selected ? '700' : '500',
-                                  fontSize: 13,
-                                }}
-                              >
-                                {option === 'Semua Angkatan' ? option : `Angkatan ${option}`}
-                              </Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </ScrollView>
-                    </View>
-                  ) : null}
-                </View>
-
-                {/* 2. Dropdown Daftar Seluruh Praktikan dengan Checkbox (Multiple Choice) */}
-                <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-                    2. Pilih Praktikan (Multiple Choice)
-                  </Text>
-                  <TouchableOpacity
                     style={[
-                      styles.selectorButton,
+                      styles.dropChip,
                       {
-                        borderColor:
-                          showStudentDropdown || selectedCandidates.length > 0
-                            ? colors.actionPrimary
-                            : colors.border,
-                        backgroundColor: colors.surface,
+                        backgroundColor: selected ? colors.pacificSoft : colors.background,
+                        borderColor: selected ? colors.pacific : colors.border,
                       },
                     ]}
-                    onPress={() => {
-                      setShowStudentDropdown((prev) => !prev);
-                      setShowCohortDropdown(false);
-                    }}
-                    disabled={isAdding}
-                    accessibilityRole="button"
-                    accessibilityLabel="Pilih praktikan dari dropdown"
                   >
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={[styles.selectorPrimary, { color: colors.textPrimary }]}
-                        numberOfLines={1}
-                      >
-                        {selectedCandidates.length > 0
-                          ? `${selectedCandidates.length} praktikan dipilih`
-                          : 'Pilih nama praktikan'}
-                      </Text>
-                      <Text style={[styles.selectorSecondary, { color: colors.textSecondary }]}>
-                        {cohortCandidates.length} tersedia
-                        {cohortFilter !== 'Semua Angkatan' ? ` · Angkatan ${cohortFilter}` : ''}
-                      </Text>
-                    </View>
-                    <Text style={{ color: colors.actionPrimary, fontSize: 12, fontWeight: '700' }}>
-                      {showStudentDropdown ? 'Tutup ▲' : 'Pilih ▼'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {showStudentDropdown ? (
-                    <View
+                    <Text
                       style={[
-                        styles.dropdownMenu,
-                        { borderColor: colors.border, backgroundColor: colors.surface },
+                        styles.dropChipText,
+                        { color: selected ? colors.pacificDark : colors.textPrimary },
                       ]}
                     >
-                      {cohortCandidates.length === 0 ? (
-                        <Text
-                          style={[
-                            styles.emptyText,
-                            { color: colors.textSecondary, padding: 12 },
-                          ]}
-                        >
-                          Tidak ada praktikan tersedia untuk filter angkatan ini atau semua sudah
-                          terdaftar.
-                        </Text>
-                      ) : (
-                        <>
-                          <View
-                            style={[
-                              styles.dropdownToolbar,
-                              {
-                                borderBottomColor: colors.border,
-                                backgroundColor: colors.surfaceMuted,
-                              },
-                            ]}
-                          >
-                            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                              {cohortCandidates.length} praktikan
-                            </Text>
-                            <TouchableOpacity
-                              onPress={toggleSelectAllCohort}
-                              disabled={isAdding}
-                              accessibilityRole="button"
-                            >
-                              <Text
-                                style={{
-                                  color: colors.actionPrimary,
-                                  fontSize: 12,
-                                  fontWeight: '700',
-                                }}
-                              >
-                                {allCohortSelected ? 'Batal Semua' : 'Pilih Semua'}
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
+                      {cohort}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
 
-                          <ScrollView
-                            style={styles.studentDropdownScroll}
-                            nestedScrollEnabled
-                            keyboardShouldPersistTaps="handled"
-                          >
-                            {cohortCandidates.map((item) => {
-                              const isSelected = selectedUserIds.includes(item.userId);
-                              const cohort = extractCohortYear(item.identifier);
-                              const otherClasses = getOtherEnrolledClasses(item.userId);
-
-                              return (
-                                <TouchableOpacity
-                                  key={item.userId}
-                                  style={[
-                                    styles.checkboxOption,
-                                    {
-                                      borderBottomColor: colors.border,
-                                      backgroundColor: isSelected
-                                        ? colors.surfaceMuted
-                                        : 'transparent',
-                                    },
-                                  ]}
-                                  onPress={() => toggleCandidateSelection(item.userId)}
-                                  disabled={isAdding}
-                                  accessibilityRole="checkbox"
-                                  accessibilityState={{ checked: isSelected }}
-                                  accessibilityLabel={`Pilih ${item.displayName}`}
-                                >
-                                  <View
-                                    style={[
-                                      styles.checkboxBox,
-                                      {
-                                        borderColor: isSelected
-                                          ? colors.actionPrimary
-                                          : colors.border,
-                                        backgroundColor: isSelected
-                                          ? colors.actionPrimary
-                                          : 'transparent',
-                                      },
-                                    ]}
-                                  >
-                                    {isSelected ? <Text style={styles.checkboxMark}>✓</Text> : null}
-                                  </View>
-
-                                  <View style={{ flex: 1, gap: 2 }}>
-                                    <Text
-                                      style={[styles.checkboxName, { color: colors.textPrimary }]}
-                                      numberOfLines={1}
-                                    >
-                                      {item.displayName}
-                                    </Text>
-                                    <Text
-                                      style={[styles.memberNIM, { color: colors.textSecondary }]}
-                                      numberOfLines={1}
-                                    >
-                                      {item.identifier} ·{' '}
-                                      {cohort ? `Angkatan ${cohort}` : 'Angkatan -'}
-                                    </Text>
-                                    {otherClasses.length > 0 ? (
-                                      <Text style={styles.otherClassHint} numberOfLines={1}>
-                                        Terdaftar di{' '}
-                                        {otherClasses.map((c) => c.className).join(', ')}
-                                      </Text>
-                                    ) : null}
-                                  </View>
-                                </TouchableOpacity>
-                              );
-                            })}
-                          </ScrollView>
-                        </>
-                      )}
-                    </View>
-                  ) : null}
-
-                  {selectedCandidates.length > 0 ? (
-                    <View style={styles.batchActionRow}>
-                      <TouchableOpacity
-                        style={[
-                          styles.batchAddBtn,
-                          { backgroundColor: colors.actionPrimary },
-                        ]}
-                        onPress={handleAddSelected}
-                        disabled={isAdding}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Tambahkan ${selectedCandidates.length} praktikan terpilih`}
-                      >
-                        {addingBatch ? (
-                          <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                          <Text style={styles.batchAddText}>
-                            Tambahkan {selectedCandidates.length} Praktikan
-                          </Text>
-                        )}
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.resetBtn, { borderColor: colors.border }]}
-                        onPress={() => setSelectedUserIds([])}
-                        disabled={isAdding}
-                        accessibilityRole="button"
-                      >
-                        <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600' }}>
-                          Reset
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : null}
-                </View>
-
-                {/* 3. Opsi Cari Berdasarkan Nama atau NIM */}
-                <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
-                <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-                    Atau Cari Nama / NIM
-                  </Text>
-                  <View
+        {activeDropdown === 'class' ? (
+          <View
+            style={[
+              styles.inlineDropdown,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <ScrollView style={{ maxHeight: 160 }} nestedScrollEnabled>
+              {classFilterOptions.map((opt) => {
+                const selected = opt.value === classFilter;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    onPress={() => {
+                      setClassFilter(opt.value);
+                      setActiveDropdown(null);
+                    }}
                     style={[
-                      styles.searchInputRow,
-                      { borderColor: colors.border, backgroundColor: colors.surface },
+                      styles.dropOptionRow,
+                      {
+                        backgroundColor: selected ? colors.pacificSoft : 'transparent',
+                        borderBottomColor: colors.border,
+                      },
                     ]}
                   >
-                    <TextInput
-                      style={[styles.searchInput, { color: colors.textPrimary }]}
-                      placeholder="Cari nama atau NIM praktikan..."
-                      placeholderTextColor={colors.textSecondary}
-                      value={searchQuery}
-                      onChangeText={(value) => {
-                        setSearchQuery(value);
-                        setAddError('');
-                        if (value.trim().length > 0) {
-                          setShowCohortDropdown(false);
-                          setShowStudentDropdown(false);
-                        }
-                      }}
-                      editable={!isAdding}
-                      accessibilityLabel="Cari nama atau NIM praktikan"
-                    />
-                    {searchQuery.length > 0 ? (
-                      <TouchableOpacity
-                        onPress={() => setSearchQuery('')}
-                        style={styles.clearInputBtn}
-                        accessibilityLabel="Hapus pencarian"
-                      >
-                        <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '700' }}>
-                          ✕
-                        </Text>
-                      </TouchableOpacity>
-                    ) : null}
+                    <Text
+                      style={[
+                        styles.dropOptionText,
+                        { color: selected ? colors.pacificDark : colors.textPrimary },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {opt.label}
+                    </Text>
+                    {selected ? <Check size={14} color={colors.pacific} strokeWidth={2.5} /> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        ) : null}
+
+        <View style={styles.countHeader}>
+          <Text style={[styles.countText, { color: colors.textSecondary }]}>
+            {filteredCandidates.length} mahasiswa ditemukan
+          </Text>
+          {filteredCandidates.length > 0 ? (
+            <Pressable accessibilityRole="button" onPress={toggleSelectAllFiltered}>
+              <Text style={[styles.selectAllText, { color: colors.baltic }]}>
+                {allFilteredSelected ? 'Batal semua' : 'Pilih semua'}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+
+        {addError ? (
+          <View
+            style={[
+              styles.errorBox,
+              { backgroundColor: colors.rosySoft, borderColor: colors.rosyBorder },
+            ]}
+          >
+            <Text style={[styles.errorText, { color: colors.rosyDark }]}>{addError}</Text>
+          </View>
+        ) : null}
+
+        {loadingCandidates ? (
+          <RowListSkeleton count={4} label="Memuat daftar praktikan" />
+        ) : candidatesError ? (
+          <Text style={[styles.errorText, { color: colors.rosyDark }]}>{candidatesError}</Text>
+        ) : filteredCandidates.length === 0 ? (
+          <View
+            style={[
+              styles.emptyBox,
+              { backgroundColor: colors.background, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              Tidak ada calon praktikan yang sesuai filter.
+            </Text>
+          </View>
+        ) : (
+          <ScrollView
+            style={styles.candidateScroll}
+            contentContainerStyle={styles.candidateList}
+            showsVerticalScrollIndicator={false}
+          >
+            {filteredCandidates.map((student) => {
+              const checked = selectedUserIds.includes(student.userId);
+              const year = extractCohortYear(student.identifier) ?? '-';
+              const clsTag = getCandidateClassTag(student.userId);
+
+              return (
+                <Pressable
+                  key={student.userId}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked }}
+                  onPress={() => toggleCandidate(student.userId)}
+                  style={({ pressed }) => [
+                    styles.candidateRow,
+                    {
+                      backgroundColor: checked ? colors.pacificSoft : colors.background,
+                      borderColor: checked ? colors.pacific : colors.border,
+                      borderWidth: checked ? 1.5 : 1,
+                    },
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.checkbox,
+                      {
+                        backgroundColor: checked ? colors.pacific : colors.surface,
+                        borderColor: checked ? colors.pacific : colors.borderStrong,
+                      },
+                    ]}
+                  >
+                    {checked ? <Check size={13} color="#FCFCFA" strokeWidth={3} /> : null}
                   </View>
 
-                  {trimmedSearchQuery.length > 0 ? (
-                    searchCandidates.length === 0 ? (
-                      <Text
-                        style={[
-                          styles.emptyText,
-                          { color: colors.textSecondary, paddingVertical: 8 },
-                        ]}
-                      >
-                        Tidak ada praktikan cocok dengan &quot;{trimmedSearchQuery}&quot; atau sudah
-                        terdaftar di kelas ini.
-                      </Text>
-                    ) : (
-                      <>
-                        <Text style={[styles.resultHint, { color: colors.textSecondary }]}>
-                          {searchCandidates.length} hasil pencarian — ketuk untuk menambahkan:
-                        </Text>
-                        <ScrollView
-                          style={styles.candidateList}
-                          nestedScrollEnabled
-                          keyboardShouldPersistTaps="handled"
-                        >
-                          {searchCandidates.map((item) => {
-                            const cohort = extractCohortYear(item.identifier);
-                            const otherClasses = getOtherEnrolledClasses(item.userId);
-                            const isAddingThis = addingUserId === item.userId;
-
-                            return (
-                              <TouchableOpacity
-                                key={item.userId}
-                                style={[
-                                  styles.candidateRow,
-                                  { borderColor: colors.border, backgroundColor: colors.surface },
-                                ]}
-                                onPress={() => handleSelectCandidate(item)}
-                                disabled={isAdding}
-                                accessibilityRole="button"
-                                accessibilityLabel={`Tambahkan ${item.displayName}`}
-                              >
-                                <View style={{ flex: 1, gap: 3 }}>
-                                  <Text style={[styles.memberName, { color: colors.textPrimary }]}>
-                                    {item.displayName}
-                                  </Text>
-                                  <Text style={[styles.memberNIM, { color: colors.textSecondary }]}>
-                                    {item.identifier} ·{' '}
-                                    {cohort ? `Angkatan ${cohort}` : 'Angkatan -'}
-                                  </Text>
-                                  <View
-                                    style={[
-                                      styles.statusBadge,
-                                      {
-                                        backgroundColor:
-                                          otherClasses.length > 0
-                                            ? 'rgba(245, 158, 11, 0.15)'
-                                            : colors.surfaceMuted,
-                                        borderColor:
-                                          otherClasses.length > 0 ? '#d97706' : colors.border,
-                                      },
-                                    ]}
-                                  >
-                                    <Text
-                                      style={[
-                                        styles.statusBadgeText,
-                                        {
-                                          color:
-                                            otherClasses.length > 0
-                                              ? '#b45309'
-                                              : colors.textSecondary,
-                                        },
-                                      ]}
-                                      numberOfLines={1}
-                                    >
-                                      {otherClasses.length > 0
-                                        ? `Terdaftar di ${otherClasses.map((c) => c.className).join(', ')}`
-                                        : 'Belum terdaftar di kelas lain'}
-                                    </Text>
-                                  </View>
-                                </View>
-
-                                <View style={styles.tapAddPill}>
-                                  {isAddingThis ? (
-                                    <ActivityIndicator size="small" color={colors.actionPrimary} />
-                                  ) : (
-                                    <Text
-                                      style={{
-                                        color: colors.actionPrimary,
-                                        fontWeight: '700',
-                                        fontSize: 12,
-                                      }}
-                                    >
-                                      + Tambah
-                                    </Text>
-                                  )}
-                                </View>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </ScrollView>
-                      </>
-                    )
-                  ) : null}
-                </View>
-              </ScrollView>
-            )}
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={[styles.addNewButton, { borderColor: colors.actionPrimary }]}
-            onPress={() => {
-              setLoadingCandidates(true);
-              setCandidatesError('');
-              setShowSearchPicker(true);
-            }}
-            disabled={loading || Boolean(removingMemberId)}
-          >
-            <Text style={[styles.addNewText, { color: colors.actionPrimary }]}>
-              + Tambah Praktikan
-            </Text>
-          </TouchableOpacity>
+                  <View style={styles.candidateInfo}>
+                    <Text
+                      style={[styles.candidateName, { color: colors.textPrimary }]}
+                      numberOfLines={1}
+                    >
+                      {student.displayName}
+                    </Text>
+                    <Text
+                      style={[styles.candidateMeta, { color: colors.textSecondary }]}
+                      numberOfLines={1}
+                    >
+                      {student.identifier} · {year} · {clsTag}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         )}
 
-        {loading ? (
-          <RowListSkeleton count={4} label="Memuat daftar anggota kelas" />
-        ) : loadError ? (
-          <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{loadError}</Text>
-            <TouchableOpacity
-              style={[styles.retryBtn, { borderColor: colors.actionPrimary }]}
-              onPress={() => {
-                setLoading(true);
-                setLoadError('');
-                setReloadKey((value) => value + 1);
-              }}
+        <Pressable
+          accessibilityRole="button"
+          disabled={addingBatch || selectedValidCandidates.length === 0}
+          onPress={() => void handleBatchAdd()}
+          style={({ pressed }) => [
+            styles.primaryBtn,
+            {
+              backgroundColor:
+                selectedValidCandidates.length === 0 ? colors.disabledSurface : colors.rosy,
+            },
+            pressed && selectedValidCandidates.length > 0 && styles.pressed,
+          ]}
+        >
+          {addingBatch ? (
+            <ActivityIndicator size="small" color="#FCFCFA" />
+          ) : (
+            <Text
+              style={[
+                styles.primaryBtnText,
+                selectedValidCandidates.length === 0 && { color: colors.disabledText },
+              ]}
             >
-              <Text style={{ color: colors.actionPrimary, fontWeight: '700' }}>Coba lagi</Text>
-            </TouchableOpacity>
-          </View>
-        ) : members.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              Belum ada praktikan terdaftar di kelas ini.
+              {selectedValidCandidates.length > 0
+                ? `Tambahkan ${selectedValidCandidates.length} Praktikan`
+                : 'Pilih Praktikan'}
             </Text>
-          </View>
-        ) : (
-          <FlatList
-            data={members}
-            keyExtractor={(item) => item.userId}
-            style={{ maxHeight: showSearchPicker ? 150 : 340 }}
-            renderItem={({ item }) => (
-              <View style={[styles.memberRow, { borderBottomColor: colors.border }]}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.memberName, { color: colors.textPrimary }]}>
-                    {item.displayName}
-                  </Text>
-                  <Text style={[styles.memberNIM, { color: colors.textSecondary }]}>
-                    {item.identifier}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.removeBtn}
-                  onPress={() => handleRemove(item)}
-                  disabled={Boolean(removingMemberId)}
-                >
-                  <Text style={styles.removeText}>
-                    {removingMemberId === item.userId ? 'Menghapus...' : 'Hapus'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          />
-        )}
+          )}
+        </Pressable>
       </View>
-    </KeyboardAvoidingView>
+    );
+  }
+
+  return (
+    <View style={styles.sheetBody}>
+      <View
+        style={[
+          styles.searchBox,
+          { backgroundColor: colors.background, borderColor: colors.border },
+        ]}
+      >
+        <Search size={15} color={colors.textSubtle} strokeWidth={2} />
+        <TextInput
+          value={memberSearch}
+          onChangeText={setMemberSearch}
+          placeholder="Cari nama atau NIM..."
+          placeholderTextColor={colors.textSubtle}
+          style={[styles.searchInput, { color: colors.textPrimary }]}
+        />
+      </View>
+
+      {feedback ? (
+        <View
+          style={[
+            styles.feedbackBox,
+            { backgroundColor: colors.pacificSoft, borderColor: colors.pacificLight },
+          ]}
+        >
+          <Text style={[styles.feedbackText, { color: colors.pacificDark }]}>{feedback}</Text>
+        </View>
+      ) : null}
+
+      {loadingMembers ? (
+        <RowListSkeleton count={4} label="Memuat anggota kelas" />
+      ) : membersError ? (
+        <View
+          style={[
+            styles.emptyBox,
+            { backgroundColor: colors.background, borderColor: colors.border },
+          ]}
+        >
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{membersError}</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setLoadingMembers(true);
+              setMembersError('');
+              setReloadTick((t) => t + 1);
+            }}
+            style={({ pressed }) => [
+              styles.retryPill,
+              { backgroundColor: colors.balticSoft },
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={[styles.retryText, { color: colors.baltic }]}>Coba lagi</Text>
+          </Pressable>
+        </View>
+      ) : filteredMembers.length === 0 ? (
+        <View
+          style={[
+            styles.emptyBox,
+            { backgroundColor: colors.background, borderColor: colors.border },
+          ]}
+        >
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+            {members.length === 0
+              ? 'Belum ada praktikan terdaftar di kelas ini.'
+              : 'Tidak ada anggota yang cocok.'}
+          </Text>
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.membersScroll}
+          contentContainerStyle={styles.membersList}
+          showsVerticalScrollIndicator={false}
+        >
+          {filteredMembers.map((member) => (
+            <View
+              key={member.userId}
+              style={[styles.memberRow, { backgroundColor: colors.background }]}
+            >
+              <Text style={[styles.memberName, { color: colors.textPrimary }]} numberOfLines={1}>
+                {member.displayName}
+              </Text>
+              <View style={styles.memberRight}>
+                <Text style={[styles.memberNim, { color: colors.textSubtle }]}>
+                  {member.identifier}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Keluarkan ${member.displayName}`}
+                  disabled={removingId === member.userId}
+                  onPress={() => handleRemoveMember(member)}
+                  style={({ pressed }) => [
+                    styles.removeIconBtn,
+                    { backgroundColor: colors.rosySoft },
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Trash2 size={13} color={colors.rosyDark} strokeWidth={2} />
+                </Pressable>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+
+      {fetchStudentCandidates ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            setFeedback('');
+            setAddError('');
+            setLoadingCandidates(true);
+            setMode('add');
+          }}
+          style={({ pressed }) => [
+            styles.addTriggerBtn,
+            { backgroundColor: colors.pacificSoft },
+            pressed && styles.pressed,
+          ]}
+        >
+          <Plus size={16} color={colors.pacificDark} strokeWidth={2.4} />
+          <Text style={[styles.addTriggerText, { color: colors.pacificDark }]}>
+            Tambah Praktikan
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -886,298 +734,269 @@ export function ClassMembersModal({
   onAddMember,
   onRemoveMember,
 }: ClassMembersModalProps) {
-  if (!visible || !practicumClass) return null;
-
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <ClassMembersContent
-        key={practicumClass.id}
-        practicumClass={practicumClass}
-        allClasses={allClasses}
-        onClose={onClose}
-        fetchMembers={fetchMembers}
-        fetchStudentCandidates={fetchStudentCandidates}
-        onAddMember={onAddMember}
-        onRemoveMember={onRemoveMember}
-      />
-    </Modal>
+    <FlyAwayBottomSheet
+      visible={visible && Boolean(practicumClass)}
+      onClose={onClose}
+      title={practicumClass ? `Anggota (${practicumClass.memberCount ?? practicumClass.memberUids?.length ?? 0})` : 'Anggota Kelas'}
+      subtitle={
+        practicumClass
+          ? `${practicumClass.courseName} · ${practicumClass.className}`
+          : undefined
+      }
+      maxHeight="88%"
+    >
+      {practicumClass ? (
+        <ClassMembersContent
+          key={practicumClass.id}
+          practicumClass={practicumClass}
+          allClasses={allClasses}
+          fetchMembers={fetchMembers}
+          fetchStudentCandidates={fetchStudentCandidates}
+          onAddMember={onAddMember}
+          onRemoveMember={onRemoveMember}
+        />
+      ) : null}
+    </FlyAwayBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
+  sheetBody: {
+    gap: 12,
+    paddingBottom: 6,
   },
-  container: {
-    width: '100%',
-    maxWidth: 520,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 20,
-    maxHeight: '90%',
-  },
-  header: {
+  backLink: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 14,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  subtitle: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  closeBtn: {
-    padding: 6,
-  },
-  addNewButton: {
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderRadius: 8,
-    paddingVertical: 10,
     alignItems: 'center',
-    marginBottom: 14,
+    gap: 6,
+    alignSelf: 'flex-start',
   },
-  addNewText: {
-    fontWeight: '700',
-    fontSize: 14,
+  backLinkText: {
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 12.5,
   },
-  searchPanel: {
+  searchBox: {
+    height: 42,
+    borderRadius: 21,
     borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 14,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
-  searchPanelScroll: {
-    maxHeight: 380,
+  searchInput: {
+    flex: 1,
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 13,
+    paddingVertical: 0,
   },
-  searchPanelContent: {
-    gap: 10,
-  },
-  searchHeader: {
+  dualFilterRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 8,
+  },
+  filterBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  formTitle: {
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  errorText: {
-    color: '#ef4444',
-    fontSize: 12,
-  },
-  successText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  fieldGroup: {
+    justifyContent: 'space-between',
     gap: 6,
   },
-  fieldLabel: {
+  filterPrefix: {
+    fontFamily: FontFamily.sansRegular,
     fontSize: 12,
-    fontWeight: '600',
+    flex: 1,
   },
-  selectorButton: {
+  filterValue: {
+    fontFamily: FontFamily.sansBold,
+  },
+  inlineDropdown: {
+    borderRadius: 16,
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    padding: 10,
+  },
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  dropChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+  },
+  dropChipText: {
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 12,
+  },
+  dropOptionRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 9,
+    paddingHorizontal: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  dropOptionText: {
+    fontFamily: FontFamily.sansMedium,
+    fontSize: 12.5,
+    flex: 1,
+  },
+  countHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  countText: {
+    fontFamily: FontFamily.sansMedium,
+    fontSize: 12,
+  },
+  selectAllText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 12.5,
+  },
+  candidateScroll: {
+    maxHeight: 270,
+  },
+  candidateList: {
     gap: 8,
   },
-  selectorPrimary: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  selectorSecondary: {
-    fontSize: 11,
-    marginTop: 1,
-  },
-  dropdownMenu: {
-    borderWidth: 1,
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  cohortDropdownScroll: {
-    maxHeight: 160,
-  },
-  dropdownOption: {
+  candidateRow: {
+    borderRadius: 16,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  dropdownToolbar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  studentDropdownScroll: {
-    maxHeight: 180,
-  },
-  checkboxOption: {
+    paddingVertical: 11,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 10,
+    gap: 11,
   },
-  checkboxBox: {
-    width: 20,
-    height: 20,
-    borderRadius: 5,
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 7,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkboxMark: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '800',
-    lineHeight: 14,
-  },
-  checkboxName: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  otherClassHint: {
-    color: '#b45309',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  batchActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 2,
-  },
-  batchAddBtn: {
+  candidateInfo: {
     flex: 1,
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    gap: 2,
+  },
+  candidateName: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 13.5,
+  },
+  candidateMeta: {
+    fontFamily: FontFamily.monoMedium,
+    fontSize: 11.5,
+    fontVariant: ['tabular-nums'],
+  },
+  primaryBtn: {
+    height: 46,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  batchAddText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '700',
+  primaryBtnText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 13.5,
+    color: '#FCFCFA',
   },
-  resetBtn: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+  membersScroll: {
+    maxHeight: 280,
   },
-  sectionDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginVertical: 2,
-  },
-  searchInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 8,
-    fontSize: 13,
-  },
-  clearInputBtn: {
-    paddingLeft: 8,
-    paddingVertical: 6,
-  },
-  candidateState: {
-    paddingVertical: 16,
-    alignItems: 'center',
+  membersList: {
     gap: 8,
   },
-  resultHint: {
-    fontSize: 12,
-  },
-  candidateList: {
-    maxHeight: 160,
-  },
-  candidateRow: {
+  memberRow: {
+    borderRadius: 14,
+    paddingHorizontal: 13,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 8,
+    justifyContent: 'space-between',
     gap: 10,
   },
-  statusBadge: {
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginTop: 2,
+  memberName: {
+    flex: 1,
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 13.5,
   },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  tapAddPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-  emptyContainer: {
-    paddingVertical: 32,
+  memberRight: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+  },
+  memberNim: {
+    fontFamily: FontFamily.monoMedium,
+    fontSize: 12,
+    fontVariant: ['tabular-nums'],
+  },
+  removeIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addTriggerBtn: {
+    height: 46,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  addTriggerText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 13.5,
+  },
+  feedbackBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  feedbackText: {
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 12,
+  },
+  errorBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  errorText: {
+    fontFamily: FontFamily.sansMedium,
+    fontSize: 12,
+  },
+  emptyBox: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 18,
+    alignItems: 'center',
+    gap: 8,
   },
   emptyText: {
+    fontFamily: FontFamily.sansRegular,
     fontSize: 13,
     textAlign: 'center',
   },
-  retryBtn: {
-    borderWidth: 1,
-    borderRadius: 6,
+  retryPill: {
+    borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginTop: 4,
+    paddingVertical: 7,
   },
-  memberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-  },
-  memberName: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  memberNIM: {
+  retryText: {
+    fontFamily: FontFamily.sansBold,
     fontSize: 12,
-    marginTop: 2,
   },
-  removeBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 4,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-  },
-  removeText: {
-    color: '#ef4444',
-    fontSize: 12,
-    fontWeight: '600',
+  pressed: {
+    opacity: 0.78,
   },
 });
