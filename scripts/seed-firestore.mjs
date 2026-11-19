@@ -9,6 +9,7 @@ import {
   addDoc,
   arrayUnion,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -40,14 +41,14 @@ const SEED_ACCOUNTS = [
     password: SEED_PASSWORD,
     displayName: 'Galang Bintang',
     role: 'assistant',
-    identifier: 'AS-202401',
+    identifier: '2402030101',
   },
   {
     email: 'asisten2@praktikum.ac.id',
     password: SEED_PASSWORD,
     displayName: 'Anintya Abhi',
     role: 'assistant',
-    identifier: 'AS-202402',
+    identifier: '2402030102',
   },
   {
     email: 'praktikan1@praktikum.ac.id',
@@ -75,10 +76,6 @@ const SEED_PRACTICUM_COURSES = [
   { courseName: 'Dasar Sistem', className: 'Kelas A', lab: 'Lab Arsitektur Komputer' },
   { courseName: 'Dasar Pemrograman', className: 'Kelas A', lab: 'Lab Dasar Komputasi' },
 ];
-
-function isPermissionDenied(error) {
-  return typeof error === 'object' && error !== null && error.code === 'permission-denied';
-}
 
 async function ensureAccount(auth, db, account) {
   let credential;
@@ -159,7 +156,6 @@ async function main() {
       existingClassesSnap.docs.map((d) => [d.data().practicumName, { id: d.id, ...d.data() }]),
     );
 
-    let rulesWarningLogged = false;
     const seededClasses = [];
 
     console.log('2. Membuat / memverifikasi 8 mata kuliah praktikum...');
@@ -170,76 +166,55 @@ async function main() {
       let classState = 'existing';
 
       if (!classId) {
-        const baseClassPayload = {
+        const docRef = await addDoc(collection(db, 'classes'), {
           practicumName: course.courseName,
           className: course.className,
           lab: course.lab,
           assistantIds,
+          memberUids: students.map((s) => s.identifier),
           createdBy: primaryAssistant.uid,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
-        };
-
-        try {
-          const docRef = await addDoc(collection(db, 'classes'), {
-            ...baseClassPayload,
-            memberUids: students.map((s) => s.identifier),
-          });
-          classId = docRef.id;
-          classState = 'created';
-        } catch (error) {
-          if (!isPermissionDenied(error)) throw error;
-          if (!rulesWarningLogged) {
-            console.warn(
-              '   [Catatan] firestore.rules di server belum mengizinkan memberUids/NIM-as-memberId; fallback ke format rules lama.',
-            );
-            rulesWarningLogged = true;
-          }
-          const docRef = await addDoc(collection(db, 'classes'), baseClassPayload);
-          classId = docRef.id;
-          classState = 'created (legacy-rules)';
-        }
+        });
+        classId = docRef.id;
+        classState = 'created';
       }
 
-      // Tambahkan kedua praktikan sebagai anggota kelas
+      // Sinkronkan kedua praktikan sebagai anggota kelas berbasis NIM & bersihkan member UID lama bila ada
       for (const student of students) {
         const nimDocRef = doc(db, 'classes', classId, 'members', student.identifier);
         const uidDocRef = doc(db, 'classes', classId, 'members', student.uid);
-        const nimExists = (await getDoc(nimDocRef)).exists();
+        const [nimSnap, uidSnap] = await Promise.all([getDoc(nimDocRef), getDoc(uidDocRef)]);
 
-        if (!nimExists) {
-          try {
-            const batch = writeBatch(db);
-            batch.set(nimDocRef, {
-              userId: student.identifier,
-              role: 'student',
-              displayName: student.displayName,
-              identifier: student.identifier,
-              joinedAt: serverTimestamp(),
-            });
-            batch.update(doc(db, 'classes', classId), {
+        if (!nimSnap.exists()) {
+          const batch = writeBatch(db);
+          batch.set(nimDocRef, {
+            userId: student.identifier,
+            role: 'student',
+            displayName: student.displayName,
+            identifier: student.identifier,
+            joinedAt: serverTimestamp(),
+          });
+          batch.update(doc(db, 'classes', classId), {
+            memberUids: arrayUnion(student.identifier),
+            updatedAt: serverTimestamp(),
+          });
+          if (uidSnap.exists() && student.uid !== student.identifier) {
+            batch.delete(uidDocRef);
+          }
+          await batch.commit();
+        } else {
+          if (nimSnap.data().displayName !== student.displayName) {
+            await updateDoc(nimDocRef, { displayName: student.displayName });
+          }
+          if (!existing?.memberUids?.includes(student.identifier)) {
+            await updateDoc(doc(db, 'classes', classId), {
               memberUids: arrayUnion(student.identifier),
               updatedAt: serverTimestamp(),
             });
-            await batch.commit();
-          } catch (error) {
-            if (!isPermissionDenied(error)) throw error;
-            if (!rulesWarningLogged) {
-              console.warn(
-                '   [Catatan] firestore.rules di server belum di-deploy dengan NIM memberId; fallback ke member UID auth.',
-              );
-              rulesWarningLogged = true;
-            }
-            const uidExists = (await getDoc(uidDocRef)).exists();
-            if (!uidExists) {
-              await setDoc(uidDocRef, {
-                userId: student.uid,
-                role: 'student',
-                displayName: student.displayName,
-                identifier: student.identifier,
-                joinedAt: serverTimestamp(),
-              });
-            }
+          }
+          if (uidSnap.exists() && student.uid !== student.identifier) {
+            await deleteDoc(uidDocRef);
           }
         }
       }
