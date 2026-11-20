@@ -8,7 +8,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { ChevronDown, Plus } from 'lucide-react-native';
+import { ChevronDown, Plus, Trash2 } from 'lucide-react-native';
 
 import { AppHeader, getFirstName } from '@/components/ui/app-header';
 import { PickerBottomSheet, type PickerOption } from '@/components/ui/picker-bottom-sheet';
@@ -22,7 +22,7 @@ import { FSM_UNDIP_LABS } from '@/features/labs/fsm-undip-labs';
 import { type StoredLab, useLabs } from '@/features/labs/firestore-labs';
 import { usePracticum } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { showAlert } from '@/lib/cross-platform-alert';
+import { confirmAction, showAlert } from '@/lib/cross-platform-alert';
 
 type MasterLabItem = {
   id: string;
@@ -45,17 +45,27 @@ export default function MasterLabScreen() {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const { user } = useAuth();
   const { classes, sessions, updateClass, openSession } = usePracticum();
-  const { labs: storedLabs, loading: labsLoading, saveLab, seedFsmLabs, syncDefaultLabRadius } = useLabs();
+  const {
+    labs: storedLabs,
+    loading: labsLoading,
+    saveLab,
+    deleteLab,
+    seedFsmLabs,
+    syncDefaultLabRadius,
+  } = useLabs();
 
   const [selectedLabId, setSelectedLabId] = useState<string>('');
   const [labPickerVisible, setLabPickerVisible] = useState(false);
   const [qrVisible, setQrVisible] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const seedStarted = useRef(false);
 
   const labs = useMemo<MasterLabItem[]>(() => {
     const map = new Map<string, MasterLabItem>();
-    DEFAULT_MASTER_LABS.forEach((item) => map.set(item.name.toLowerCase(), item));
+    if (storedLabs.length === 0) {
+      DEFAULT_MASTER_LABS.forEach((item) => map.set(item.name.toLowerCase(), item));
+    }
 
     classes.forEach((cls) => {
       const labName = cls.lab?.trim();
@@ -117,6 +127,14 @@ export default function MasterLabScreen() {
   );
   const [draftCode, setDraftCode] = useState(activeLab?.roomCode ?? 'LAB-IF-202');
   const [draftCapacity, setDraftCapacity] = useState(activeLab?.capacity ?? '32 kursi');
+  const [draftLatitude, setDraftLatitude] = useState(String(FSM_UNDIP_LABS[0].latitude));
+  const [draftLongitude, setDraftLongitude] = useState(String(FSM_UNDIP_LABS[0].longitude));
+  const [draftRadius, setDraftRadius] = useState(String(FSM_UNDIP_LABS[0].radiusMeters));
+
+  const resolveLabLocation = (labId: string) =>
+    storedLabs.find((lab) => lab.id === labId) ??
+    FSM_UNDIP_LABS.find((lab) => lab.id === labId) ??
+    FSM_UNDIP_LABS[0];
 
   const syncFormToLab = (lab: MasterLabItem) => {
     setSelectedLabId(lab.id);
@@ -124,6 +142,10 @@ export default function MasterLabScreen() {
     setDraftBuilding(lab.buildingFloor);
     setDraftCode(lab.roomCode);
     setDraftCapacity(lab.capacity);
+    const location = resolveLabLocation(lab.id);
+    setDraftLatitude(String(location.latitude));
+    setDraftLongitude(String(location.longitude));
+    setDraftRadius(String(location.radiusMeters));
   };
 
   const handleAddNewLab = () => {
@@ -132,12 +154,31 @@ export default function MasterLabScreen() {
     setDraftBuilding('Gedung Informatika Lt. 2');
     setDraftCode('LAB-BARU-01');
     setDraftCapacity('32 kursi');
+    setDraftLatitude(String(FSM_UNDIP_LABS[0].latitude));
+    setDraftLongitude(String(FSM_UNDIP_LABS[0].longitude));
+    setDraftRadius(String(FSM_UNDIP_LABS[0].radiusMeters));
   };
 
   const handleSave = async () => {
     const trimmedName = draftName.trim();
     if (trimmedName.length < 2) {
       showAlert('Nama lab tidak valid', 'Masukkan nama laboratorium minimal 2 karakter.');
+      return;
+    }
+
+    const latitude = Number(draftLatitude.trim().replace(',', '.'));
+    const longitude = Number(draftLongitude.trim().replace(',', '.'));
+    const radiusMeters = Number(draftRadius.trim().replace(',', '.'));
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+      showAlert('Latitude tidak valid', 'Latitude harus berupa angka antara -90 sampai 90.');
+      return;
+    }
+    if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+      showAlert('Longitude tidak valid', 'Longitude harus berupa angka antara -180 sampai 180.');
+      return;
+    }
+    if (!Number.isFinite(radiusMeters) || radiusMeters < 10 || radiusMeters > 500) {
+      showAlert('Radius tidak valid', 'Radius presensi harus antara 10 hingga 500 meter.');
       return;
     }
 
@@ -156,16 +197,15 @@ export default function MasterLabScreen() {
         await updateClass(activeLab.linkedClassId, { lab: trimmedName });
       }
 
-      const fallback = FSM_UNDIP_LABS[0];
       const savedLab: StoredLab = {
         id: nextLab.id,
         name: nextLab.name,
         building: nextLab.buildingFloor.replace(/\s+Lt\.\s*\d+$/, ''),
         floor: Number((nextLab.buildingFloor.match(/Lt\.\s*(\d+)/)?.[1] ?? '')) || null,
         capacity: Number(nextLab.capacity.match(/\d+/)?.[0] ?? '32'),
-        latitude: storedLabs.find((lab) => lab.id === nextLab.id)?.latitude ?? fallback.latitude,
-        longitude: storedLabs.find((lab) => lab.id === nextLab.id)?.longitude ?? fallback.longitude,
-        radiusMeters: storedLabs.find((lab) => lab.id === nextLab.id)?.radiusMeters ?? fallback.radiusMeters,
+        latitude,
+        longitude,
+        radiusMeters,
         isActive: true,
       };
       await saveLab(savedLab, user!.uid);
@@ -175,6 +215,33 @@ export default function MasterLabScreen() {
       showAlert('Gagal menyimpan', err?.message ?? 'Silakan coba lagi.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!activeLab || selectedLabId === 'new') return;
+    if (activeLab.linkedClassId) {
+      showAlert(
+        'Lab masih dipakai kelas',
+        'Ubah lokasi kelas yang terhubung sebelum menghapus laboratorium ini.',
+      );
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      await deleteLab(activeLab.id);
+      const nextLab = labs.find((lab) => lab.id !== activeLab.id);
+      if (nextLab) {
+        syncFormToLab(nextLab);
+      } else {
+        handleAddNewLab();
+      }
+      showAlert('Lab dihapus', `${activeLab.name} berhasil dihapus dari Master Lab.`);
+    } catch (err: any) {
+      showAlert('Gagal menghapus', err?.message ?? 'Silakan coba lagi.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -337,6 +404,44 @@ export default function MasterLabScreen() {
               </View>
             </View>
 
+            <View style={styles.twoCol}>
+              <View style={[styles.fieldGroup, { flex: 1 }]}>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>Latitude</Text>
+                <TextInput
+                  value={draftLatitude}
+                  onChangeText={setDraftLatitude}
+                  keyboardType="numbers-and-punctuation"
+                  placeholder="-7.048237"
+                  placeholderTextColor={colors.textSubtle}
+                  style={[styles.input, styles.coordinateInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+                />
+              </View>
+              <View style={[styles.fieldGroup, { flex: 1 }]}>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>Longitude</Text>
+                <TextInput
+                  value={draftLongitude}
+                  onChangeText={setDraftLongitude}
+                  keyboardType="numbers-and-punctuation"
+                  placeholder="110.440766"
+                  placeholderTextColor={colors.textSubtle}
+                  style={[styles.input, styles.coordinateInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+                />
+              </View>
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Radius presensi (meter)</Text>
+              <TextInput
+                value={draftRadius}
+                onChangeText={setDraftRadius}
+                keyboardType="number-pad"
+                placeholder="10"
+                placeholderTextColor={colors.textSubtle}
+                style={[styles.input, styles.coordinateInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+              />
+              <Text style={[styles.helperText, { color: colors.textSubtle }]}>Batas yang diizinkan: 10–500 meter.</Text>
+            </View>
+
             <View style={[styles.qrStrip, { backgroundColor: colors.balticSoft }]}>
               <View style={styles.qrStripText}>
                 <Text style={[styles.qrStripTitle, { color: colors.textPrimary }]}>
@@ -376,6 +481,34 @@ export default function MasterLabScreen() {
                 <Text style={styles.saveBtnText}>Simpan Perubahan Lab</Text>
               )}
             </Pressable>
+
+            {selectedLabId !== 'new' ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={saving || deleting}
+                onPress={() =>
+                  confirmAction({
+                    title: 'Hapus laboratorium?',
+                    message: `Data ${activeLab?.name ?? 'laboratorium'} akan dihapus dari Master Lab.`,
+                    confirmText: 'Hapus Lab',
+                    destructive: true,
+                    onConfirm: () => void handleDelete(),
+                  })
+                }
+                style={({ pressed }) => [
+                  styles.deleteBtn,
+                  { borderColor: colors.rosyBorder, backgroundColor: colors.rosySoft },
+                  pressed && styles.pressed,
+                ]}
+              >
+                {deleting ? (
+                  <ActivityIndicator size="small" color={colors.rosyDark} />
+                ) : (
+                  <Trash2 size={16} color={colors.rosyDark} strokeWidth={2.3} />
+                )}
+                <Text style={[styles.deleteBtnText, { color: colors.rosyDark }]}>Hapus Laboratorium</Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
       </ScrollView>
@@ -497,6 +630,13 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.sansRegular,
     fontSize: 13.5,
   },
+  coordinateInput: {
+    fontFamily: FontFamily.monoMedium,
+  },
+  helperText: {
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 11.5,
+  },
   twoCol: {
     flexDirection: 'row',
     gap: 10,
@@ -545,6 +685,19 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.sansBold,
     fontSize: 14,
     color: '#FCFCFA',
+  },
+  deleteBtn: {
+    height: 44,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 7,
+  },
+  deleteBtnText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 13,
   },
   pressed: {
     opacity: 0.78,
