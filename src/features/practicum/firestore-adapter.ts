@@ -11,6 +11,10 @@ import {
 } from './types';
 import { PracticumPort } from './port';
 import type { Firestore } from 'firebase/firestore';
+import {
+  dispatchScheduleChangedNotification,
+  dispatchSessionOpenedNotification,
+} from '@/services/notification/push-sender';
 
 function formatTimestamp(ts: any): string {
   if (!ts) return new Date().toISOString();
@@ -75,6 +79,41 @@ function mapSessionDoc(id: string, data: Record<string, any>): PracticumSession 
     createdBy: data.createdBy,
     createdAt: formatTimestamp(data.createdAt),
     updatedAt: formatTimestamp(data.updatedAt),
+  };
+}
+
+function sessionLocationSnapshot(input: CreateSessionInput | UpdateSessionInput): Record<string, unknown> {
+  const values = [
+    input.labId,
+    input.locationName,
+    input.latitude,
+    input.longitude,
+    input.radiusMeters,
+  ];
+  if (values.every((value) => value === undefined)) return {};
+
+  if (
+    typeof input.labId !== 'string' ||
+    input.labId.trim().length === 0 ||
+    typeof input.locationName !== 'string' ||
+    input.locationName.trim().length < 2 ||
+    typeof input.latitude !== 'number' ||
+    !Number.isFinite(input.latitude) ||
+    typeof input.longitude !== 'number' ||
+    !Number.isFinite(input.longitude) ||
+    typeof input.radiusMeters !== 'number' ||
+    !Number.isFinite(input.radiusMeters) ||
+    input.radiusMeters <= 0
+  ) {
+    throw new Error('Snapshot lokasi Master Lab tidak valid. Pilih ulang laboratorium.');
+  }
+
+  return {
+    labId: input.labId.trim(),
+    locationName: input.locationName.trim(),
+    latitude: input.latitude,
+    longitude: input.longitude,
+    radiusMeters: input.radiusMeters,
   };
 }
 
@@ -525,23 +564,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
     const docSnap = await getDoc(doc(db, 'sessions', sessionId));
     if (!docSnap.exists()) return null;
 
-    const data = docSnap.data();
-    return {
-      id: docSnap.id,
-      classId: data.classId,
-      title: data.title ?? '',
-      location: data.location ?? '',
-      startsAt: formatTimestamp(data.startsAt),
-      endsAt: formatTimestamp(data.endsAt),
-      status: data.status,
-      openedBy: data.openedBy,
-      openedAt: data.openedAt ? formatTimestamp(data.openedAt) : undefined,
-      closedBy: data.closedBy,
-      closedAt: data.closedAt ? formatTimestamp(data.closedAt) : undefined,
-      createdBy: data.createdBy,
-      createdAt: formatTimestamp(data.createdAt),
-      updatedAt: formatTimestamp(data.updatedAt),
-    };
+    return mapSessionDoc(docSnap.id, docSnap.data());
   }
 
   subscribeSession(
@@ -564,23 +587,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
               onData(null);
               return;
             }
-            const data = docSnap.data();
-            onData({
-              id: docSnap.id,
-              classId: data.classId,
-              title: data.title ?? '',
-              location: data.location ?? '',
-              startsAt: formatTimestamp(data.startsAt),
-              endsAt: formatTimestamp(data.endsAt),
-              status: data.status,
-              openedBy: data.openedBy,
-              openedAt: data.openedAt ? formatTimestamp(data.openedAt) : undefined,
-              closedBy: data.closedBy,
-              closedAt: data.closedAt ? formatTimestamp(data.closedAt) : undefined,
-              createdBy: data.createdBy,
-              createdAt: formatTimestamp(data.createdAt),
-              updatedAt: formatTimestamp(data.updatedAt),
-            });
+            onData(mapSessionDoc(docSnap.id, docSnap.data()));
           },
           (err) => onError?.(err)
         );
@@ -611,6 +618,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
       classId: input.classId,
       title: input.title,
       location: input.location,
+      ...sessionLocationSnapshot(input),
       startsAt: Timestamp.fromDate(startDate),
       endsAt: Timestamp.fromDate(endDate),
       status: 'scheduled',
@@ -626,6 +634,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
       classId: input.classId,
       title: input.title,
       location: input.location,
+      ...sessionLocationSnapshot(input),
       startsAt: input.startsAt,
       endsAt: input.endsAt,
       status: 'scheduled',
@@ -640,19 +649,20 @@ export class FirestorePracticumAdapter implements PracticumPort {
     const { doc, getDoc, serverTimestamp, Timestamp, updateDoc } = await import('firebase/firestore');
 
     const sessionRef = doc(db, 'sessions', sessionId);
+    const snapshot = await getDoc(sessionRef);
+    if (!snapshot.exists()) {
+      throw new Error('Sesi tidak ditemukan');
+    }
+    const current = snapshot.data();
     const updatePayload: Record<string, any> = {
       updatedAt: serverTimestamp(),
     };
 
     if (input.title !== undefined) updatePayload.title = input.title;
     if (input.location !== undefined) updatePayload.location = input.location;
+    Object.assign(updatePayload, sessionLocationSnapshot(input));
 
     if (input.startsAt !== undefined || input.endsAt !== undefined) {
-      const snap = await getDoc(sessionRef);
-      if (!snap.exists()) {
-        throw new Error('Sesi tidak ditemukan');
-      }
-      const current = snap.data();
       const startDate =
         input.startsAt !== undefined ? new Date(input.startsAt) : parseSessionDate(current.startsAt);
       const endDate =
@@ -670,6 +680,21 @@ export class FirestorePracticumAdapter implements PracticumPort {
     }
 
     await updateDoc(sessionRef, updatePayload);
+
+    const sessionScheduleChanged =
+      (input.location !== undefined && input.location !== current.location) ||
+      (input.labId !== undefined && input.labId !== current.labId) ||
+      (input.startsAt !== undefined && new Date(input.startsAt).getTime() !== parseSessionDate(current.startsAt).getTime()) ||
+      (input.endsAt !== undefined && new Date(input.endsAt).getTime() !== parseSessionDate(current.endsAt).getTime());
+
+    if (sessionScheduleChanged) {
+      void dispatchScheduleChangedNotification({
+        sessionId,
+        classId: current.classId,
+        title: input.title ?? current.title ?? 'Sesi praktikum',
+        location: input.location ?? current.location ?? input.locationName ?? 'Laboratorium',
+      });
+    }
   }
 
   async deleteSession(sessionId: string): Promise<void> {
@@ -725,6 +750,13 @@ export class FirestorePracticumAdapter implements PracticumPort {
       openedBy: assistantId,
       openedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
+    });
+
+    void dispatchSessionOpenedNotification({
+      sessionId,
+      classId: data.classId,
+      title: data.title ?? 'Sesi praktikum',
+      location: data.location ?? data.locationName ?? 'Laboratorium',
     });
   }
 

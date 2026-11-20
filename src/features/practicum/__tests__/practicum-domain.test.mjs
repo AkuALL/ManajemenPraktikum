@@ -37,7 +37,12 @@ test('GA-01 & GA-02: Asisten can create class, add members, and create session',
     {
       classId: newClass.id,
       title: 'Pertemuan 1 - Pengenalan React Native',
-      location: 'Lab 1',
+      location: 'Lab Informatika B',
+      labId: 'lab-informatika-b',
+      locationName: 'Lab Informatika B',
+      latitude: -7.0482375,
+      longitude: 110.440765625,
+      radiusMeters: 10,
       startsAt: '2026-11-20T08:00:00.000Z',
       endsAt: '2026-11-20T10:00:00.000Z',
     },
@@ -47,6 +52,10 @@ test('GA-01 & GA-02: Asisten can create class, add members, and create session',
   assert.equal(session.title, 'Pertemuan 1 - Pengenalan React Native');
   assert.equal(session.status, 'scheduled');
   assert.equal(session.classId, newClass.id);
+  assert.equal(session.labId, 'lab-informatika-b');
+  assert.equal(session.latitude, -7.0482375);
+  assert.equal(session.longitude, 110.440765625);
+  assert.equal(session.radiusMeters, 10);
 });
 
 test('GA-03 & FR-06: Praktikan only sees sessions from classes they are enrolled in', async () => {

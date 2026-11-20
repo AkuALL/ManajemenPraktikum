@@ -182,6 +182,11 @@ service cloud.firestore {
           'classId',
           'title',
           'location',
+          'labId',
+          'locationName',
+          'latitude',
+          'longitude',
+          'radiusMeters',
           'startsAt',
           'endsAt',
           'status',
@@ -207,7 +212,26 @@ service cloud.firestore {
         && request.resource.data.endsAt is timestamp
         && request.resource.data.startsAt < request.resource.data.endsAt
         && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time;
+        && request.resource.data.updatedAt == request.time
+        && validSessionLocationSnapshot();
+    }
+
+    function validSessionLocationSnapshot() {
+      let locationKeys = ['labId', 'locationName', 'latitude', 'longitude', 'radiusMeters'];
+      return !request.resource.data.keys().hasAny(locationKeys)
+        || (request.resource.data.keys().hasAll(locationKeys)
+          && validText(request.resource.data.labId, 1, 160)
+          && validText(request.resource.data.locationName, 2, 120)
+          && request.resource.data.location == request.resource.data.locationName
+          && request.resource.data.latitude is number
+          && request.resource.data.latitude >= -90
+          && request.resource.data.latitude <= 90
+          && request.resource.data.longitude is number
+          && request.resource.data.longitude >= -180
+          && request.resource.data.longitude <= 180
+          && request.resource.data.radiusMeters is number
+          && request.resource.data.radiusMeters >= 1
+          && request.resource.data.radiusMeters <= 500);
     }
 
     function validSessionStatusTransition() {
@@ -231,6 +255,11 @@ service cloud.firestore {
           'classId',
           'title',
           'location',
+          'labId',
+          'locationName',
+          'latitude',
+          'longitude',
+          'radiusMeters',
           'startsAt',
           'endsAt',
           'status',
@@ -251,6 +280,7 @@ service cloud.firestore {
         && request.resource.data.endsAt is timestamp
         && request.resource.data.startsAt < request.resource.data.endsAt
         && request.resource.data.updatedAt == request.time
+        && validSessionLocationSnapshot()
         && validSessionStatusTransition();
     }
 
