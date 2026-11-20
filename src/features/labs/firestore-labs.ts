@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
@@ -74,6 +75,10 @@ export function useLabs() {
     );
   };
 
+  const deleteLab = async (labId: string) => {
+    await deleteDoc(doc(db, 'labs', labId));
+  };
+
   const seedFsmLabs = async (userId: string) => {
     await Promise.all(
       FSM_UNDIP_LABS.map((lab) =>
@@ -115,5 +120,5 @@ export function useLabs() {
     );
   };
 
-  return { labs, loading, error, saveLab, seedFsmLabs, syncDefaultLabRadius };
+  return { labs, loading, error, saveLab, deleteLab, seedFsmLabs, syncDefaultLabRadius };
 }
