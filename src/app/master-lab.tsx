@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -19,6 +19,7 @@ import {
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
 import { FSM_UNDIP_LABS } from '@/features/labs/fsm-undip-labs';
+import { type StoredLab, useLabs } from '@/features/labs/firestore-labs';
 import { usePracticum } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { showAlert } from '@/lib/cross-platform-alert';
@@ -44,12 +45,13 @@ export default function MasterLabScreen() {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const { user } = useAuth();
   const { classes, sessions, updateClass, openSession } = usePracticum();
+  const { labs: storedLabs, loading: labsLoading, saveLab, seedFsmLabs } = useLabs();
 
-  const [customLabs, setCustomLabs] = useState<MasterLabItem[]>([]);
   const [selectedLabId, setSelectedLabId] = useState<string>('');
   const [labPickerVisible, setLabPickerVisible] = useState(false);
   const [qrVisible, setQrVisible] = useState(false);
   const [saving, setSaving] = useState(false);
+  const seedStarted = useRef(false);
 
   const labs = useMemo<MasterLabItem[]>(() => {
     const map = new Map<string, MasterLabItem>();
@@ -76,12 +78,27 @@ export default function MasterLabScreen() {
       }
     });
 
-    customLabs.forEach((lab) => {
-      map.set(lab.name.toLowerCase(), lab);
+    storedLabs.forEach((lab) => {
+      map.set(lab.name.toLowerCase(), {
+        id: lab.id,
+        name: lab.name,
+        buildingFloor: `${lab.building}${lab.floor ? ` Lt. ${lab.floor}` : ''}`,
+        roomCode: lab.id.toUpperCase(),
+        capacity: `${lab.capacity} kursi`,
+      });
     });
 
     return Array.from(map.values());
-  }, [classes, customLabs]);
+  }, [classes, storedLabs]);
+
+  useEffect(() => {
+    if (!labsLoading && storedLabs.length === 0 && user?.role === 'assistant' && !seedStarted.current) {
+      seedStarted.current = true;
+      void seedFsmLabs(user.uid).catch(() => {
+        seedStarted.current = false;
+      });
+    }
+  }, [labsLoading, seedFsmLabs, storedLabs.length, user?.role, user?.uid]);
 
   const activeLab = useMemo(
     () => labs.find((l) => l.id === selectedLabId) ?? labs[0],
@@ -133,10 +150,19 @@ export default function MasterLabScreen() {
         await updateClass(activeLab.linkedClassId, { lab: trimmedName });
       }
 
-      setCustomLabs((prev) => [
-        ...prev.filter((item) => item.id !== nextLab.id),
-        nextLab,
-      ]);
+      const fallback = FSM_UNDIP_LABS[0];
+      const savedLab: StoredLab = {
+        id: nextLab.id,
+        name: nextLab.name,
+        building: nextLab.buildingFloor.replace(/\s+Lt\.\s*\d+$/, ''),
+        floor: Number((nextLab.buildingFloor.match(/Lt\.\s*(\d+)/)?.[1] ?? '')) || null,
+        capacity: Number(nextLab.capacity.match(/\d+/)?.[0] ?? '32'),
+        latitude: storedLabs.find((lab) => lab.id === nextLab.id)?.latitude ?? fallback.latitude,
+        longitude: storedLabs.find((lab) => lab.id === nextLab.id)?.longitude ?? fallback.longitude,
+        radiusMeters: storedLabs.find((lab) => lab.id === nextLab.id)?.radiusMeters ?? fallback.radiusMeters,
+        isActive: true,
+      };
+      await saveLab(savedLab, user!.uid);
       setSelectedLabId(nextLab.id);
       showAlert('Berhasil', 'Perubahan ruang laboratorium disimpan.');
     } catch (err: any) {
