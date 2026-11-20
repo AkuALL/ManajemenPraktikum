@@ -20,6 +20,7 @@ import {
   formatServerTime,
   mapAttendanceError,
   sortAttendanceEntries,
+  validateAttendanceLocationAudit,
   type AttendanceListenerMeta,
   type AttendancePort,
 } from './port';
@@ -64,6 +65,13 @@ function parseAttendanceDoc(
       typeof data.studentIdentifier === 'string' ? data.studentIdentifier : '-',
     attendedAtMs,
     attendedAt: formatServerTime(attendedAtMs, 'datetime'),
+    latitude: typeof data.latitude === 'number' ? data.latitude : undefined,
+    longitude: typeof data.longitude === 'number' ? data.longitude : undefined,
+    accuracy: typeof data.accuracy === 'number' ? data.accuracy : undefined,
+    distanceMeters:
+      typeof data.distanceMeters === 'number' ? data.distanceMeters : undefined,
+    isWithinRadius:
+      typeof data.isWithinRadius === 'boolean' ? data.isWithinRadius : undefined,
     fromCache: meta?.fromCache,
     hasPendingWrites: meta?.hasPendingWrites,
   };
@@ -119,7 +127,7 @@ function subscribeAttendanceQuery(
 }
 
 export const firestoreAttendanceAdapter: AttendancePort = {
-  async submitAttendance({ session, user }) {
+  async submitAttendance({ session, user, location }) {
     if (user.role !== 'student') {
       return {
         ok: false,
@@ -138,6 +146,16 @@ export const firestoreAttendanceAdapter: AttendancePort = {
             : 'Sesi belum dibuka oleh Asisten.',
       };
     }
+
+    const locationCheck = validateAttendanceLocationAudit(location);
+    if (!locationCheck.ok) {
+      return {
+        ok: false,
+        reason: locationCheck.reason,
+        message: locationCheck.message,
+      };
+    }
+    const validLocation = locationCheck.value;
 
     const docId = buildAttendanceDocId(session.id, user.uid);
 
@@ -159,6 +177,11 @@ export const firestoreAttendanceAdapter: AttendancePort = {
         studentName: user.displayName,
         studentIdentifier: user.identifier,
         attendedAt: serverTimestamp(),
+        latitude: validLocation.latitude,
+        longitude: validLocation.longitude,
+        accuracy: validLocation.accuracy,
+        distanceMeters: validLocation.distanceMeters,
+        isWithinRadius: true,
       });
 
       const created = await findExistingAttendance(session.id, user.uid);
@@ -173,6 +196,11 @@ export const firestoreAttendanceAdapter: AttendancePort = {
           studentIdentifier: user.identifier,
           attendedAtMs: null,
           attendedAt: formatServerTime(null, 'datetime'),
+          latitude: validLocation.latitude,
+          longitude: validLocation.longitude,
+          accuracy: validLocation.accuracy,
+          distanceMeters: validLocation.distanceMeters,
+          isWithinRadius: true,
           hasPendingWrites: true,
         },
       };

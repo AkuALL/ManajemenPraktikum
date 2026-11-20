@@ -6,6 +6,7 @@
 
 export * from './session';
 export * from './contracts';
+export * from './sprint3-contracts';
 
 export interface UserIdentity {
   role: import('./session').UserRole;

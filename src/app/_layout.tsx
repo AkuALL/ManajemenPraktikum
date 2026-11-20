@@ -25,8 +25,13 @@ import { LeaveProvider } from '@/features/leave';
 import { RoleTabBar } from '@/features/navigation';
 import { PracticumProvider } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import {
+  configureForegroundNotificationHandler,
+  useNotificationDeepLinking,
+} from '@/services/notification/deep-linking';
 
 void SplashScreen.preventAutoHideAsync();
+configureForegroundNotificationHandler();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -73,6 +78,12 @@ function RoleAwareApp({ backgroundColor }: { backgroundColor: string }) {
   const pathname = usePathname();
   const isScanScreen = pathname === '/scan';
   const containerBg = isScanScreen ? Colors.light.dockBg : backgroundColor;
+  const isAuthenticated = status === 'authenticated' && user !== null;
+
+  useNotificationDeepLinking({
+    enabled: isAuthenticated,
+    role: user?.role,
+  });
 
   if (status === 'loading') {
     return (
@@ -82,7 +93,6 @@ function RoleAwareApp({ backgroundColor }: { backgroundColor: string }) {
     );
   }
 
-  const isAuthenticated = status === 'authenticated' && user !== null;
   const isAssistant = isAuthenticated && user.role === 'assistant';
   const isStudent = isAuthenticated && user.role === 'student';
 
@@ -108,6 +118,7 @@ function RoleAwareApp({ backgroundColor }: { backgroundColor: string }) {
           </Stack.Protected>
           <Stack.Protected guard={isStudent} redirectTo={isAuthenticated ? '/' : '/login'}>
             <Stack.Screen name="kehadiran" />
+            <Stack.Screen name={'presensi' as never} />
             <Stack.Screen name={'izin' as never} />
             <Stack.Screen name={'scan' as never} />
             <Stack.Screen name={'peta' as never} />

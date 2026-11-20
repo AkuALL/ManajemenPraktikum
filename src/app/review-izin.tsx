@@ -140,7 +140,13 @@ export default function LeaveReviewScreen() {
         void (async () => {
           setSubmittingId(request.id);
           try {
-            await reviewLeave(request.id, decision);
+            const session = sessionById.get(request.sessionId);
+            await reviewLeave(request.id, decision, undefined, {
+              studentId: request.studentId,
+              sessionId: request.sessionId,
+              classId: request.classId,
+              sessionTitle: session?.courseName ?? session?.title,
+            });
           } catch (decisionError) {
             showAlert(
               'Keputusan gagal disimpan',

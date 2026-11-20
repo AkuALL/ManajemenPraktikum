@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { CheckCircle2, FileText, QrCode } from 'lucide-react-native';
+import { CheckCircle2, FileText, MapPin, QrCode } from 'lucide-react-native';
 
 import { SubScreenHeader } from '@/components/ui/app-header';
 import { QrSessionBottomSheet } from '@/components/ui/qr-session-bottom-sheet';
@@ -10,6 +10,7 @@ import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useAttendance } from '@/features/attendance';
 import { useIdentity } from '@/features/identity';
 import { LeaveRequestAction } from '@/features/leave';
+import { APP_ROUTES } from '@/features/navigation';
 import {
   formatSessionDate,
   formatSessionTime,
@@ -232,35 +233,63 @@ export default function SessionDetailScreen() {
                   </Pressable>
                 </View>
               ) : (
-                <View style={styles.actionRow}>
+                <View style={styles.studentActionsWrap}>
                   <Pressable
                     accessibilityRole="button"
                     onPress={() =>
-                      showAlert(
-                        'Modul Praktikum PDF',
-                        `Materi ${session.practicumName} siap dipelajari sebelum praktikum dimulai.`,
-                      )
+                      router.push({
+                        pathname: APP_ROUTES.PRESENSI,
+                        params: { sessionId: practicumSession.id },
+                      } as never)
                     }
                     style={({ pressed }) => [
-                      styles.moduleBtn,
-                      { backgroundColor: colors.balticSoft, borderColor: colors.border },
+                      styles.attendanceCtaBtn,
+                      {
+                        backgroundColor: attendanceEntry
+                          ? colors.pacific
+                          : practicumSession.status === 'open'
+                            ? colors.rosy
+                            : colors.baltic,
+                      },
                       pressed && styles.pressed,
                     ]}
                   >
-                    <FileText size={16} color={colors.baltic} strokeWidth={2} />
-                    <Text style={[styles.moduleBtnText, { color: colors.baltic }]}>
-                      Unduh Modul
+                    <MapPin size={16} color="#FCFCFA" strokeWidth={2.1} />
+                    <Text style={styles.attendanceCtaText}>
+                      {attendanceEntry ? 'Lihat Status Presensi' : 'Buka Halaman Presensi'}
                     </Text>
                   </Pressable>
 
-                  <LeaveRequestAction
-                    session={{
-                      id: practicumSession.id,
-                      classId: practicumSession.classId,
-                      status: practicumSession.status,
-                    }}
-                    sessionTitle={`${session.courseClass} · ${session.practicumName} · ${session.startsAt}`}
-                  />
+                  <View style={styles.actionRow}>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() =>
+                        showAlert(
+                          'Modul Praktikum PDF',
+                          `Materi ${session.practicumName} siap dipelajari sebelum praktikum dimulai.`,
+                        )
+                      }
+                      style={({ pressed }) => [
+                        styles.moduleBtn,
+                        { backgroundColor: colors.balticSoft, borderColor: colors.border },
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <FileText size={16} color={colors.baltic} strokeWidth={2} />
+                      <Text style={[styles.moduleBtnText, { color: colors.baltic }]}>
+                        Unduh Modul
+                      </Text>
+                    </Pressable>
+
+                    <LeaveRequestAction
+                      session={{
+                        id: practicumSession.id,
+                        classId: practicumSession.classId,
+                        status: practicumSession.status,
+                      }}
+                      sessionTitle={`${session.courseClass} · ${session.practicumName} · ${session.startsAt}`}
+                    />
+                  </View>
                 </View>
               )}
             </>
@@ -360,6 +389,22 @@ const styles = StyleSheet.create({
   attendedText: {
     fontFamily: FontFamily.sansSemiBold,
     fontSize: 13,
+  },
+  studentActionsWrap: {
+    gap: 10,
+  },
+  attendanceCtaBtn: {
+    height: 46,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  attendanceCtaText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 13.5,
+    color: '#FCFCFA',
   },
   actionRow: {
     flexDirection: 'row',

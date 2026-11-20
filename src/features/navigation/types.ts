@@ -16,6 +16,7 @@ export const APP_ROUTES = {
   HOME: '/',
   SCHEDULE: '/schedule',
   PETA: '/peta',
+  PRESENSI: '/presensi',
   SCAN: '/scan',
   PROFIL: '/profil',
   CLASSES: '/classes',

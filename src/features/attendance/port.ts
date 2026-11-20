@@ -9,9 +9,19 @@ export type AttendanceErrorCode =
   | 'role'
   | 'status'
   | 'duplicate'
+  | 'location-required'
+  | 'outside-radius'
   | 'forbidden'
   | 'network'
   | 'unknown';
+
+export type AttendanceLocationInput = {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  distanceMeters: number;
+  isWithinRadius: boolean;
+};
 
 export class AttendancePortError extends Error {
   readonly code: AttendanceErrorCode;
@@ -30,12 +40,24 @@ export type AttendanceListenerMeta = {
 export type SubmitAttendanceResult =
   | { ok: true; record: AttendanceEntry }
   | { ok: false; reason: 'duplicate'; record?: AttendanceEntry; message: string }
-  | { ok: false; reason: 'role' | 'status' | 'forbidden' | 'network' | 'unknown'; message: string };
+  | {
+      ok: false;
+      reason:
+        | 'role'
+        | 'status'
+        | 'location-required'
+        | 'outside-radius'
+        | 'forbidden'
+        | 'network'
+        | 'unknown';
+      message: string;
+    };
 
 export interface AttendancePort {
   submitAttendance(input: {
     session: SessionSummary;
     user: AuthUser;
+    location?: AttendanceLocationInput;
   }): Promise<SubmitAttendanceResult>;
   subscribeStudentAttendance(
     studentId: string,
@@ -102,6 +124,58 @@ export function formatServerTime(
     minute: '2-digit',
     hour12: false,
   });
+}
+
+export function validateAttendanceLocationAudit(
+  location: AttendanceLocationInput | undefined,
+):
+  | { ok: true; value: AttendanceLocationInput }
+  | { ok: false; reason: 'location-required' | 'outside-radius'; message: string } {
+  if (
+    !location ||
+    typeof location.latitude !== 'number' ||
+    typeof location.longitude !== 'number' ||
+    typeof location.accuracy !== 'number' ||
+    typeof location.distanceMeters !== 'number' ||
+    typeof location.isWithinRadius !== 'boolean' ||
+    !Number.isFinite(location.latitude) ||
+    !Number.isFinite(location.longitude) ||
+    !Number.isFinite(location.accuracy) ||
+    !Number.isFinite(location.distanceMeters) ||
+    location.latitude < -90 ||
+    location.latitude > 90 ||
+    location.longitude < -180 ||
+    location.longitude > 180 ||
+    location.accuracy < 0 ||
+    location.distanceMeters < 0
+  ) {
+    return {
+      ok: false,
+      reason: 'location-required',
+      message:
+        'Koordinat lokasi GPS yang valid diperlukan. Buka Halaman Presensi untuk verifikasi posisi.',
+    };
+  }
+
+  if (!location.isWithinRadius) {
+    return {
+      ok: false,
+      reason: 'outside-radius',
+      message:
+        'Presensi ditolak karena posisi perangkat berada di luar radius laboratorium.',
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      latitude: location.latitude,
+      longitude: location.longitude,
+      accuracy: Math.round(location.accuracy * 10) / 10,
+      distanceMeters: Math.round(location.distanceMeters * 10) / 10,
+      isWithinRadius: true,
+    },
+  };
 }
 
 export function sortAttendanceEntries(
