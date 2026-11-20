@@ -51,6 +51,20 @@ function mapSessionDoc(id: string, data: Record<string, any>): PracticumSession 
     classId: data.classId,
     title: data.title ?? '',
     location: data.location ?? '',
+    labId: typeof data.labId === 'string' ? data.labId : undefined,
+    locationName: typeof data.locationName === 'string' ? data.locationName : undefined,
+    latitude:
+      typeof data.latitude === 'number' && Number.isFinite(data.latitude)
+        ? data.latitude
+        : undefined,
+    longitude:
+      typeof data.longitude === 'number' && Number.isFinite(data.longitude)
+        ? data.longitude
+        : undefined,
+    radiusMeters:
+      typeof data.radiusMeters === 'number' && Number.isFinite(data.radiusMeters)
+        ? data.radiusMeters
+        : undefined,
     startsAt: formatTimestamp(data.startsAt),
     endsAt: formatTimestamp(data.endsAt),
     status: data.status,

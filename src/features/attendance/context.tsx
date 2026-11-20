@@ -14,6 +14,7 @@ import type { AttendanceEntry, LabSession, SessionSummary } from '@/types';
 import { firestoreAttendanceAdapter } from './firestore-adapter';
 import {
   toSessionSummary,
+  type AttendanceLocationInput,
   type AttendancePort,
   type SubmitAttendanceResult,
 } from './port';
@@ -26,6 +27,7 @@ export type AttendanceContextValue = {
   retry: () => void;
   submitAttendance: (
     session: LabSession | SessionSummary,
+    location?: AttendanceLocationInput,
   ) => Promise<SubmitAttendanceResult>;
 };
 
@@ -108,7 +110,10 @@ export function AttendanceProvider({
   }, [studentUid]);
 
   const submitAttendance = useCallback(
-    async (session: LabSession | SessionSummary): Promise<SubmitAttendanceResult> => {
+    async (
+      session: LabSession | SessionSummary,
+      location?: AttendanceLocationInput,
+    ): Promise<SubmitAttendanceResult> => {
       if (!user) {
         return {
           ok: false,
@@ -120,6 +125,7 @@ export function AttendanceProvider({
       return port.submitAttendance({
         session: toSessionSummary(session),
         user,
+        location,
       });
     },
     [port, user],

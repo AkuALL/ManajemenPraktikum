@@ -37,6 +37,7 @@ export function RoleTabBar() {
   if (
     !activeIdentity ||
     pathname === '/scan' ||
+    pathname === '/presensi' ||
     pathname === '/izin' ||
     pathname === '/login' ||
     pathname === '/register' ||

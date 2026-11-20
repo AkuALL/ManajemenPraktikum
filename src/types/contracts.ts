@@ -31,6 +31,11 @@ export type AttendanceEntry = {
   studentIdentifier: string;
   attendedAt: string;
   attendedAtMs: number | null;
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+  distanceMeters?: number;
+  isWithinRadius?: boolean;
   fromCache?: boolean;
   hasPendingWrites?: boolean;
 };

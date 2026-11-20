@@ -14,6 +14,7 @@ import { QrSessionBottomSheet } from '@/components/ui/qr-session-bottom-sheet';
 import { CardListSkeleton } from '@/components/ui/skeleton';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
+import { APP_ROUTES } from '@/features/navigation';
 import {
   formatSessionDate,
   formatSessionTime,
@@ -430,41 +431,64 @@ export function BerandaScreen() {
                   </Pressable>
                 </View>
               ) : (
-                <View style={styles.studentActionsRow}>
+                <View style={styles.studentHeroActions}>
                   <Pressable
                     accessibilityRole="button"
                     onPress={() =>
                       router.push({
-                        pathname: '/schedule/[sessionId]',
+                        pathname: APP_ROUTES.PRESENSI,
                         params: { sessionId: featuredSession.id },
-                      })
+                      } as never)
                     }
                     style={({ pressed }) => [
-                      styles.secondaryHeroBtn,
-                      { backgroundColor: colors.balticSoft },
+                      styles.presensiHeroBtn,
+                      {
+                        backgroundColor:
+                          featuredSession.status === 'open' ? colors.rosy : colors.baltic,
+                      },
                       pressed && styles.pressed,
                     ]}
                   >
-                    <FileText size={15} color={colors.baltic} strokeWidth={2} />
-                    <Text style={[styles.secondaryHeroBtnText, { color: colors.baltic }]}>
-                      Modul PDF
-                    </Text>
+                    <MapPin size={15} color="#FCFCFA" strokeWidth={2.1} />
+                    <Text style={styles.presensiHeroBtnText}>Buka Halaman Presensi</Text>
                   </Pressable>
 
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ disabled: true }}
-                    disabled
-                    style={[
-                      styles.secondaryHeroBtn,
-                      { backgroundColor: colors.disabledSurface, opacity: 0.55 },
-                    ]}
-                  >
-                    <MapPin size={15} color={colors.disabledText} strokeWidth={2} />
-                    <Text style={[styles.secondaryHeroBtnText, { color: colors.disabledText }]}>
-                      Denah Lab
-                    </Text>
-                  </Pressable>
+                  <View style={styles.studentActionsRow}>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() =>
+                        router.push({
+                          pathname: '/schedule/[sessionId]',
+                          params: { sessionId: featuredSession.id },
+                        })
+                      }
+                      style={({ pressed }) => [
+                        styles.secondaryHeroBtn,
+                        { backgroundColor: colors.balticSoft },
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <FileText size={15} color={colors.baltic} strokeWidth={2} />
+                      <Text style={[styles.secondaryHeroBtnText, { color: colors.baltic }]}>
+                        Modul PDF
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: true }}
+                      disabled
+                      style={[
+                        styles.secondaryHeroBtn,
+                        { backgroundColor: colors.disabledSurface, opacity: 0.55 },
+                      ]}
+                    >
+                      <MapPin size={15} color={colors.disabledText} strokeWidth={2} />
+                      <Text style={[styles.secondaryHeroBtnText, { color: colors.disabledText }]}>
+                        Denah Lab
+                      </Text>
+                    </Pressable>
+                  </View>
                 </View>
               )}
             </View>
@@ -724,10 +748,26 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     maxWidth: '38%',
   },
+  studentHeroActions: {
+    gap: 8,
+    marginTop: 2,
+  },
+  presensiHeroBtn: {
+    height: 44,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+  },
+  presensiHeroBtnText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 13,
+    color: '#FCFCFA',
+  },
   studentActionsRow: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 2,
   },
   secondaryHeroBtn: {
     flex: 1,

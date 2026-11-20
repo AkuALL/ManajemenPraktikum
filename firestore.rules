@@ -272,7 +272,12 @@ service cloud.firestore {
           'studentId',
           'studentName',
           'studentIdentifier',
-          'attendedAt'
+          'attendedAt',
+          'latitude',
+          'longitude',
+          'accuracy',
+          'distanceMeters',
+          'isWithinRadius'
         ])
         && request.resource.data.keys().hasAll([
           'sessionId',
@@ -280,13 +285,30 @@ service cloud.firestore {
           'studentId',
           'studentName',
           'studentIdentifier',
-          'attendedAt'
+          'attendedAt',
+          'latitude',
+          'longitude',
+          'accuracy',
+          'distanceMeters',
+          'isWithinRadius'
         ])
         && request.resource.data.studentId == request.auth.uid
         && attendanceId == request.resource.data.sessionId + '_' + request.auth.uid
         && request.resource.data.studentName == get(userProfilePath(request.auth.uid)).data.displayName
         && request.resource.data.studentIdentifier == get(userProfilePath(request.auth.uid)).data.identifier
         && request.resource.data.attendedAt == request.time
+        && request.resource.data.latitude is number
+        && request.resource.data.latitude >= -90
+        && request.resource.data.latitude <= 90
+        && request.resource.data.longitude is number
+        && request.resource.data.longitude >= -180
+        && request.resource.data.longitude <= 180
+        && request.resource.data.accuracy is number
+        && request.resource.data.accuracy >= 0
+        && request.resource.data.distanceMeters is number
+        && request.resource.data.distanceMeters >= 0
+        && request.resource.data.isWithinRadius is bool
+        && request.resource.data.isWithinRadius == true
         && isOpenStudentSession(
           request.resource.data.sessionId,
           request.resource.data.classId

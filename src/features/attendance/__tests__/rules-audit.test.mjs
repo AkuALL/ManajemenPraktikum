@@ -6,10 +6,10 @@ import test from 'node:test';
 const RULES_PATH = path.resolve(process.cwd(), 'firestore.rules');
 const rulesText = fs.readFileSync(RULES_PATH, 'utf8');
 
-function extractBlock(marker) {
+function extractBlock(marker, length = 1200) {
   const start = rulesText.indexOf(marker);
   assert.notEqual(start, -1, `Missing rules block: ${marker}`);
-  return rulesText.slice(start, start + 1200);
+  return rulesText.slice(start, start + length);
 }
 
 test('firestore.rules preserves all required users and attendance rule invariants', () => {
@@ -39,12 +39,16 @@ test('firestore.rules preserves all required users and attendance rule invariant
   );
   assert.match(attendanceMatch, /allow update, delete:\s*if false;/);
 
-  const attendanceHelper = extractBlock('function validAttendanceCreate(');
+  const attendanceHelper = extractBlock('function validAttendanceCreate(', 2200);
   assert.match(
     attendanceHelper,
     /attendanceId == request\.resource\.data\.sessionId \+ '_' \+ request\.auth\.uid/,
   );
   assert.match(attendanceHelper, /isOpenStudentSession\(/);
+  assert.match(attendanceHelper, /request\.resource\.data\.isWithinRadius == true/);
+  assert.match(attendanceHelper, /request\.resource\.data\.latitude is number/);
+  assert.match(attendanceHelper, /request\.resource\.data\.longitude is number/);
+  assert.match(attendanceHelper, /request\.resource\.data\.distanceMeters >= 0/);
 
   const membersGroupMatch = extractBlock('match /{path=**}/members/{memberId}');
   assert.match(
@@ -141,8 +145,13 @@ function evalAttendanceRule(op, ctx) {
     if (userProfile?.role !== 'student') return false;
     const keys = Object.keys(reqData).sort();
     const expected = [
+      'accuracy',
       'attendedAt',
       'classId',
+      'distanceMeters',
+      'isWithinRadius',
+      'latitude',
+      'longitude',
       'sessionId',
       'studentId',
       'studentIdentifier',
@@ -157,6 +166,17 @@ function evalAttendanceRule(op, ctx) {
       reqData.studentName === userProfile.displayName &&
       reqData.studentIdentifier === userProfile.identifier &&
       reqData.attendedAt === SERVER_TIME &&
+      typeof reqData.latitude === 'number' &&
+      reqData.latitude >= -90 &&
+      reqData.latitude <= 90 &&
+      typeof reqData.longitude === 'number' &&
+      reqData.longitude >= -180 &&
+      reqData.longitude <= 180 &&
+      typeof reqData.accuracy === 'number' &&
+      reqData.accuracy >= 0 &&
+      typeof reqData.distanceMeters === 'number' &&
+      reqData.distanceMeters >= 0 &&
+      reqData.isWithinRadius === true &&
       member?.role === 'student' &&
       session?.classId === reqData.classId &&
       session?.status === 'open'
@@ -263,6 +283,11 @@ test('attendance allow/deny matrix covers open-session check, membership, determ
     studentName: 'Budi',
     studentIdentifier: '23.11.0101',
     attendedAt: SERVER_TIME,
+    latitude: -7.765432,
+    longitude: 110.372101,
+    accuracy: 8.5,
+    distanceMeters: 12.4,
+    isWithinRadius: true,
   };
 
   // Allows
@@ -306,6 +331,44 @@ test('attendance allow/deny matrix covers open-session check, membership, determ
       auth: { uid: 'stu2' },
       attendanceId: 'sOpen_stu2',
       reqData: { ...validDoc, studentId: 'stu2', studentName: 'Citra', studentIdentifier: '23.11.0102' },
+      db,
+    }),
+    false,
+  );
+  // Denies missing location audit, outside-radius submission, and invalid coordinates
+  const { latitude: _lat, longitude: _lng, ...docWithoutCoords } = validDoc;
+  assert.equal(
+    evalAttendanceRule('create', {
+      auth: { uid: 'stu1' },
+      attendanceId: 'sOpen_stu1',
+      reqData: docWithoutCoords,
+      db,
+    }),
+    false,
+  );
+  assert.equal(
+    evalAttendanceRule('create', {
+      auth: { uid: 'stu1' },
+      attendanceId: 'sOpen_stu1',
+      reqData: { ...validDoc, isWithinRadius: false, distanceMeters: 120 },
+      db,
+    }),
+    false,
+  );
+  assert.equal(
+    evalAttendanceRule('create', {
+      auth: { uid: 'stu1' },
+      attendanceId: 'sOpen_stu1',
+      reqData: { ...validDoc, latitude: 91 },
+      db,
+    }),
+    false,
+  );
+  assert.equal(
+    evalAttendanceRule('create', {
+      auth: { uid: 'stu1' },
+      attendanceId: 'sOpen_stu1',
+      reqData: { ...validDoc, distanceMeters: -1 },
       db,
     }),
     false,
