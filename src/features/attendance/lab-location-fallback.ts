@@ -1,121 +1,24 @@
 import type { PracticumSession } from '@/features/practicum/types';
 import type { LabLocation, SessionLocationSummary } from '@/types';
+import { FSM_UNDIP_LABS } from '@/features/labs/fsm-undip-labs';
 
 /**
  * Koordinat fallback default laboratorium Informatika (SRS §8.1.1)
  * dipakai sementara bila dokumen sesi/lab dari Firestore belum menyimpan lat/lng.
  */
-export const DEFAULT_FALLBACK_LAB: LabLocation = {
-  id: 'lab_informatika_default',
-  name: 'Laboratorium Informatika',
-  building: 'Gedung Informatika',
-  latitude: -7.765432,
-  longitude: 110.372101,
-  radiusMeters: 50,
-  isActive: true,
-};
+export const FALLBACK_LAB_LOCATIONS: LabLocation[] = FSM_UNDIP_LABS.map(
+  ({ id, name, building, latitude, longitude, radiusMeters, isActive }) => ({
+    id,
+    name,
+    building,
+    latitude,
+    longitude,
+    radiusMeters,
+    isActive,
+  }),
+);
 
-export const FALLBACK_LAB_LOCATIONS: LabLocation[] = [
-  {
-    id: 'lab_sistem_jaringan',
-    name: 'Lab Sistem & Jaringan',
-    building: 'Gedung Informatika Lt. 3',
-    latitude: -7.76538,
-    longitude: 110.37214,
-    radiusMeters: 50,
-    isActive: true,
-  },
-  {
-    id: 'lab_mobile_iot',
-    name: 'Lab Mobile & IoT',
-    building: 'Gedung Informatika Lt. 2',
-    latitude: -7.765432,
-    longitude: 110.372101,
-    radiusMeters: 50,
-    isActive: true,
-  },
-  {
-    id: 'lab_kecerdasan_buatan',
-    name: 'Lab Kecerdasan Buatan',
-    building: 'Gedung Informatika Lt. 3',
-    latitude: -7.76546,
-    longitude: 110.37218,
-    radiusMeters: 50,
-    isActive: true,
-  },
-  {
-    id: 'lab_pemrograman_1',
-    name: 'Lab Pemrograman 1',
-    building: 'Gedung Informatika Lt. 2',
-    latitude: -7.76541,
-    longitude: 110.37206,
-    radiusMeters: 50,
-    isActive: true,
-  },
-  {
-    id: 'lab_basis_data',
-    name: 'Lab Basis Data',
-    building: 'Gedung Informatika Lt. 2',
-    latitude: -7.76549,
-    longitude: 110.37209,
-    radiusMeters: 50,
-    isActive: true,
-  },
-  {
-    id: 'lab_pemrograman_2',
-    name: 'Lab Pemrograman 2',
-    building: 'Gedung Informatika Lt. 2',
-    latitude: -7.76552,
-    longitude: 110.37213,
-    radiusMeters: 50,
-    isActive: true,
-  },
-  {
-    id: 'lab_arsitektur_komputer',
-    name: 'Lab Arsitektur Komputer',
-    building: 'Gedung Informatika Lt. 1',
-    latitude: -7.76539,
-    longitude: 110.37202,
-    radiusMeters: 50,
-    isActive: true,
-  },
-  {
-    id: 'lab_dasar_komputasi',
-    name: 'Lab Dasar Komputasi',
-    building: 'Gedung Informatika Lt. 1',
-    latitude: -7.76547,
-    longitude: 110.37204,
-    radiusMeters: 50,
-    isActive: true,
-  },
-  {
-    id: 'lab_rpl',
-    name: 'Lab RPL',
-    building: 'Gedung Informatika Lt. 2',
-    latitude: -7.765432,
-    longitude: 110.372101,
-    radiusMeters: 50,
-    isActive: true,
-  },
-  {
-    id: 'lab_jarkom_302',
-    name: 'Lab Jarkom 302',
-    building: 'Gedung Laboratorium Lt. 3',
-    latitude: -7.76538,
-    longitude: 110.37214,
-    radiusMeters: 50,
-    isActive: true,
-  },
-  {
-    id: 'lab_komp_2',
-    name: 'Lab Komp 2',
-    building: 'Gedung Laboratorium Lt. 3',
-    latitude: -7.76544,
-    longitude: 110.37212,
-    radiusMeters: 50,
-    isActive: true,
-  },
-];
+export const DEFAULT_FALLBACK_LAB: LabLocation = FALLBACK_LAB_LOCATIONS[0];
 
 function isFiniteCoordinatePair(latitude: unknown, longitude: unknown): boolean {
   return (

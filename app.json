@@ -44,7 +44,11 @@
           "color": "#12597F",
           "defaultChannel": "default"
         }
-      ]
+      ],
+      "expo-image",
+      "expo-status-bar",
+      "expo-web-browser",
+      "expo-maps"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -6,6 +6,7 @@ import { FlyAwayBottomSheet } from '@/components/ui/fly-away-bottom-sheet';
 import { PickerBottomSheet, type PickerOption } from '@/components/ui/picker-bottom-sheet';
 import { SearchFilterBar } from '@/components/ui/search-filter-bar';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
+import { FSM_UNDIP_LABS } from '@/features/labs/fsm-undip-labs';
 import { formatSessionTime, usePracticum } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { showAlert } from '@/lib/cross-platform-alert';
@@ -23,12 +24,13 @@ type LabRoomItem = {
   assistantName?: string;
 };
 
-const BASE_LAB_ROOMS: Omit<LabRoomItem, 'isActiveNow'>[] = [
-  { id: 'lab-jarkom-302', name: 'Lab Jarkom 302', building: 'Gedung Laboratorium Lantai 3', floor: 'Lt. 3', capacity: 32 },
-  { id: 'lab-komp-2', name: 'Lab Komp 2', building: 'Gedung Laboratorium Lantai 3', floor: 'Lt. 3', capacity: 36 },
-  { id: 'lab-rpl-1', name: 'Lab RPL 1', building: 'Gedung Laboratorium Lantai 2', floor: 'Lt. 2', capacity: 40 },
-  { id: 'lab-104', name: 'Lab 104', building: 'Gedung Laboratorium Lantai 1', floor: 'Lt. 1', capacity: 30 },
-];
+const BASE_LAB_ROOMS: Omit<LabRoomItem, 'isActiveNow'>[] = FSM_UNDIP_LABS.map((lab) => ({
+  id: lab.id,
+  name: lab.name,
+  building: lab.building,
+  floor: lab.floor ? `Lt. ${lab.floor}` : 'Area gedung',
+  capacity: 32,
+}));
 
 export default function PetaLabScreen() {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
@@ -596,3 +598,4 @@ const styles = StyleSheet.create({
     opacity: 0.78,
   },
 });
+
