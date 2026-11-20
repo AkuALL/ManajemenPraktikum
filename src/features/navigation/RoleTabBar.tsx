@@ -58,7 +58,7 @@ export function RoleTabBar() {
         ]
       : [
           { key: 'beranda', label: 'Beranda', route: APP_ROUTES.HOME },
-          { key: 'peta', label: 'Peta', route: APP_ROUTES.PETA, disabled: true },
+          { key: 'peta', label: 'Peta', route: APP_ROUTES.PETA },
           { key: 'scan', label: 'Scan', route: APP_ROUTES.SCAN, isScan: true },
           { key: 'riwayat', label: 'Riwayat', route: APP_ROUTES.STUDENT_ATTENDANCE },
           { key: 'profil', label: 'Profil', route: APP_ROUTES.PROFIL },

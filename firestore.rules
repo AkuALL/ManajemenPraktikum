@@ -81,9 +81,12 @@ service cloud.firestore {
 
     function validProfileUpdate() {
       return request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['displayName', 'identifier', 'updatedAt'])
+          .hasOnly(['displayName', 'identifier', 'updatedAt', 'pushTokens'])
         && validText(request.resource.data.displayName, 2, 100)
         && validText(request.resource.data.identifier, 3, 40)
+        && (!request.resource.data.keys().hasAll(['pushTokens'])
+          || (request.resource.data.pushTokens is list
+            && request.resource.data.pushTokens.size() <= 5))
         && request.resource.data.updatedAt == request.time;
     }
 

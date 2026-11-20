@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/qr-session-bottom-sheet';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
+import { FSM_UNDIP_LABS } from '@/features/labs/fsm-undip-labs';
 import { usePracticum } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { showAlert } from '@/lib/cross-platform-alert';
@@ -31,29 +32,13 @@ type MasterLabItem = {
   linkedClassId?: string;
 };
 
-const DEFAULT_MASTER_LABS: MasterLabItem[] = [
-  {
-    id: 'lab-if-202',
-    name: 'Laboratorium Komputer 2',
-    buildingFloor: 'Gedung Informatika Lt. 2',
-    roomCode: 'LAB-IF-202',
-    capacity: '32 kursi',
-  },
-  {
-    id: 'lab-jarkom-302',
-    name: 'Lab Jarkom 302',
-    buildingFloor: 'Gedung Laboratorium Lt. 3',
-    roomCode: 'LAB-JRK-302',
-    capacity: '36 kursi',
-  },
-  {
-    id: 'lab-rpl-1',
-    name: 'Lab RPL 1',
-    buildingFloor: 'Gedung Laboratorium Lt. 2',
-    roomCode: 'LAB-RPL-01',
-    capacity: '40 kursi',
-  },
-];
+const DEFAULT_MASTER_LABS: MasterLabItem[] = FSM_UNDIP_LABS.map((lab) => ({
+  id: lab.id,
+  name: lab.name,
+  buildingFloor: `${lab.building}${lab.floor ? ` Lt. ${lab.floor}` : ''}`,
+  roomCode: lab.id.toUpperCase(),
+  capacity: '32 kursi',
+}));
 
 export default function MasterLabScreen() {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
