@@ -1,12 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/ui/app-header';
 import { FlyAwayBottomSheet } from '@/components/ui/fly-away-bottom-sheet';
 import { PickerBottomSheet, type PickerOption } from '@/components/ui/picker-bottom-sheet';
 import { SearchFilterBar } from '@/components/ui/search-filter-bar';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
-import { FSM_UNDIP_LABS } from '@/features/labs/fsm-undip-labs';
+import { FSM_UNDIP_LABS, FSM_UNDIP_MAP_CAMERA } from '@/features/labs/fsm-undip-labs';
+import { useLabs } from '@/features/labs/firestore-labs';
+import { LabNativeMap } from '@/features/maps/lab-native-map';
 import { formatSessionTime, usePracticum } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { showAlert } from '@/lib/cross-platform-alert';
@@ -22,19 +24,17 @@ type LabRoomItem = {
   activeCourse?: string;
   activeTime?: string;
   assistantName?: string;
+  nextSessionTitle?: string;
+  nextSessionTime?: string;
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
 };
-
-const BASE_LAB_ROOMS: Omit<LabRoomItem, 'isActiveNow'>[] = FSM_UNDIP_LABS.map((lab) => ({
-  id: lab.id,
-  name: lab.name,
-  building: lab.building,
-  floor: lab.floor ? `Lt. ${lab.floor}` : 'Area gedung',
-  capacity: 32,
-}));
 
 export default function PetaLabScreen() {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const { classes, sessions } = usePracticum();
+  const { labs: storedLabs } = useLabs();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [floorFilter, setFloorFilter] = useState<string>('Semua');
@@ -44,7 +44,21 @@ export default function PetaLabScreen() {
 
   const rooms = useMemo<LabRoomItem[]>(() => {
     const map = new Map<string, Omit<LabRoomItem, 'isActiveNow'>>();
-    BASE_LAB_ROOMS.forEach((item) => map.set(item.name.toLowerCase(), item));
+    const labSource = storedLabs.length > 0 ? storedLabs : FSM_UNDIP_LABS;
+    labSource
+      .filter((lab) => lab.isActive)
+      .forEach((lab) =>
+        map.set(lab.name.toLowerCase(), {
+          id: lab.id,
+          name: lab.name,
+          building: lab.building,
+          floor: lab.floor ? `Lt. ${lab.floor}` : 'Area gedung',
+          capacity: 'capacity' in lab ? lab.capacity : 32,
+          latitude: lab.latitude,
+          longitude: lab.longitude,
+          radiusMeters: lab.radiusMeters,
+        }),
+      );
 
     classes.forEach((cls) => {
       const labName = cls.lab?.trim();
@@ -56,6 +70,9 @@ export default function PetaLabScreen() {
           building: 'Gedung Laboratorium Lantai 2',
           floor: 'Lt. 2',
           capacity: 32,
+          latitude: FSM_UNDIP_MAP_CAMERA.coordinates.latitude,
+          longitude: FSM_UNDIP_MAP_CAMERA.coordinates.longitude,
+          radiusMeters: 10,
         });
       }
     });
@@ -70,6 +87,9 @@ export default function PetaLabScreen() {
           building: 'Gedung Laboratorium Lantai 3',
           floor: 'Lt. 3',
           capacity: 32,
+          latitude: FSM_UNDIP_MAP_CAMERA.coordinates.latitude,
+          longitude: FSM_UNDIP_MAP_CAMERA.coordinates.longitude,
+          radiusMeters: 10,
         });
       }
     });
@@ -80,6 +100,11 @@ export default function PetaLabScreen() {
           s.location.trim().toLowerCase() === room.name.toLowerCase() &&
           s.status === 'open',
       );
+      const nextSession = sessions.find(
+        (s) =>
+          s.location.trim().toLowerCase() === room.name.toLowerCase() &&
+          s.status === 'scheduled',
+      );
       return {
         ...room,
         isActiveNow: Boolean(activeSession),
@@ -89,9 +114,13 @@ export default function PetaLabScreen() {
           ? `${formatSessionTime(activeSession.startsAt)}–${formatSessionTime(activeSession.endsAt)}`
           : undefined,
         assistantName: activeSession?.assistantName ?? 'Asisten Jaga',
+        nextSessionTitle: nextSession?.courseName ?? nextSession?.className,
+        nextSessionTime: nextSession
+          ? `${formatSessionTime(nextSession.startsAt)}–${formatSessionTime(nextSession.endsAt)}`
+          : undefined,
       };
     });
-  }, [classes, sessions]);
+  }, [classes, sessions, storedLabs]);
 
   const floorOptions = useMemo<PickerOption[]>(() => {
     const floors = Array.from(new Set(rooms.map((r) => r.floor))).sort();
@@ -143,12 +172,23 @@ export default function PetaLabScreen() {
             onPressFilter={() => setFloorSheetVisible(true)}
           />
 
-          <View
-            style={[
-              styles.floorplanCard,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
+          {Platform.OS !== 'web' ? (
+            <LabNativeMap
+              labs={filteredRooms}
+              selectedLabId={selectedRoomId}
+              onSelectLab={(labId) => {
+                const selected = rooms.find((room) => room.id === labId);
+                setSelectedRoomId(labId);
+                if (selected) setDetailSheetRoom(selected);
+              }}
+            />
+          ) : (
+            <View
+              style={[
+                styles.floorplanCard,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
             {filteredRooms.length === 0 ? (
               <Text style={[styles.emptyRoomText, { color: colors.textSecondary }]}>
                 Tidak ada ruang laboratorium yang cocok.
@@ -189,7 +229,8 @@ export default function PetaLabScreen() {
                 ) : null}
               </>
             )}
-          </View>
+            </View>
+          )}
 
           {focusedRoom ? (
             <Pressable
@@ -250,7 +291,9 @@ export default function PetaLabScreen() {
                 <Text style={[styles.selectedStripLeft, { color: colors.textPrimary }]}>
                   {focusedRoom.activeCourse
                     ? `${focusedRoom.activeCourse} · ${focusedRoom.activeTime}`
-                    : `Kapasitas ${focusedRoom.capacity} kursi · Siap digunakan`}
+                    : focusedRoom.nextSessionTitle
+                      ? `Berikutnya: ${focusedRoom.nextSessionTitle} · ${focusedRoom.nextSessionTime}`
+                      : `Kapasitas ${focusedRoom.capacity} kursi · Siap digunakan`}
                 </Text>
                 <Text style={[styles.selectedStripFloor, { color: colors.baltic }]}>
                   {focusedRoom.floor}
@@ -332,12 +375,16 @@ export default function PetaLabScreen() {
               <Text style={[styles.bsDetailTitle, { color: colors.textPrimary }]}>
                 {detailSheetRoom.activeCourse
                   ? `Praktikum ${detailSheetRoom.activeCourse}`
-                  : 'Ruang Praktikum Tersedia'}
+                  : detailSheetRoom.nextSessionTitle
+                    ? `Berikutnya: ${detailSheetRoom.nextSessionTitle}`
+                    : 'Ruang Praktikum Tersedia'}
               </Text>
               <Text style={[styles.bsDetailMeta, { color: colors.textSecondary }]}>
                 {detailSheetRoom.activeTime
                   ? `${detailSheetRoom.activeTime} · ${detailSheetRoom.assistantName}`
-                  : `Lantai ${detailSheetRoom.floor} · Koridor utama Gedung Laboratorium`}
+                  : detailSheetRoom.nextSessionTime
+                    ? detailSheetRoom.nextSessionTime
+                    : `Lantai ${detailSheetRoom.floor} · Koridor utama Gedung Laboratorium`}
               </Text>
             </View>
 

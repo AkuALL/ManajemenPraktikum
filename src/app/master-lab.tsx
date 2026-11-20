@@ -45,7 +45,7 @@ export default function MasterLabScreen() {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const { user } = useAuth();
   const { classes, sessions, updateClass, openSession } = usePracticum();
-  const { labs: storedLabs, loading: labsLoading, saveLab, seedFsmLabs } = useLabs();
+  const { labs: storedLabs, loading: labsLoading, saveLab, seedFsmLabs, syncDefaultLabRadius } = useLabs();
 
   const [selectedLabId, setSelectedLabId] = useState<string>('');
   const [labPickerVisible, setLabPickerVisible] = useState(false);
@@ -92,13 +92,19 @@ export default function MasterLabScreen() {
   }, [classes, storedLabs]);
 
   useEffect(() => {
-    if (!labsLoading && storedLabs.length === 0 && user?.role === 'assistant' && !seedStarted.current) {
+    if (!labsLoading && user?.role === 'assistant' && !seedStarted.current) {
       seedStarted.current = true;
-      void seedFsmLabs(user.uid).catch(() => {
-        seedStarted.current = false;
-      });
+      if (storedLabs.length === 0) {
+        void seedFsmLabs(user.uid).catch(() => {
+          seedStarted.current = false;
+        });
+      } else {
+        void syncDefaultLabRadius().catch(() => {
+          seedStarted.current = false;
+        });
+      }
     }
-  }, [labsLoading, seedFsmLabs, storedLabs.length, user?.role, user?.uid]);
+  }, [labsLoading, seedFsmLabs, storedLabs.length, syncDefaultLabRadius, user?.role, user?.uid]);
 
   const activeLab = useMemo(
     () => labs.find((l) => l.id === selectedLabId) ?? labs[0],

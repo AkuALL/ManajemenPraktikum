@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import {
   collection,
   doc,
+  getDoc,
   onSnapshot,
   serverTimestamp,
   setDoc,
+  updateDoc,
   type Unsubscribe,
 } from 'firebase/firestore';
 
@@ -34,7 +36,7 @@ function readLab(id: string, value: Record<string, unknown>): StoredLab | null {
     capacity: typeof value.capacity === 'number' ? value.capacity : 32,
     latitude: value.latitude,
     longitude: value.longitude,
-    radiusMeters: typeof value.radiusMeters === 'number' ? value.radiusMeters : 65,
+    radiusMeters: typeof value.radiusMeters === 'number' ? value.radiusMeters : 10,
     isActive: value.isActive !== false,
   };
 }
@@ -97,5 +99,21 @@ export function useLabs() {
     );
   };
 
-  return { labs, loading, error, saveLab, seedFsmLabs };
+  /** Memigrasikan radius data referensi lama (65 m) ke kebijakan 10 m tanpa menyentuh lab kustom. */
+  const syncDefaultLabRadius = async () => {
+    await Promise.all(
+      FSM_UNDIP_LABS.map(async (lab) => {
+        const reference = doc(db, 'labs', lab.id);
+        const snapshot = await getDoc(reference);
+        if (snapshot.exists() && snapshot.data().radiusMeters === 65) {
+          await updateDoc(reference, {
+            radiusMeters: lab.radiusMeters,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }),
+    );
+  };
+
+  return { labs, loading, error, saveLab, seedFsmLabs, syncDefaultLabRadius };
 }

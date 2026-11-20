@@ -47,8 +47,7 @@
       ],
       "expo-image",
       "expo-status-bar",
-      "expo-web-browser",
-      "expo-maps"
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
