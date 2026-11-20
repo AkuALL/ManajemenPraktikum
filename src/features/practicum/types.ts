@@ -23,6 +23,7 @@ export interface PracticumClass {
 
 export interface StudentCandidate {
   userId: string;
+  authUid?: string;
   displayName: string;
   identifier: string;
 }
@@ -42,6 +43,11 @@ export interface PracticumSession {
   courseName?: string;
   title: string;
   location: string;
+  labId?: string;
+  locationName?: string;
+  latitude?: number;
+  longitude?: number;
+  radiusMeters?: number;
   startsAt: string; // Format ISO atau jam "HH:mm" / YYYY-MM-DDTHH:mm
   endsAt: string;
   status: SessionStatus;

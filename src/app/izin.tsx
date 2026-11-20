@@ -1,97 +1,414 @@
-import { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Upload } from 'lucide-react-native';
 
-import { CardListSkeleton } from '@/components/ui/skeleton';
-import { Colors, MaxContentWidth } from '@/constants/theme';
-import { aiStatusLabel, useLeave } from '@/features/leave';
-import { usePracticum } from '@/features/practicum';
+import { SubScreenHeader } from '@/components/ui/app-header';
+import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
+import { useAuth } from '@/features/auth';
+import {
+  formatAttachmentSize,
+  MAX_ATTACHMENT_SIZE_BYTES,
+  saveLeaveAttachment,
+  useLeave,
+  type LeaveAttachmentMeta,
+} from '@/features/leave';
+import { validateLeaveReason } from '@/features/leave/port';
+import { APP_ROUTES } from '@/features/navigation';
+import { formatSessionTime, usePracticum } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import type { LeaveRequest } from '@/types';
+import { showAlert } from '@/lib/cross-platform-alert';
 
-function formatServerDate(value: number | null): string {
-  if (value === null) return 'Menunggu waktu server';
-  return new Date(value).toLocaleString('id-ID', {
-    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
-  });
-}
-
-function statusLabel(status: LeaveRequest['status']): string {
-  if (status === 'approved') return 'Diterima';
-  if (status === 'rejected') return 'Ditolak';
-  return 'Menunggu review';
-}
-
-export default function MyLeaveRequestsScreen() {
+export default function LeaveRequestScreen() {
+  const router = useRouter();
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
+  const { sessionId } = useLocalSearchParams<{ sessionId?: string }>();
+  const { user } = useAuth();
   const { sessions } = usePracticum();
-  const { requests, loading, error, fromCache, classificationErrors, retryClassification, retry } = useLeave();
-  const sessionById = useMemo(() => new Map(sessions.map((item) => [item.id, item])), [sessions]);
+  const { requests, submitLeave } = useLeave();
+
+  const [reason, setReason] = useState('');
+  const [attachment, setAttachment] = useState<LeaveAttachmentMeta | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const targetSession = useMemo(() => {
+    if (sessionId) {
+      return sessions.find((s) => s.id === sessionId) ?? null;
+    }
+    const existingIds = new Set(requests.map((r) => r.sessionId));
+    return (
+      sessions.find(
+        (s) =>
+          (s.status === 'scheduled' || s.status === 'open') && !existingIds.has(s.id),
+      ) ?? null
+    );
+  }, [requests, sessionId, sessions]);
+
+  const existingRequest = targetSession
+    ? requests.find((r) => r.sessionId === targetSession.id)
+    : undefined;
+
+  const handlePickAttachment = async () => {
+    if (submitting) return;
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/*', 'application/pdf'],
+        multiple: false,
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+      const asset = result.assets[0];
+      const sizeBytes = asset.size ?? 0;
+      if (sizeBytes > MAX_ATTACHMENT_SIZE_BYTES) {
+        showAlert(
+          'Ukuran berkas terlalu besar',
+          'Ukuran lampiran maksimal 2 MB (Image / PDF).',
+        );
+        return;
+      }
+
+      setAttachment({
+        name: asset.name,
+        sizeBytes,
+        mimeType: asset.mimeType ?? 'application/pdf',
+        uri: asset.uri,
+      });
+    } catch {
+      showAlert('Gagal memilih berkas', 'Silakan pilih berkas gambar atau PDF lain.');
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!targetSession || submitting) return;
+    const validationError = validateLeaveReason(reason);
+    if (validationError) {
+      setErrorMessage(validationError);
+      return;
+    }
+
+    setSubmitting(true);
+    setErrorMessage(null);
+    const result = await submitLeave(
+      {
+        id: targetSession.id,
+        classId: targetSession.classId,
+        status: targetSession.status,
+      },
+      reason,
+    );
+    setSubmitting(false);
+
+    if (result.ok) {
+      if (attachment) {
+        saveLeaveAttachment(
+          { sessionId: targetSession.id, userId: user?.uid, leaveId: result.request.id },
+          attachment,
+        );
+      }
+      router.replace(APP_ROUTES.STUDENT_ATTENDANCE as never);
+    } else {
+      setErrorMessage(result.message);
+    }
+  };
+
+  const subtitle = targetSession
+    ? `${targetSession.courseName ?? targetSession.className ?? 'Praktikum'} · ${targetSession.title} · ${formatSessionTime(targetSession.startsAt)}`
+    : 'Pilih sesi dari Detail Sesi untuk mengajukan izin';
 
   return (
-    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.container}>
-      <View style={styles.header}>
-        <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>RUANG PRAKTIKAN</Text>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Izin saya</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Pantau pengajuan izin dan keputusan Asisten. Ajukan izin dari detail sesi yang belum selesai.</Text>
-      </View>
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <SubScreenHeader
+          backLabel="Detail Sesi"
+          onBack={() => router.back()}
+          title="Ajukan Izin"
+          subtitle={subtitle}
+          rightBadgeLabel={`NIM ${user?.identifier ?? '-'}`}
+          rightBadgeTone="mono"
+        />
 
-      {fromCache ? <Text style={[styles.cache, { color: colors.textSecondary }]}>Menampilkan data cache. Menunggu sinkronisasi server.</Text> : null}
-      {loading ? <CardListSkeleton count={3} label="Memuat pengajuan izin" /> : null}
-      {error ? (
-        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Izin belum dapat dimuat</Text>
-          <Text style={[styles.body, { color: colors.textSecondary }]}>{error}</Text>
-          <Pressable onPress={retry} style={[styles.retry, { borderColor: colors.border }]}><Text style={{ color: colors.textPrimary }}>Coba lagi</Text></Pressable>
-        </View>
-      ) : null}
-
-      {!loading && !error && requests.length === 0 ? (
-        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Belum ada pengajuan izin</Text>
-          <Text style={[styles.body, { color: colors.textSecondary }]}>Buka detail sesi terjadwal atau berlangsung untuk membuat pengajuan izin.</Text>
-        </View>
-      ) : null}
-
-      {requests.map((request) => {
-        const session = sessionById.get(request.sessionId);
-        const classificationError = classificationErrors[request.id];
-        return (
-          <View key={request.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.cardTop}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{session?.title ?? 'Sesi praktikum'}</Text>
-                <Text style={[styles.meta, { color: colors.textSecondary }]}>{session?.className ?? request.classId} · {formatServerDate(request.createdAtMs)}</Text>
-              </View>
-              <Text style={[styles.status, { color: colors.textPrimary, backgroundColor: colors.surfaceMuted }]}>{statusLabel(request.status)}</Text>
+        <View style={styles.bodyContainer}>
+          {!targetSession ? (
+            <View
+              style={[
+                styles.card,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>
+                Tidak ada sesi aktif untuk izin
+              </Text>
+              <Text style={[styles.bodyText, { color: colors.textSecondary }]}>
+                Buka salah satu sesi terjadwal atau berlangsung pada halaman Beranda, lalu tekan Ajukan Izin.
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.replace(APP_ROUTES.STUDENT_ATTENDANCE as never)}
+                style={({ pressed }) => [
+                  styles.submitBtn,
+                  { backgroundColor: colors.baltic },
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.submitBtnText}>Lihat Status di Riwayat</Text>
+              </Pressable>
             </View>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>ALASAN</Text>
-            <Text style={[styles.body, { color: colors.textPrimary }]}>{request.reason}</Text>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>KLASIFIKASI AI</Text>
-            <Text style={[styles.body, { color: colors.textSecondary }]}>
-              {request.aiStatus === 'success' ? `${request.aiCategory ?? 'Lainnya'}${typeof request.aiConfidence === 'number' ? ` · ${Math.round(request.aiConfidence * 100)}% keyakinan` : ''}` : aiStatusLabel(request.aiStatus)}
-            </Text>
-            {classificationError ? <Text accessibilityRole="alert" style={[styles.meta, { color: colors.textSecondary }]}>{classificationError}</Text> : null}
-            {request.aiStatus === 'failed' ? <Pressable onPress={() => void retryClassification(request.id)} style={[styles.retry, { borderColor: colors.border }]}><Text style={{ color: colors.textPrimary }}>Coba klasifikasi lagi</Text></Pressable> : null}
-            {request.status !== 'pending' ? (
-              <View style={[styles.decision, { borderTopColor: colors.border }]}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>KEPUTUSAN ASISTEN</Text>
-                <Text style={[styles.body, { color: colors.textPrimary }]}>{statusLabel(request.status)} · {formatServerDate(request.reviewedAtMs)}</Text>
-                {request.reviewNote ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Catatan: {request.reviewNote}</Text> : null}
+          ) : existingRequest ? (
+            <View
+              style={[
+                styles.card,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>
+                Izin sudah diajukan
+              </Text>
+              <Text style={[styles.bodyText, { color: colors.textSecondary }]}>
+                Pengajuan izin Anda untuk sesi ini berstatus{' '}
+                {existingRequest.status === 'approved'
+                  ? 'Disetujui'
+                  : existingRequest.status === 'rejected'
+                    ? 'Ditolak'
+                    : 'Pending'}
+                .
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.replace(APP_ROUTES.STUDENT_ATTENDANCE as never)}
+                style={({ pressed }) => [
+                  styles.submitBtn,
+                  { backgroundColor: colors.baltic },
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.submitBtnText}>Pantau Status di Riwayat</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View
+              style={[
+                styles.card,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>
+                Formulir izin praktikum
+              </Text>
+
+              <View style={styles.fieldGroup}>
+                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                  Alasan izin
+                </Text>
+                <TextInput
+                  value={reason}
+                  onChangeText={(value) => {
+                    setReason(value);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
+                  editable={!submitting}
+                  multiline
+                  maxLength={1000}
+                  placeholder="Tuliskan alasan ketidakhadiran Anda..."
+                  placeholderTextColor={colors.textSubtle}
+                  style={[
+                    styles.textarea,
+                    {
+                      backgroundColor: colors.background,
+                      borderColor: colors.border,
+                      color: colors.textPrimary,
+                    },
+                  ]}
+                />
               </View>
-            ) : null}
-          </View>
-        );
-      })}
-    </ScrollView>
+
+              <View style={styles.fieldGroup}>
+                <View style={styles.attachHeader}>
+                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                    Lampiran surat (opsional)
+                  </Text>
+                  <Text style={[styles.attachRule, { color: colors.baltic }]}>
+                    Image / PDF · Maks 2 MB
+                  </Text>
+                </View>
+
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={submitting}
+                  onPress={() => void handlePickAttachment()}
+                  style={({ pressed }) => [
+                    styles.attachRow,
+                    { backgroundColor: colors.balticSoft, borderColor: colors.border },
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <View style={styles.attachLeft}>
+                    <Upload size={16} color={colors.baltic} strokeWidth={2} />
+                    <Text
+                      style={[styles.attachName, { color: colors.textPrimary }]}
+                      numberOfLines={1}
+                    >
+                      {attachment
+                        ? `${attachment.name} · ${formatAttachmentSize(attachment.sizeBytes)}`
+                        : 'Pilih dokumen gambar atau PDF'}
+                    </Text>
+                  </View>
+                  <Text style={[styles.attachAction, { color: colors.baltic }]}>
+                    {attachment ? 'Ganti' : 'Pilih'}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {errorMessage ? (
+                <View
+                  style={[
+                    styles.errorBox,
+                    { backgroundColor: colors.rosySoft, borderColor: colors.rosyBorder },
+                  ]}
+                >
+                  <Text style={[styles.errorText, { color: colors.rosyDark }]}>
+                    {errorMessage}
+                  </Text>
+                </View>
+              ) : null}
+
+              <Pressable
+                accessibilityRole="button"
+                disabled={submitting}
+                onPress={() => void handleSubmit()}
+                style={({ pressed }) => [
+                  styles.submitBtn,
+                  { backgroundColor: submitting ? colors.disabledSurface : colors.rosy },
+                  pressed && !submitting && styles.pressed,
+                ]}
+              >
+                {submitting ? (
+                  <ActivityIndicator size="small" color={colors.disabledText} />
+                ) : (
+                  <Text style={styles.submitBtnText}>Kirim Pengajuan</Text>
+                )}
+              </Pressable>
+            </View>
+          )}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', padding: 20, paddingBottom: 40, gap: 14 },
-  header: { gap: 5, paddingTop: 12, marginBottom: 6 }, eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1.2 }, title: { fontSize: 28, fontWeight: '800' }, subtitle: { fontSize: 14, lineHeight: 20 },
-  cache: { fontSize: 12, fontStyle: 'italic' }, state: { minHeight: 140, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  card: { borderWidth: 1, borderRadius: 12, padding: 16, gap: 8 }, cardTop: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' }, cardTitle: { fontSize: 16, fontWeight: '700' },
-  meta: { fontSize: 12, lineHeight: 18 }, label: { fontSize: 11, fontWeight: '700', letterSpacing: 0.7, marginTop: 4 }, body: { fontSize: 14, lineHeight: 20 },
-  status: { fontSize: 12, fontWeight: '700', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 5, overflow: 'hidden' }, retry: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 7, paddingHorizontal: 11, paddingVertical: 7, marginTop: 4 },
-  decision: { borderTopWidth: 1, paddingTop: 10, marginTop: 4, gap: 4 },
+  screen: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 40,
+    gap: 14,
+  },
+  bodyContainer: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
+    paddingHorizontal: 14,
+  },
+  card: {
+    borderRadius: 22,
+    borderWidth: 1,
+    padding: 16,
+    gap: 14,
+  },
+  cardTitle: {
+    fontFamily: FontFamily.displayBold,
+    fontSize: 16.5,
+  },
+  bodyText: {
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 13.5,
+    lineHeight: 19,
+  },
+  fieldGroup: {
+    gap: 6,
+  },
+  fieldLabel: {
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 12,
+  },
+  textarea: {
+    minHeight: 100,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    textAlignVertical: 'top',
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 13.5,
+    lineHeight: 19,
+  },
+  attachHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  attachRule: {
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 11.5,
+  },
+  attachRow: {
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  attachLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  attachName: {
+    flex: 1,
+    fontFamily: FontFamily.sansMedium,
+    fontSize: 12.5,
+  },
+  attachAction: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 12.5,
+  },
+  errorBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  errorText: {
+    fontFamily: FontFamily.sansMedium,
+    fontSize: 12.5,
+  },
+  submitBtn: {
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitBtnText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 14,
+    color: '#FCFCFA',
+  },
+  pressed: {
+    opacity: 0.8,
+  },
 });

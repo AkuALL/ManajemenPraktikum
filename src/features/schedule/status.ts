@@ -2,33 +2,37 @@ import { SessionStatus } from '@/types';
 
 type StatusPresentation = {
   label: string;
-  icon: string;
+  tone: 'scheduled' | 'open' | 'closed';
   backgroundColor: string;
   borderColor: string;
   textColor: string;
+  dotColor: string;
 };
 
 const statusPresentations: Record<SessionStatus, StatusPresentation> = {
   upcoming: {
-    label: 'Belum dibuka',
-    icon: '◷',
-    backgroundColor: '#F3F4F6',
-    borderColor: '#D1D5DB',
-    textColor: '#374151',
+    label: 'Terjadwal',
+    tone: 'scheduled',
+    backgroundColor: '#E9F1F6',
+    borderColor: '#DCE4EA',
+    textColor: '#12597F',
+    dotColor: '#1FA7C1',
   },
   open: {
     label: 'Berlangsung',
-    icon: '●',
-    backgroundColor: '#DCFCE7',
-    borderColor: '#86EFAC',
-    textColor: '#166534',
+    tone: 'open',
+    backgroundColor: '#FCF0ED',
+    borderColor: '#F3D3CC',
+    textColor: '#D55036',
+    dotColor: '#D55036',
   },
   closed: {
     label: 'Selesai',
-    icon: '✓',
-    backgroundColor: '#E5E7EB',
-    borderColor: '#9CA3AF',
-    textColor: '#374151',
+    tone: 'closed',
+    backgroundColor: '#E8F7FA',
+    borderColor: '#BCE8F2',
+    textColor: '#0E6F83',
+    dotColor: '#1FA7C1',
   },
 };
 

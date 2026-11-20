@@ -29,7 +29,20 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#F7F7F7"
+          "backgroundColor": "#F2F4F6"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Izinkan $(PRODUCT_NAME) mengakses lokasi Anda untuk memverifikasi jarak ke laboratorium saat presensi."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#12597F",
+          "defaultChannel": "default"
         }
       ]
     ],

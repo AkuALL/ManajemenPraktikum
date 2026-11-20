@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { formatSessionDate, formatSessionTime } from '../port';
-import { PracticumSession } from '../types';
-import { Colors } from '@/constants/theme';
+import { ChevronRight } from 'lucide-react-native';
+
+import { Colors, FontFamily } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+
+import { formatSessionDate, formatSessionTime } from '../port';
+import type { PracticumSession } from '../types';
 import { SessionLifecycleButtons } from './SessionLifecycleButtons';
 
 interface SessionCardProps {
@@ -25,86 +28,65 @@ export const SessionCard = React.memo(function SessionCard({
   onEditSession,
 }: SessionCardProps) {
   const router = useRouter();
-  const scheme = useColorScheme();
-  const isDark = scheme === 'dark';
-  const colors = isDark ? Colors.dark : Colors.light;
+  const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const [actionBusy, setActionBusy] = useState(false);
 
-  const getStatusBadge = () => {
-    switch (session.status) {
-      case 'open':
-        return {
-          label: 'Sedang Berlangsung',
-          bgColor: 'rgba(16, 185, 129, 0.15)',
-          textColor: '#10b981',
-        };
-      case 'closed':
-        return {
-          label: 'Selesai',
-          bgColor: colors.surfaceMuted,
-          textColor: colors.textSecondary,
-        };
-      default:
-        return {
-          label: 'Belum Dibuka',
-          bgColor: 'rgba(59, 130, 246, 0.15)',
-          textColor: '#3b82f6',
-        };
-    }
-  };
-
-  const badge = getStatusBadge();
+  const badge =
+    session.status === 'open'
+      ? {
+          label: 'Live',
+          bgColor: colors.rosySoft,
+          textColor: colors.rosy,
+          dotColor: colors.rosy,
+        }
+      : session.status === 'closed'
+        ? {
+            label: 'Selesai',
+            bgColor: colors.pacificSoft,
+            textColor: colors.pacificDark,
+            dotColor: colors.pacific,
+          }
+        : {
+            label: 'Terjadwal',
+            bgColor: colors.balticSoft,
+            textColor: colors.baltic,
+            dotColor: colors.baltic,
+          };
 
   return (
     <View
       style={[
         styles.card,
-        {
-          backgroundColor: colors.surface,
-          borderColor: colors.border,
-        },
+        { backgroundColor: colors.surface, borderColor: colors.border },
       ]}
     >
       <View style={styles.topRow}>
-        <View style={{ flex: 1 }}>
-          {session.className && (
-            <Text style={[styles.classTag, { color: colors.textSecondary }]}>
-              {session.className} {session.courseName ? `• ${session.courseName}` : ''}
+        <View style={styles.titleBlock}>
+          {session.className ? (
+            <Text style={[styles.classTag, { color: colors.textSubtle }]} numberOfLines={1}>
+              {session.className} {session.courseName ? `· ${session.courseName}` : ''}
             </Text>
-          )}
+          ) : null}
           <Text style={[styles.title, { color: colors.textPrimary }]}>{session.title}</Text>
         </View>
 
         <View style={[styles.statusBadge, { backgroundColor: badge.bgColor }]}>
+          <View style={[styles.dot, { backgroundColor: badge.dotColor }]} />
           <Text style={[styles.statusText, { color: badge.textColor }]}>{badge.label}</Text>
         </View>
       </View>
 
-      <View style={styles.detailsGrid}>
-        <View style={styles.detailItem}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Waktu</Text>
-          <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
-            {formatSessionTime(session.startsAt)} – {formatSessionTime(session.endsAt)}
-          </Text>
-        </View>
-
-        <View style={styles.detailItem}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Lokasi</Text>
-          <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
-            {session.location}
-          </Text>
-        </View>
-
-        <View style={styles.detailItem}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Tanggal</Text>
-          <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
-            {formatSessionDate(session.date, session.startsAt)}
-          </Text>
-        </View>
+      <View style={[styles.metaStrip, { backgroundColor: colors.background }]}>
+        <Text style={[styles.metaText, { color: colors.textPrimary }]} numberOfLines={1}>
+          {formatSessionDate(session.date, session.startsAt)} ·{' '}
+          {formatSessionTime(session.startsAt)}–{formatSessionTime(session.endsAt)}
+        </Text>
+        <Text style={[styles.metaLocation, { color: colors.textSecondary }]} numberOfLines={1}>
+          {session.location}
+        </Text>
       </View>
 
-      {/* Kontrol Buka / Tutup Sesi untuk Asisten */}
-      {isAssistant && (
+      {isAssistant ? (
         <SessionLifecycleButtons
           session={session}
           isAssistant={isAssistant}
@@ -113,22 +95,26 @@ export const SessionCard = React.memo(function SessionCard({
           onDeleteSession={session.status === 'scheduled' ? onDeleteSession : undefined}
           onBusyChange={setActionBusy}
         />
-      )}
+      ) : null}
 
-      {/* Footer Navigasi & Edit */}
-      <View style={[styles.footer, { borderTopColor: colors.border }]}>
-        {isAssistant && session.status === 'scheduled' && onEditSession && (
-          <TouchableOpacity
-            style={[styles.smallBtn, { borderColor: colors.border }]}
+      <View style={styles.footer}>
+        {isAssistant && session.status === 'scheduled' && onEditSession ? (
+          <Pressable
+            accessibilityRole="button"
             onPress={() => onEditSession(session)}
             disabled={actionBusy}
+            style={({ pressed }) => [
+              styles.smallBtn,
+              { backgroundColor: colors.background, borderColor: colors.border },
+              pressed && styles.pressed,
+            ]}
           >
-            <Text style={[styles.smallBtnText, { color: colors.textSecondary }]}>Edit Sesi</Text>
-          </TouchableOpacity>
-        )}
+            <Text style={[styles.smallBtnText, { color: colors.textSecondary }]}>Ubah Sesi</Text>
+          </Pressable>
+        ) : null}
 
-        <TouchableOpacity
-          style={[styles.detailBtn, { borderColor: colors.border }]}
+        <Pressable
+          accessibilityRole="button"
           onPress={() =>
             router.push({
               pathname: '/schedule/[sessionId]',
@@ -136,11 +122,15 @@ export const SessionCard = React.memo(function SessionCard({
             })
           }
           disabled={actionBusy}
+          style={({ pressed }) => [
+            styles.detailBtn,
+            { backgroundColor: colors.balticSoft },
+            pressed && styles.pressed,
+          ]}
         >
-          <Text style={[styles.detailBtnText, { color: colors.textPrimary }]}>
-            Lihat Detail Sesi ➔
-          </Text>
-        </TouchableOpacity>
+          <Text style={[styles.detailBtnText, { color: colors.baltic }]}>Detail Sesi</Text>
+          <ChevronRight size={14} color={colors.baltic} strokeWidth={2.3} />
+        </Pressable>
       </View>
     </View>
   );
@@ -149,9 +139,10 @@ export const SessionCard = React.memo(function SessionCard({
 const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 14,
+    borderRadius: 20,
+    padding: 15,
+    marginBottom: 10,
+    gap: 10,
   },
   topRow: {
     flexDirection: 'row',
@@ -159,71 +150,86 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 8,
   },
+  titleBlock: {
+    flex: 1,
+    gap: 2,
+  },
   classTag: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 4,
-    textTransform: 'uppercase',
+    fontFamily: FontFamily.sansMedium,
+    fontSize: 11.5,
   },
   title: {
-    fontSize: 17,
-    fontWeight: '700',
-    lineHeight: 22,
+    fontFamily: FontFamily.displayBold,
+    fontSize: 16,
+    lineHeight: 20,
   },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   statusText: {
+    fontFamily: FontFamily.sansBold,
     fontSize: 11,
-    fontWeight: '700',
   },
-  detailsGrid: {
+  metaStrip: {
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-    marginTop: 12,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
   },
-  detailItem: {
-    minWidth: '28%',
-    flexGrow: 1,
+  metaText: {
+    flex: 1,
+    fontFamily: FontFamily.monoMedium,
+    fontSize: 11.5,
+    fontVariant: ['tabular-nums'],
   },
-  detailLabel: {
-    fontSize: 11,
-    marginBottom: 2,
-  },
-  detailValue: {
-    fontSize: 13,
-    fontWeight: '600',
+  metaLocation: {
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 11.5,
+    maxWidth: '38%',
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
+    gap: 8,
   },
   smallBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
+    height: 36,
+    paddingHorizontal: 12,
+    borderRadius: 12,
     borderWidth: 1,
+    justifyContent: 'center',
   },
   smallBtnText: {
+    fontFamily: FontFamily.sansSemiBold,
     fontSize: 12,
-    fontWeight: '600',
   },
   detailBtn: {
+    height: 36,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   detailBtnText: {
+    fontFamily: FontFamily.sansBold,
     fontSize: 12,
-    fontWeight: '700',
+  },
+  pressed: {
+    opacity: 0.78,
   },
 });

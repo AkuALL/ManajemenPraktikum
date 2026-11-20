@@ -1,19 +1,16 @@
-import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { CheckCircle2 } from 'lucide-react-native';
 
-import { Colors } from '@/constants/theme';
+import { Colors, FontFamily } from '@/constants/theme';
+import { APP_ROUTES } from '@/features/navigation';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { SessionSummary } from '@/types';
 
 import { useLeave } from './context';
-import { isLeaveEligibleStatus, validateLeaveReason } from './port';
+import { LeaveRequestBottomSheet } from './LeaveRequestBottomSheet';
+import { isLeaveEligibleStatus } from './port';
 
 export function LeaveRequestAction({
   session,
@@ -22,92 +19,142 @@ export function LeaveRequestAction({
   session: SessionSummary;
   sessionTitle: string;
 }) {
+  const router = useRouter();
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
-  const { requests, submitLeave } = useLeave();
-  const [reason, setReason] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const { requests } = useLeave();
+  const [sheetVisible, setSheetVisible] = useState(false);
 
   const existing = requests.find((request) => request.sessionId === session.id);
   const eligible = isLeaveEligibleStatus(session.status);
 
   if (existing) {
+    const label =
+      existing.status === 'approved'
+        ? 'Izin Disetujui'
+        : existing.status === 'rejected'
+          ? 'Izin Ditolak'
+          : 'Izin Pending';
+
     return (
-      <View style={[styles.card, { backgroundColor: colors.surfaceMuted, borderColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Izin sudah diajukan</Text>
-        <Text style={[styles.body, { color: colors.textSecondary }]}>
-          Status keputusan: {existing.status === 'pending' ? 'menunggu review Asisten' : existing.status === 'approved' ? 'diterima' : 'ditolak'}.
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push(APP_ROUTES.STUDENT_ATTENDANCE as never)}
+        style={({ pressed }) => [
+          styles.statusBtn,
+          {
+            backgroundColor:
+              existing.status === 'approved' ? colors.pacificSoft : colors.rosySoft,
+            borderColor:
+              existing.status === 'approved' ? colors.pacificLight : colors.rosyBorder,
+          },
+          pressed && styles.pressed,
+        ]}
+      >
+        <CheckCircle2
+          size={15}
+          color={existing.status === 'approved' ? colors.pacificDark : colors.rosyDark}
+          strokeWidth={2}
+        />
+        <Text
+          style={[
+            styles.statusBtnText,
+            {
+              color: existing.status === 'approved' ? colors.pacificDark : colors.rosyDark,
+            },
+          ]}
+        >
+          {label}
         </Text>
-      </View>
+      </Pressable>
     );
   }
 
   if (!eligible) {
     return (
-      <View style={[styles.card, { backgroundColor: colors.surfaceMuted, borderColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Izin tidak tersedia</Text>
-        <Text style={[styles.body, { color: colors.textSecondary }]}>Sesi sudah selesai sehingga pengajuan izin baru tidak dapat dibuat.</Text>
+      <View
+        style={[
+          styles.disabledBtn,
+          { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
+        ]}
+      >
+        <Text style={[styles.disabledBtnText, { color: colors.textSubtle }]}>
+          Sesi Selesai
+        </Text>
       </View>
     );
   }
 
-  const handleSubmit = async () => {
-    const validationError = validateLeaveReason(reason);
-    if (validationError) {
-      setMessage(validationError);
-      return;
-    }
-
-    setSubmitting(true);
-    setMessage(null);
-    const result = await submitLeave(session, reason);
-    if (result.ok) {
-      setReason('');
-      setMessage('Izin tersimpan. Klasifikasi AI diproses sebagai informasi pendukung.');
-    } else {
-      setMessage(result.message);
-    }
-    setSubmitting(false);
-  };
-
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <Text style={[styles.title, { color: colors.textPrimary }]}>Ajukan izin</Text>
-      <Text style={[styles.body, { color: colors.textSecondary }]}>Tuliskan alasan ketidakhadiran untuk sesi {sessionTitle}. Keputusan tetap dibuat oleh Asisten.</Text>
-      <TextInput
-        value={reason}
-        onChangeText={setReason}
-        editable={!submitting}
-        multiline
-        maxLength={1000}
-        accessibilityLabel="Alasan izin"
-        placeholder="Contoh: Saya sakit dan tidak dapat mengikuti praktikum."
-        placeholderTextColor={colors.textSecondary}
-        style={[styles.input, { color: colors.textPrimary, borderColor: colors.border, backgroundColor: colors.background }]}
-      />
-      <Text style={[styles.counter, { color: colors.textSecondary }]}>{reason.trim().length}/1000 karakter</Text>
-      {message ? <Text accessibilityRole="alert" style={[styles.message, { color: colors.textSecondary }]}>{message}</Text> : null}
+    <>
       <Pressable
-        disabled={submitting}
-        onPress={() => void handleSubmit()}
         accessibilityRole="button"
-        accessibilityLabel="Kirim pengajuan izin"
-        style={({ pressed }) => [styles.button, { backgroundColor: submitting ? colors.disabledSurface : colors.actionPrimary }, pressed && !submitting && styles.pressed]}
+        accessibilityLabel={`Ajukan izin untuk ${sessionTitle}`}
+        onPress={() => setSheetVisible(true)}
+        style={({ pressed }) => [
+          styles.leaveBtn,
+          { backgroundColor: colors.rosySoft, borderColor: colors.rosyBorder },
+          pressed && styles.pressed,
+        ]}
       >
-        {submitting ? <ActivityIndicator size="small" color={colors.disabledText} /> : <Text style={[styles.buttonText, { color: colors.actionSecondary }]}>Kirim pengajuan izin</Text>}
+        <CheckCircle2 size={15} color={colors.rosyDark} strokeWidth={2.1} />
+        <Text style={[styles.leaveBtnText, { color: colors.rosyDark }]}>Ajukan Izin</Text>
       </Pressable>
-    </View>
+
+      <LeaveRequestBottomSheet
+        visible={sheetVisible}
+        onClose={() => setSheetVisible(false)}
+        session={session}
+        sessionSubtitle={sessionTitle}
+      />
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: 12, padding: 16, gap: 10 },
-  title: { fontSize: 16, fontWeight: '700' },
-  body: { fontSize: 14, lineHeight: 20 },
-  input: { minHeight: 104, borderWidth: 1, borderRadius: 8, padding: 12, textAlignVertical: 'top', fontSize: 14 },
-  counter: { fontSize: 12, textAlign: 'right' },
-  message: { fontSize: 13, lineHeight: 18 },
-  button: { minHeight: 46, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
-  buttonText: { fontSize: 14, fontWeight: '700' },
-  pressed: { opacity: 0.72 },
+  leaveBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+  },
+  leaveBtnText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 13.5,
+  },
+  statusBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+  },
+  statusBtnText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 13.5,
+  },
+  disabledBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  disabledBtnText: {
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 13,
+  },
+  pressed: {
+    opacity: 0.78,
+  },
 });

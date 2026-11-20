@@ -1,38 +1,45 @@
-import React, { useCallback, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-} from 'react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Plus, SlidersHorizontal } from 'lucide-react-native';
+
+import { AppHeader, getFirstName } from '@/components/ui/app-header';
+import { PickerBottomSheet, type PickerOption } from '@/components/ui/picker-bottom-sheet';
+import { QrSessionBottomSheet } from '@/components/ui/qr-session-bottom-sheet';
+import { SearchFilterBar } from '@/components/ui/search-filter-bar';
 import { CardListSkeleton } from '@/components/ui/skeleton';
-import { Colors, MaxContentWidth } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useIdentity } from '@/features/identity';
 import {
-  usePracticum,
   ClassCard,
   ClassFormModal,
   ClassMembersModal,
-  PracticumClass,
-  CreateClassInput,
+  type CreateClassInput,
+  formatSessionTime,
+  type PracticumClass,
+  type PracticumSession,
+  usePracticum,
 } from '@/features/practicum';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { showAlert } from '@/lib/cross-platform-alert';
+
+type ClassFilterMode = 'all' | 'active' | 'live';
+
+const FILTER_OPTIONS: PickerOption[] = [
+  { value: 'active', label: 'Aktif', subtitle: 'Tampilkan semua kelas aktif semester ini' },
+  { value: 'live', label: 'Live', subtitle: 'Hanya kelas yang sedang memiliki sesi berlangsung' },
+  { value: 'all', label: 'Semua', subtitle: 'Seluruh daftar kelas praktikum' },
+];
 
 export default function ClassesScreen() {
-  const scheme = useColorScheme();
-  const isDark = scheme === 'dark';
-  const colors = isDark ? Colors.dark : Colors.light;
-
+  const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const { activeIdentity } = useIdentity();
   const isAssistant = activeIdentity?.role === 'assistant';
 
   const {
     classes,
+    sessions,
     loadingClasses,
     classesError,
-    classesFromCache,
     error,
     retryClasses,
     createClass,
@@ -42,15 +49,55 @@ export default function ClassesScreen() {
     getClassMembers,
     addMember,
     removeMember,
-  } = usePracticum({ sessions: false });
+    openSession,
+  } = usePracticum();
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterMode, setFilterMode] = useState<ClassFilterMode>('active');
+  const [filterSheetVisible, setFilterSheetVisible] = useState(false);
+  const [expandedMap, setExpandedMap] = useState<Record<string, boolean>>({});
 
   const [formModalVisible, setFormModalVisible] = useState(false);
   const [editingClass, setEditingClass] = useState<PracticumClass | null>(null);
 
   const [membersModalVisible, setMembersModalVisible] = useState(false);
   const [managingClass, setManagingClass] = useState<PracticumClass | null>(null);
+  const [qrTarget, setQrTarget] = useState<{
+    sessionId: string;
+    title: string;
+    subtitle: string;
+    status: PracticumSession['status'];
+  } | null>(null);
+
   const [deletingClassId, setDeletingClassId] = useState<string | null>(null);
   const deletingClassRef = useRef<string | null>(null);
+
+  const sessionByClassId = useMemo(() => {
+    const map = new Map<string, PracticumSession>();
+    sessions.forEach((sess) => {
+      const existing = map.get(sess.classId);
+      if (!existing || (sess.status === 'open' && existing.status !== 'open')) {
+        map.set(sess.classId, sess);
+      }
+    });
+    return map;
+  }, [sessions]);
+
+  const filteredClasses = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return classes.filter((cls) => {
+      const linkedSession = sessionByClassId.get(cls.id);
+      if (filterMode === 'live' && linkedSession?.status !== 'open') {
+        return false;
+      }
+      if (!q) return true;
+      return (
+        cls.courseName.toLowerCase().includes(q) ||
+        cls.className.toLowerCase().includes(q) ||
+        (cls.lab?.toLowerCase().includes(q) ?? false)
+      );
+    });
+  }, [classes, filterMode, searchQuery, sessionByClassId]);
 
   const handleOpenCreate = useCallback(() => {
     setEditingClass(null);
@@ -67,6 +114,19 @@ export default function ClassesScreen() {
     setMembersModalVisible(true);
   }, []);
 
+  const handleShowQr = useCallback(
+    (cls: PracticumClass) => {
+      const sess = sessionByClassId.get(cls.id);
+      setQrTarget({
+        sessionId: sess?.id ?? cls.id,
+        title: `${cls.courseName} · ${cls.className}`,
+        subtitle: cls.lab ?? sess?.location ?? 'Ruang Lab',
+        status: sess?.status ?? 'open',
+      });
+    },
+    [sessionByClassId],
+  );
+
   const handleFormSubmit = async (input: CreateClassInput) => {
     if (editingClass) {
       await updateClass(editingClass.id, input);
@@ -75,121 +135,199 @@ export default function ClassesScreen() {
     }
   };
 
-  const handleDeleteClass = useCallback(async (classId: string) => {
-    if (deletingClassRef.current) return;
-
-    deletingClassRef.current = classId;
-    setDeletingClassId(classId);
-    try {
-      await deleteClass(classId);
-    } catch (err: any) {
-      Alert.alert('Gagal Menghapus Kelas', err.message ?? 'Terjadi kesalahan');
-    } finally {
-      deletingClassRef.current = null;
-      setDeletingClassId(null);
-    }
-  }, [deleteClass]);
+  const handleDeleteClass = useCallback(
+    async (classId: string) => {
+      if (deletingClassRef.current) return;
+      deletingClassRef.current = classId;
+      setDeletingClassId(classId);
+      try {
+        await deleteClass(classId);
+      } catch (err: any) {
+        showAlert('Gagal Menghapus Kelas', err.message ?? 'Terjadi kesalahan');
+      } finally {
+        deletingClassRef.current = null;
+        setDeletingClassId(null);
+      }
+    },
+    [deleteClass],
+  );
 
   if (!isAssistant) {
     return (
       <View style={[styles.guard, { backgroundColor: colors.background }]}>
-        <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+        <Text style={[styles.guardTitle, { color: colors.textPrimary }]}>
           Halaman tidak tersedia
         </Text>
-        <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+        <Text style={[styles.guardBody, { color: colors.textSecondary }]}>
           Pengelolaan kelas dan anggota praktikum hanya tersedia untuk Asisten.
         </Text>
       </View>
     );
   }
 
+  const primaryLab = classes[0]?.lab ?? 'Asisten Lab';
+  const filterLabel =
+    FILTER_OPTIONS.find((opt) => opt.value === filterMode)?.label ?? 'Aktif';
+
   return (
-    <ScrollView
-      style={{ backgroundColor: colors.background }}
-      contentContainerStyle={styles.container}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>
-            MANAJEMEN PRAKTIKUM
-          </Text>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>
-            Kelola Kelas
-          </Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Buat kelas praktikum baru, atur lokasi lab, dan daftarkan anggota praktikan.
-          </Text>
-        </View>
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <AppHeader
+          eyebrow={`Asisten Lab · ${primaryLab}`}
+          title={`Hai, ${getFirstName(activeIdentity?.displayName)}`}
+          monoBadge={activeIdentity?.identifier ?? 'AST-LAB'}
+          statusBadge={`${classes.length} Kelas Aktif`}
+        />
 
-        {isAssistant && (
-          <TouchableOpacity
-            style={[styles.createBtn, { backgroundColor: colors.actionPrimary }]}
-            onPress={handleOpenCreate}
-          >
-            <Text style={styles.createBtnText}>+ Tambah Kelas</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+        <View style={styles.bodyContainer}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+              Daftar kelas ({filteredClasses.length})
+            </Text>
 
-      {classesFromCache ? (
-        <Text style={[styles.cacheNotice, { color: colors.textSecondary }]}>Menampilkan data cache. Menunggu sinkronisasi server.</Text>
-      ) : null}
+            <View style={styles.headerActionPills}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: true }}
+                disabled
+                style={[
+                  styles.labChip,
+                  {
+                    backgroundColor: colors.disabledSurface,
+                    borderColor: colors.border,
+                    opacity: 0.55,
+                  },
+                ]}
+              >
+                <SlidersHorizontal size={13} color={colors.disabledText} strokeWidth={2} />
+                <Text style={[styles.labChipText, { color: colors.disabledText }]}>Lab</Text>
+              </Pressable>
 
-      {/* Error Banner */}
-      {error && (
-        <View style={styles.errorBanner}>
-          <Text style={styles.errorText}>{error}</Text>
-          {classesError ? (
-            <TouchableOpacity onPress={retryClasses} style={styles.retryButton}>
-              <Text style={styles.retryText}>Coba lagi</Text>
-            </TouchableOpacity>
+              <Pressable
+                accessibilityRole="button"
+                onPress={handleOpenCreate}
+                style={({ pressed }) => [
+                  styles.createPill,
+                  { backgroundColor: colors.rosy },
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Plus size={14} color="#FCFCFA" strokeWidth={2.4} />
+                <Text style={styles.createPillText}>Kelas Baru</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <SearchFilterBar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="Cari nama atau kode kelas..."
+            filterLabel={filterLabel}
+            onPressFilter={() => setFilterSheetVisible(true)}
+          />
+
+          {error ? (
+            <View
+              style={[
+                styles.errorBanner,
+                { backgroundColor: colors.rosySoft, borderColor: colors.rosyBorder },
+              ]}
+            >
+              <Text style={[styles.errorText, { color: colors.rosyDark }]}>{error}</Text>
+              {classesError ? (
+                <Pressable onPress={retryClasses} style={styles.retryBtn}>
+                  <Text style={[styles.retryText, { color: colors.rosy }]}>Coba lagi</Text>
+                </Pressable>
+              ) : null}
+            </View>
           ) : null}
-        </View>
-      )}
 
-      {/* List Kelas */}
-      {loadingClasses ? (
-        <CardListSkeleton count={3} showActions label="Memuat daftar kelas" />
-      ) : classes.length === 0 ? (
-        <View
-          style={[
-            styles.emptyCard,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}
-        >
-          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-            Belum ada kelas praktikum
-          </Text>
-          <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-            Klik tombol &quot;+ Tambah Kelas&quot; di atas untuk mulai membuat kelas praktikum pertama Anda.
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.list}>
-          {classes.map((cls) => (
-            <ClassCard
-              key={cls.id}
-              practicumClass={cls}
-              isAssistant={isAssistant}
-              onManageMembers={handleOpenMembers}
-              onEdit={handleOpenEdit}
-              onDelete={handleDeleteClass}
-            isDeleting={deletingClassId === cls.id}
-            />
-          ))}
-        </View>
-      )}
+          {loadingClasses ? (
+            <CardListSkeleton count={3} showActions label="Memuat daftar kelas" />
+          ) : filteredClasses.length === 0 ? (
+            <View
+              style={[
+                styles.emptyCard,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+                {classes.length === 0 ? 'Belum ada kelas praktikum' : 'Kelas tidak ditemukan'}
+              </Text>
+              <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
+                {classes.length === 0
+                  ? 'Tekan "+ Kelas Baru" untuk membuat kelas praktikum pertama Anda.'
+                  : 'Coba ubah kata kunci pencarian atau filter status kelas.'}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.list}>
+              {filteredClasses.map((cls, index) => {
+                const linkedSession = sessionByClassId.get(cls.id);
+                const hasLiveSession = linkedSession?.status === 'open';
+                const defaultExpanded = hasLiveSession || index === 0;
+                const expanded =
+                  expandedMap[cls.id] !== undefined ? expandedMap[cls.id] : defaultExpanded;
+                const scheduleSummary = linkedSession
+                  ? `${formatSessionTime(linkedSession.startsAt)}–${formatSessionTime(linkedSession.endsAt)}`
+                  : undefined;
 
-      {/* Modal Form Tambah / Edit Kelas */}
+                return (
+                  <ClassCard
+                    key={cls.id}
+                    practicumClass={cls}
+                    isAssistant={isAssistant}
+                    expanded={expanded}
+                    onToggleExpand={() =>
+                      setExpandedMap((prev) => ({ ...prev, [cls.id]: !expanded }))
+                    }
+                    hasLiveSession={hasLiveSession}
+                    scheduleSummary={scheduleSummary}
+                    onShowQr={handleShowQr}
+                    onManageMembers={handleOpenMembers}
+                    onEdit={handleOpenEdit}
+                    onDelete={handleDeleteClass}
+                    isDeleting={deletingClassId === cls.id}
+                  />
+                );
+              })}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+
+      <PickerBottomSheet
+        visible={filterSheetVisible}
+        onClose={() => setFilterSheetVisible(false)}
+        title="Filter Daftar Kelas"
+        searchable={false}
+        options={FILTER_OPTIONS}
+        selectedValue={filterMode}
+        onSelect={(val) => setFilterMode(val as ClassFilterMode)}
+      />
+
+      <QrSessionBottomSheet
+        visible={Boolean(qrTarget)}
+        onClose={() => setQrTarget(null)}
+        sessionId={qrTarget?.sessionId ?? 'cls'}
+        sessionTitle={qrTarget?.title ?? ''}
+        subtitle={qrTarget?.subtitle ?? ''}
+        sessionStatus={qrTarget?.status}
+        onOpenSession={
+          qrTarget && sessionByClassId.get(qrTarget.sessionId) === undefined
+            ? () => openSession(qrTarget.sessionId)
+            : undefined
+        }
+      />
+
       <ClassFormModal
         visible={formModalVisible}
         initialClass={editingClass}
         onClose={() => setFormModalVisible(false)}
         onSubmit={handleFormSubmit}
+        onDelete={handleDeleteClass}
       />
 
-      {/* Modal Kelola Anggota Kelas */}
       <ClassMembersModal
         visible={membersModalVisible}
         practicumClass={managingClass}
@@ -200,98 +338,123 @@ export default function ClassesScreen() {
         onAddMember={addMember}
         onRemoveMember={removeMember}
       />
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 112,
+    gap: 14,
+  },
+  bodyContainer: {
     width: '100%',
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
-    padding: 24,
-    paddingBottom: 48,
-    gap: 18,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 16,
-    paddingTop: 12,
-  },
-  eyebrow: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-  },
-  title: {
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 4,
-  },
-  createBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  createBtnText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  cacheNotice: {
-    fontSize: 12,
-    fontStyle: 'italic',
-  },
-  errorBanner: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderColor: '#ef4444',
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-  },
-  errorText: {
-    color: '#ef4444',
-    fontSize: 13,
-  },
-  retryButton: { alignSelf: 'flex-start', marginTop: 8, paddingVertical: 4 },
-  retryText: { color: '#ef4444', fontSize: 13, fontWeight: '700' },
-  loadingContainer: {
-    paddingVertical: 48,
-    alignItems: 'center',
-  },
-  emptyCard: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 32,
-    alignItems: 'center',
-    gap: 8,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    textAlign: 'center',
-    maxWidth: 380,
-  },
-  list: {
-    marginTop: 8,
+    paddingHorizontal: 14,
+    gap: 12,
   },
   guard: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    padding: 32,
     gap: 8,
+  },
+  guardTitle: {
+    fontFamily: FontFamily.displayBold,
+    fontSize: 18,
+    textAlign: 'center',
+  },
+  guardBody: {
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 13.5,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  sectionTitle: {
+    fontFamily: FontFamily.displayBold,
+    fontSize: 16.5,
+  },
+  headerActionPills: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  labChip: {
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  labChipText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 12.5,
+  },
+  createPill: {
+    height: 36,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  createPillText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 12.5,
+    color: '#FCFCFA',
+  },
+  list: {
+    gap: 10,
+  },
+  errorBanner: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 12,
+    gap: 6,
+  },
+  errorText: {
+    fontFamily: FontFamily.sansMedium,
+    fontSize: 12.5,
+  },
+  retryBtn: {
+    alignSelf: 'flex-start',
+  },
+  retryText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 12.5,
+  },
+  emptyCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 22,
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyTitle: {
+    fontFamily: FontFamily.displayBold,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  emptyBody: {
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  pressed: {
+    opacity: 0.78,
   },
 });

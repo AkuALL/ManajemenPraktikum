@@ -7,6 +7,7 @@ import {
   mapAttendanceError,
   sortAttendanceEntries,
   toSessionSummary,
+  validateAttendanceLocationAudit,
 } from '../port.ts';
 
 test('buildAttendanceDocId enforces deterministic {sessionId}_{studentId} format', () => {
@@ -86,4 +87,42 @@ test('mapAttendanceError maps Firestore codes cleanly', () => {
   assert.equal(mapAttendanceError({ code: 'already-exists' }).code, 'duplicate');
   assert.equal(mapAttendanceError({ code: 'permission-denied' }).code, 'forbidden');
   assert.equal(mapAttendanceError({ code: 'unavailable' }).code, 'network');
+});
+
+test('validateAttendanceLocationAudit requires valid GPS audit and within-radius status', () => {
+  assert.equal(validateAttendanceLocationAudit(undefined).reason, 'location-required');
+  assert.equal(
+    validateAttendanceLocationAudit({
+      latitude: 95,
+      longitude: 110,
+      accuracy: 10,
+      distanceMeters: 15,
+      isWithinRadius: true,
+    }).reason,
+    'location-required',
+  );
+  assert.equal(
+    validateAttendanceLocationAudit({
+      latitude: -7.7654,
+      longitude: 110.3721,
+      accuracy: 8,
+      distanceMeters: 120,
+      isWithinRadius: false,
+    }).reason,
+    'outside-radius',
+  );
+
+  const valid = validateAttendanceLocationAudit({
+    latitude: -7.765432,
+    longitude: 110.372101,
+    accuracy: 8.46,
+    distanceMeters: 12.34,
+    isWithinRadius: true,
+  });
+  assert.equal(valid.ok, true);
+  if (valid.ok) {
+    assert.equal(valid.value.accuracy, 8.5);
+    assert.equal(valid.value.distanceMeters, 12.3);
+    assert.equal(valid.value.isWithinRadius, true);
+  }
 });

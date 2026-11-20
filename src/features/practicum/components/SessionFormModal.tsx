@@ -1,28 +1,27 @@
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react-native';
 
-import { Colors } from '@/constants/theme';
+import { FlyAwayBottomSheet } from '@/components/ui/fly-away-bottom-sheet';
+import { Colors, FontFamily } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-import { CreateSessionInput, PracticumClass, PracticumSession } from '../types';
+import type { CreateSessionInput, PracticumClass, PracticumSession } from '../types';
 import {
   defaultSessionDate,
   detectSessionSlotId,
   formatCalendarDateLabel,
   SESSION_TIME_SLOTS,
   sessionDateInput,
-  SessionSlotId,
+  type SessionSlotId,
   sessionTimeInput,
   validateSessionInput,
 } from '../validation';
@@ -87,9 +86,7 @@ function SessionFormContent({
   onClose: () => void;
   onSubmit: (input: CreateSessionInput) => Promise<void>;
 }) {
-  const scheme = useColorScheme();
-  const isDark = scheme === 'dark';
-  const colors = isDark ? Colors.dark : Colors.light;
+  const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
 
   const initialStartsAt = sessionTimeInput(initialSession?.startsAt, '08:00');
   const initialEndsAt = sessionTimeInput(initialSession?.endsAt, '10:00');
@@ -103,7 +100,7 @@ function SessionFormContent({
   );
   const [title, setTitle] = useState(initialSession?.title ?? '');
   const [location, setLocation] = useState(
-    initialSession?.location ?? (classes[0]?.lab || 'Lab Komputer 1'),
+    initialSession?.location ?? (classes[0]?.lab || 'Lab Komputer 2'),
   );
   const [date, setDate] = useState(initialDate);
   const [calendarCursor, setCalendarCursor] = useState(() => parseYearMonth(initialDate));
@@ -180,398 +177,398 @@ function SessionFormContent({
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.overlay}
-    >
-      <View
-        style={[
-          styles.container,
-          { backgroundColor: colors.surface, borderColor: colors.border },
-        ]}
+    <View style={styles.formWrap}>
+      {errorMessage ? (
+        <View
+          accessibilityRole="alert"
+          style={[
+            styles.errorBox,
+            { backgroundColor: colors.rosySoft, borderColor: colors.rosyBorder },
+          ]}
+        >
+          <Text style={[styles.errorText, { color: colors.rosyDark }]}>{errorMessage}</Text>
+        </View>
+      ) : null}
+
+      <ScrollView
+        style={styles.formScroll}
+        contentContainerStyle={styles.formContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        <Text style={[styles.title, { color: colors.textPrimary }]}>
-          {initialSession ? 'Edit Sesi Praktikum' : 'Tambah Sesi Praktikum Baru'}
-        </Text>
-
-        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-
-        <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ gap: 14 }}>
-          {!initialSession && (
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>
-                Kelas Praktikum *
-              </Text>
-              <View style={styles.classChips}>
-                {classes.map((cls) => {
-                  const isSelected = selectedClassId === cls.id;
-                  return (
-                    <TouchableOpacity
-                      key={cls.id}
-                      onPress={() => setSelectedClassId(cls.id)}
-                      disabled={submitting}
-                      style={[
-                        styles.chip,
-                        {
-                          borderColor: isSelected ? colors.actionPrimary : colors.border,
-                          backgroundColor: isSelected
-                            ? colors.surfaceMuted
-                            : colors.background,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          {
-                            color: isSelected ? colors.actionPrimary : colors.textPrimary,
-                            fontWeight: isSelected ? '700' : '500',
-                          },
-                        ]}
-                      >
-                        {cls.className} - {cls.courseName}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-          )}
-
+        {!initialSession ? (
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>
-              Judul / Topik Praktikum *
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  color: colors.textPrimary,
-                  borderColor: colors.border,
-                  backgroundColor: colors.background,
-                },
-              ]}
-              placeholder="Contoh: Modul 5: REST API & State Management"
-              placeholderTextColor={colors.textSecondary}
-              value={title}
-              onChangeText={(value) => {
-                setTitle(value);
-                setErrorMessage('');
-              }}
-              editable={!submitting}
-              maxLength={140}
-              accessibilityLabel="Judul atau topik praktikum"
-            />
-          </View>
-
-          <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>
-              Lokasi / Ruangan Lab *
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  color: colors.textPrimary,
-                  borderColor: colors.border,
-                  backgroundColor: colors.background,
-                },
-              ]}
-              placeholder="Contoh: Lab Komputer 2"
-              placeholderTextColor={colors.textSecondary}
-              value={location}
-              onChangeText={(value) => {
-                setLocation(value);
-                setErrorMessage('');
-              }}
-              editable={!submitting}
-              maxLength={120}
-              accessibilityLabel="Lokasi praktikum"
-            />
-          </View>
-
-          {/* Pemilih Tanggal Berbasis Kalender */}
-          <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>
-              Tanggal Pelaksanaan *
-            </Text>
-            <TouchableOpacity
-              style={[
-                styles.selectorButton,
-                { borderColor: colors.border, backgroundColor: colors.background },
-              ]}
-              onPress={() => {
-                setShowCalendar((prev) => !prev);
-                setShowSlotDropdown(false);
-              }}
-              disabled={submitting}
-              accessibilityRole="button"
-              accessibilityLabel="Pilih tanggal pelaksanaan dari kalender"
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.selectorPrimary, { color: colors.textPrimary }]}>
-                  {formatCalendarDateLabel(date)}
-                </Text>
-                <Text style={[styles.selectorSecondary, { color: colors.textSecondary }]}>
-                  {date}
-                </Text>
-              </View>
-              <Text style={{ color: colors.actionPrimary, fontWeight: '700', fontSize: 13 }}>
-                {showCalendar ? 'Tutup ▲' : 'Kalender ▼'}
-              </Text>
-            </TouchableOpacity>
-
-            {showCalendar ? (
-              <View
-                style={[
-                  styles.calendarCard,
-                  { borderColor: colors.border, backgroundColor: colors.background },
-                ]}
-              >
-                <View style={styles.calendarHeader}>
-                  <TouchableOpacity
-                    style={[styles.calendarNavBtn, { borderColor: colors.border }]}
-                    onPress={() => shiftCalendarMonth(-1)}
-                    accessibilityLabel="Bulan sebelumnya"
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Kelas Praktikum</Text>
+            <View style={styles.classChips}>
+              {classes.map((cls) => {
+                const isSelected = selectedClassId === cls.id;
+                return (
+                  <Pressable
+                    key={cls.id}
+                    onPress={() => setSelectedClassId(cls.id)}
+                    disabled={submitting}
+                    style={[
+                      styles.chip,
+                      {
+                        borderColor: isSelected ? colors.pacific : colors.border,
+                        backgroundColor: isSelected ? colors.pacificSoft : colors.background,
+                      },
+                    ]}
                   >
-                    <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>‹</Text>
-                  </TouchableOpacity>
-                  <Text style={[styles.calendarMonthLabel, { color: colors.textPrimary }]}>
-                    {MONTH_NAMES[calendarCursor.month]} {calendarCursor.year}
-                  </Text>
-                  <TouchableOpacity
-                    style={[styles.calendarNavBtn, { borderColor: colors.border }]}
-                    onPress={() => shiftCalendarMonth(1)}
-                    accessibilityLabel="Bulan berikutnya"
-                  >
-                    <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>›</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.weekRow}>
-                  {WEEKDAY_HEADERS.map((dayName) => (
                     <Text
-                      key={dayName}
-                      style={[styles.weekHeaderText, { color: colors.textSecondary }]}
-                    >
-                      {dayName}
-                    </Text>
-                  ))}
-                </View>
-
-                <View style={styles.daysGrid}>
-                  {calendarCells.map((cellDate, idx) => {
-                    if (!cellDate) {
-                      return <View key={`empty-${idx}`} style={styles.dayCell} />;
-                    }
-                    const dayNum = Number(cellDate.slice(-2));
-                    const isSelected = cellDate === date;
-                    const isToday = cellDate === todayDateStr;
-                    return (
-                      <TouchableOpacity
-                        key={cellDate}
-                        style={[
-                          styles.dayCell,
-                          isSelected && { backgroundColor: colors.actionPrimary },
-                          !isSelected && isToday && {
-                            borderColor: colors.actionPrimary,
-                            borderWidth: 1,
-                          },
-                        ]}
-                        onPress={() => {
-                          setDate(cellDate);
-                          setShowCalendar(false);
-                          setErrorMessage('');
-                        }}
-                      >
-                        <Text
-                          style={[
-                            styles.dayCellText,
-                            {
-                              color: isSelected ? '#fff' : colors.textPrimary,
-                              fontWeight: isSelected || isToday ? '700' : '400',
-                            },
-                          ]}
-                        >
-                          {dayNum}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            ) : null}
-          </View>
-
-          {/* Dropdown 6 Slot Waktu Sesi */}
-          <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>
-              Slot Waktu Praktikum *
-            </Text>
-            <TouchableOpacity
-              style={[
-                styles.selectorButton,
-                { borderColor: colors.border, backgroundColor: colors.background },
-              ]}
-              onPress={() => {
-                setShowSlotDropdown((prev) => !prev);
-                setShowCalendar(false);
-              }}
-              disabled={submitting}
-              accessibilityRole="button"
-              accessibilityLabel="Pilih slot waktu praktikum"
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.selectorPrimary, { color: colors.textPrimary }]}>
-                  {activeSlot.label}
-                </Text>
-                <Text style={[styles.selectorSecondary, { color: colors.textSecondary }]}>
-                  {activeSlot.description}
-                </Text>
-              </View>
-              <Text style={{ color: colors.actionPrimary, fontWeight: '700', fontSize: 13 }}>
-                {showSlotDropdown ? 'Tutup ▲' : 'Pilih ▼'}
-              </Text>
-            </TouchableOpacity>
-
-            {showSlotDropdown ? (
-              <View
-                style={[
-                  styles.dropdownList,
-                  { borderColor: colors.border, backgroundColor: colors.background },
-                ]}
-              >
-                {SESSION_TIME_SLOTS.map((slot) => {
-                  const isSelected = slot.id === selectedSlotId;
-                  return (
-                    <TouchableOpacity
-                      key={slot.id}
                       style={[
-                        styles.dropdownItem,
-                        {
-                          borderBottomColor: colors.border,
-                          backgroundColor: isSelected ? colors.surfaceMuted : 'transparent',
-                        },
+                        styles.chipText,
+                        { color: isSelected ? colors.pacificDark : colors.textPrimary },
                       ]}
-                      onPress={() => handleSelectSlot(slot.id)}
                     >
-                      <Text
-                        style={{
-                          color: isSelected ? colors.actionPrimary : colors.textPrimary,
-                          fontWeight: isSelected ? '700' : '600',
-                          fontSize: 13,
-                        }}
-                      >
-                        {slot.label}
-                      </Text>
-                      <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                        {slot.description}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            ) : null}
+                      {cls.courseName} · {cls.className}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
+        ) : null}
 
-          {selectedSlotId !== 'custom' ? (
+        <View style={styles.fieldGroup}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>
+            Judul / Modul Sesi
+          </Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                color: colors.textPrimary,
+                borderColor: colors.border,
+                backgroundColor: colors.background,
+              },
+            ]}
+            placeholder="Contoh: Modul 04 · Routing OSPF"
+            placeholderTextColor={colors.textSubtle}
+            value={title}
+            onChangeText={(value) => {
+              setTitle(value);
+              setErrorMessage('');
+            }}
+            editable={!submitting}
+            maxLength={140}
+          />
+        </View>
+
+        <View style={styles.fieldGroup}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>
+            Ruang Laboratorium
+          </Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                color: colors.textPrimary,
+                borderColor: colors.border,
+                backgroundColor: colors.background,
+              },
+            ]}
+            placeholder="Contoh: Lab Jarkom 302"
+            placeholderTextColor={colors.textSubtle}
+            value={location}
+            onChangeText={(value) => {
+              setLocation(value);
+              setErrorMessage('');
+            }}
+            editable={!submitting}
+            maxLength={120}
+          />
+        </View>
+
+        <View style={styles.fieldGroup}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>
+            Tanggal Pelaksanaan
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setShowCalendar((prev) => !prev);
+              setShowSlotDropdown(false);
+            }}
+            disabled={submitting}
+            style={[
+              styles.selectorButton,
+              { borderColor: colors.border, backgroundColor: colors.background },
+            ]}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.selectorPrimary, { color: colors.textPrimary }]}>
+                {formatCalendarDateLabel(date)}
+              </Text>
+              <Text style={[styles.selectorSecondary, { color: colors.textSubtle }]}>{date}</Text>
+            </View>
+            {showCalendar ? (
+              <ChevronUp size={16} color={colors.baltic} strokeWidth={2.2} />
+            ) : (
+              <ChevronDown size={16} color={colors.baltic} strokeWidth={2.2} />
+            )}
+          </Pressable>
+
+          {showCalendar ? (
             <View
               style={[
-                styles.lockedTimeBanner,
-                { borderColor: colors.border, backgroundColor: colors.surfaceMuted },
+                styles.calendarCard,
+                { borderColor: colors.border, backgroundColor: colors.background },
               ]}
             >
-              <Text style={[styles.lockedTimeLabel, { color: colors.textSecondary }]}>
-                Jam Sesi (otomatis dari slot terpilih):
-              </Text>
-              <Text style={[styles.lockedTimeValue, { color: colors.textPrimary }]}>
-                {startsAt} – {endsAt}
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.row}>
-              <View style={[styles.fieldGroup, { flex: 1 }]}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>
-                  Waktu Mulai Kustom *
+              <View style={styles.calendarHeader}>
+                <Pressable
+                  style={[styles.calendarNavBtn, { borderColor: colors.border }]}
+                  onPress={() => shiftCalendarMonth(-1)}
+                >
+                  <ChevronLeft size={16} color={colors.textPrimary} strokeWidth={2.2} />
+                </Pressable>
+                <Text style={[styles.calendarMonthLabel, { color: colors.textPrimary }]}>
+                  {MONTH_NAMES[calendarCursor.month]} {calendarCursor.year}
                 </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      color: colors.textPrimary,
-                      borderColor: colors.border,
-                      backgroundColor: colors.background,
-                    },
-                  ]}
-                  placeholder="08:00"
-                  placeholderTextColor={colors.textSecondary}
-                  value={startsAt}
-                  onChangeText={(value) => {
-                    setStartsAt(value);
-                    setErrorMessage('');
-                  }}
-                  editable={!submitting}
-                  maxLength={5}
-                  keyboardType="numbers-and-punctuation"
-                  accessibilityLabel="Waktu mulai kustom, format HH:mm"
-                />
+                <Pressable
+                  style={[styles.calendarNavBtn, { borderColor: colors.border }]}
+                  onPress={() => shiftCalendarMonth(1)}
+                >
+                  <ChevronRight size={16} color={colors.textPrimary} strokeWidth={2.2} />
+                </Pressable>
               </View>
 
-              <View style={[styles.fieldGroup, { flex: 1 }]}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>
-                  Waktu Selesai Kustom *
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      color: colors.textPrimary,
-                      borderColor: colors.border,
-                      backgroundColor: colors.background,
-                    },
-                  ]}
-                  placeholder="10:30"
-                  placeholderTextColor={colors.textSecondary}
-                  value={endsAt}
-                  onChangeText={(value) => {
-                    setEndsAt(value);
-                    setErrorMessage('');
-                  }}
-                  editable={!submitting}
-                  maxLength={5}
-                  keyboardType="numbers-and-punctuation"
-                  accessibilityLabel="Waktu selesai kustom, format HH:mm"
-                />
+              <View style={styles.weekRow}>
+                {WEEKDAY_HEADERS.map((dayName) => (
+                  <Text
+                    key={dayName}
+                    style={[styles.weekHeaderText, { color: colors.textSubtle }]}
+                  >
+                    {dayName}
+                  </Text>
+                ))}
+              </View>
+
+              <View style={styles.daysGrid}>
+                {calendarCells.map((cellDate, idx) => {
+                  if (!cellDate) {
+                    return <View key={`empty-${idx}`} style={styles.dayCell} />;
+                  }
+                  const dayNum = Number(cellDate.slice(-2));
+                  const isSelected = cellDate === date;
+                  const isToday = cellDate === todayDateStr;
+                  return (
+                    <Pressable
+                      key={cellDate}
+                      style={[
+                        styles.dayCell,
+                        isSelected && { backgroundColor: colors.pacific },
+                        !isSelected &&
+                          isToday && {
+                            borderColor: colors.pacific,
+                            borderWidth: 1,
+                          },
+                      ]}
+                      onPress={() => {
+                        setDate(cellDate);
+                        setShowCalendar(false);
+                        setErrorMessage('');
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.dayCellText,
+                          {
+                            color: isSelected ? '#FCFCFA' : colors.textPrimary,
+                            fontFamily:
+                              isSelected || isToday ? FontFamily.sansBold : FontFamily.sansRegular,
+                          },
+                        ]}
+                      >
+                        {dayNum}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             </View>
-          )}
-        </ScrollView>
-
-        <View style={styles.buttonRow}>
-          <TouchableOpacity
-            style={[styles.cancelBtn, { borderColor: colors.border }]}
-            onPress={onClose}
-            disabled={submitting}
-          >
-            <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Batal</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.submitBtn, { backgroundColor: colors.actionPrimary }]}
-            onPress={handleSubmit}
-            disabled={submitting}
-          >
-            {submitting ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.submitBtnText}>
-                {initialSession ? 'Simpan Perubahan' : 'Buat Sesi'}
-              </Text>
-            )}
-          </TouchableOpacity>
+          ) : null}
         </View>
+
+        <View style={styles.fieldGroup}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Slot Waktu Praktikum</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setShowSlotDropdown((prev) => !prev);
+              setShowCalendar(false);
+            }}
+            disabled={submitting}
+            style={[
+              styles.selectorButton,
+              { borderColor: colors.border, backgroundColor: colors.background },
+            ]}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.selectorPrimary, { color: colors.textPrimary }]}>
+                {activeSlot.label}
+              </Text>
+              <Text style={[styles.selectorSecondary, { color: colors.textSubtle }]}>
+                {activeSlot.description}
+              </Text>
+            </View>
+            {showSlotDropdown ? (
+              <ChevronUp size={16} color={colors.baltic} strokeWidth={2.2} />
+            ) : (
+              <ChevronDown size={16} color={colors.baltic} strokeWidth={2.2} />
+            )}
+          </Pressable>
+
+          {showSlotDropdown ? (
+            <View
+              style={[
+                styles.dropdownList,
+                { borderColor: colors.border, backgroundColor: colors.background },
+              ]}
+            >
+              {SESSION_TIME_SLOTS.map((slot) => {
+                const isSelected = slot.id === selectedSlotId;
+                return (
+                  <Pressable
+                    key={slot.id}
+                    style={[
+                      styles.dropdownItem,
+                      {
+                        borderBottomColor: colors.border,
+                        backgroundColor: isSelected ? colors.pacificSoft : 'transparent',
+                      },
+                    ]}
+                    onPress={() => handleSelectSlot(slot.id)}
+                  >
+                    <Text
+                      style={{
+                        color: isSelected ? colors.pacificDark : colors.textPrimary,
+                        fontFamily: FontFamily.sansSemiBold,
+                        fontSize: 13,
+                      }}
+                    >
+                      {slot.label}
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontFamily: FontFamily.sansRegular,
+                        fontSize: 11.5,
+                      }}
+                    >
+                      {slot.description}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+        </View>
+
+        {selectedSlotId !== 'custom' ? (
+          <View
+            style={[
+              styles.lockedTimeBanner,
+              { borderColor: colors.border, backgroundColor: colors.balticSoft },
+            ]}
+          >
+            <Text style={[styles.lockedTimeLabel, { color: colors.textSecondary }]}>
+              Jam Sesi
+            </Text>
+            <Text style={[styles.lockedTimeValue, { color: colors.baltic }]}>
+              {startsAt} – {endsAt}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.row}>
+            <View style={[styles.fieldGroup, { flex: 1 }]}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Mulai</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    color: colors.textPrimary,
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                    fontFamily: FontFamily.monoMedium,
+                  },
+                ]}
+                placeholder="08:00"
+                placeholderTextColor={colors.textSubtle}
+                value={startsAt}
+                onChangeText={(value) => {
+                  setStartsAt(value);
+                  setErrorMessage('');
+                }}
+                editable={!submitting}
+                maxLength={5}
+                keyboardType="numbers-and-punctuation"
+              />
+            </View>
+
+            <View style={[styles.fieldGroup, { flex: 1 }]}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Selesai</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    color: colors.textPrimary,
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                    fontFamily: FontFamily.monoMedium,
+                  },
+                ]}
+                placeholder="10:30"
+                placeholderTextColor={colors.textSubtle}
+                value={endsAt}
+                onChangeText={(value) => {
+                  setEndsAt(value);
+                  setErrorMessage('');
+                }}
+                editable={!submitting}
+                maxLength={5}
+                keyboardType="numbers-and-punctuation"
+              />
+            </View>
+          </View>
+        )}
+      </ScrollView>
+
+      <View style={styles.buttonRow}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onClose}
+          disabled={submitting}
+          style={({ pressed }) => [
+            styles.cancelBtn,
+            { backgroundColor: colors.background, borderColor: colors.border },
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={[styles.cancelBtnText, { color: colors.textSecondary }]}>Batal</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => void handleSubmit()}
+          disabled={submitting}
+          style={({ pressed }) => [
+            styles.submitBtn,
+            { backgroundColor: colors.rosy },
+            pressed && styles.pressed,
+          ]}
+        >
+          {submitting ? (
+            <ActivityIndicator color="#FCFCFA" size="small" />
+          ) : (
+            <Text style={styles.submitBtnText}>
+              {initialSession ? 'Simpan Perubahan' : 'Buat Sesi'}
+            </Text>
+          )}
+        </Pressable>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -583,10 +580,14 @@ export function SessionFormModal({
   onClose,
   onSubmit,
 }: SessionFormModalProps) {
-  if (!visible) return null;
-
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <FlyAwayBottomSheet
+      visible={visible}
+      onClose={onClose}
+      title={initialSession ? 'Ubah Sesi Praktikum' : 'Tambah Sesi Praktikum'}
+      subtitle="Atur jadwal, ruang laboratorium, dan slot waktu sesi"
+      maxHeight="88%"
+    >
       <SessionFormContent
         key={initialSession?.id ?? `new-session-${defaultClassId ?? 'all'}`}
         classes={classes}
@@ -595,44 +596,42 @@ export function SessionFormModal({
         onClose={onClose}
         onSubmit={onSubmit}
       />
-    </Modal>
+    </FlyAwayBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
+  formWrap: {
+    gap: 12,
+    paddingBottom: 6,
   },
-  container: {
-    width: '100%',
-    maxWidth: 500,
-    borderRadius: 16,
+  formScroll: {
+    maxHeight: 410,
+  },
+  formContent: {
+    gap: 12,
+    paddingBottom: 4,
+  },
+  errorBox: {
+    borderRadius: 12,
     borderWidth: 1,
-    padding: 24,
-    gap: 16,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
   },
   errorText: {
-    color: '#ef4444',
-    fontSize: 13,
+    fontFamily: FontFamily.sansMedium,
+    fontSize: 12.5,
   },
   fieldGroup: {
     gap: 6,
   },
   row: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   label: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 12,
   },
   classChips: {
     flexDirection: 'row',
@@ -642,39 +641,42 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
   },
   chipText: {
-    fontSize: 13,
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 12.5,
   },
   input: {
+    height: 44,
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 13.5,
   },
   selectorButton: {
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderRadius: 14,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
   selectorPrimary: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 13.5,
   },
   selectorSecondary: {
-    fontSize: 12,
+    fontFamily: FontFamily.monoMedium,
+    fontSize: 11.5,
     marginTop: 2,
   },
   calendarCard: {
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 16,
     padding: 12,
     gap: 10,
   },
@@ -685,15 +687,15 @@ const styles = StyleSheet.create({
   },
   calendarNavBtn: {
     borderWidth: 1,
-    borderRadius: 6,
+    borderRadius: 10,
     width: 32,
     height: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
   calendarMonthLabel: {
+    fontFamily: FontFamily.displayBold,
     fontSize: 14,
-    fontWeight: '700',
   },
   weekRow: {
     flexDirection: 'row',
@@ -701,8 +703,8 @@ const styles = StyleSheet.create({
   weekHeaderText: {
     width: '14.285%',
     textAlign: 'center',
+    fontFamily: FontFamily.sansBold,
     fontSize: 11,
-    fontWeight: '700',
   },
   daysGrid: {
     flexDirection: 'row',
@@ -711,64 +713,73 @@ const styles = StyleSheet.create({
   dayCell: {
     width: '14.285%',
     aspectRatio: 1,
-    maxHeight: 38,
-    borderRadius: 8,
+    maxHeight: 36,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dayCellText: {
-    fontSize: 13,
+    fontSize: 12.5,
   },
   dropdownList: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     overflow: 'hidden',
   },
   dropdownItem: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     gap: 2,
   },
   lockedTimeBanner: {
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderRadius: 14,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   lockedTimeLabel: {
+    fontFamily: FontFamily.sansRegular,
     fontSize: 12,
   },
   lockedTimeValue: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontFamily: FontFamily.monoMedium,
+    fontSize: 13.5,
+    fontVariant: ['tabular-nums'],
   },
   buttonRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 8,
+    gap: 10,
+    marginTop: 2,
   },
   cancelBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
+    flex: 1,
+    height: 46,
+    borderRadius: 16,
     borderWidth: 1,
-  },
-  submitBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 100,
+  },
+  cancelBtnText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 13.5,
+  },
+  submitBtn: {
+    flex: 1.4,
+    height: 46,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   submitBtnText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
+    color: '#FCFCFA',
+    fontFamily: FontFamily.sansBold,
+    fontSize: 13.5,
+  },
+  pressed: {
+    opacity: 0.78,
   },
 });

@@ -20,7 +20,7 @@ export function SkeletonGroup({
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
 }) {
-  const [opacity] = useState(() => new Animated.Value(0.5));
+  const [opacity] = useState(() => new Animated.Value(0.55));
 
   useEffect(() => {
     const animation = Animated.loop(
@@ -31,7 +31,7 @@ export function SkeletonGroup({
           useNativeDriver: true,
         }),
         Animated.timing(opacity, {
-          toValue: 0.45,
+          toValue: 0.5,
           duration: 750,
           useNativeDriver: true,
         }),
@@ -55,7 +55,7 @@ export function SkeletonGroup({
 export function SkeletonBox({
   width = '100%',
   height = 14,
-  radius = 6,
+  radius = 8,
   style,
 }: {
   width?: DimensionValue;
@@ -64,7 +64,7 @@ export function SkeletonBox({
   style?: StyleProp<ViewStyle>;
 }) {
   const isDark = useColorScheme() === 'dark';
-  const boneColor = isDark ? '#2A2F3A' : '#E5E7EB';
+  const boneColor = isDark ? Colors.dark.surfaceMuted : Colors.light.surfaceMuted;
 
   return (
     <View
@@ -101,7 +101,7 @@ export function CardListSkeleton({
               <SkeletonBox width="42%" height={11} />
               <SkeletonBox width="78%" height={18} />
             </View>
-            <SkeletonBox width={74} height={24} radius={8} />
+            <SkeletonBox width={74} height={24} radius={12} />
           </View>
 
           <View style={styles.metaRow}>
@@ -112,8 +112,8 @@ export function CardListSkeleton({
 
           {showActions ? (
             <View style={[styles.footerRow, { borderTopColor: colors.border }]}>
-              <SkeletonBox width={88} height={32} radius={8} />
-              <SkeletonBox width={112} height={32} radius={8} />
+              <SkeletonBox width={88} height={32} radius={12} />
+              <SkeletonBox width={112} height={32} radius={12} />
             </View>
           ) : null}
         </View>
@@ -142,7 +142,7 @@ export function RowListSkeleton({
             <SkeletonBox width="56%" height={14} />
             <SkeletonBox width="36%" height={11} />
           </View>
-          <SkeletonBox width={58} height={24} radius={6} />
+          <SkeletonBox width={58} height={24} radius={12} />
         </View>
       ))}
     </SkeletonGroup>
@@ -154,26 +154,16 @@ export function AppShellSkeleton() {
 
   return (
     <SkeletonGroup label="Memeriksa sesi" style={styles.shell}>
-      <View
-        style={[
-          styles.topBar,
-          { backgroundColor: colors.surface, borderBottomColor: colors.border },
-        ]}
-      >
-        <View style={styles.topBarText}>
-          <SkeletonBox width={132} height={14} />
-          <SkeletonBox width={96} height={11} />
+      <View style={[styles.balticCardSkeleton, { backgroundColor: colors.baltic }]}>
+        <SkeletonBox width={120} height={11} radius={6} style={{ opacity: 0.35 }} />
+        <SkeletonBox width={160} height={22} radius={8} style={{ opacity: 0.35 }} />
+        <View style={styles.balticBottomRow}>
+          <SkeletonBox width={110} height={26} radius={13} style={{ opacity: 0.3 }} />
+          <SkeletonBox width={92} height={26} radius={13} style={{ opacity: 0.3 }} />
         </View>
-        <SkeletonBox width={64} height={28} radius={8} />
       </View>
 
       <View style={styles.shellBody}>
-        <View style={styles.headingGroup}>
-          <SkeletonBox width={110} height={11} />
-          <SkeletonBox width="62%" height={28} radius={8} />
-          <SkeletonBox width="84%" height={14} />
-        </View>
-
         <View
           style={[
             styles.card,
@@ -185,27 +175,20 @@ export function AppShellSkeleton() {
               <SkeletonBox width="45%" height={12} />
               <SkeletonBox width="80%" height={20} />
             </View>
-            <SkeletonBox width={78} height={26} radius={8} />
+            <SkeletonBox width={78} height={26} radius={12} />
           </View>
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <SkeletonBox width="100%" height={36} radius={12} />
           <View style={styles.metaRow}>
-            <SkeletonBox width="28%" height={14} />
-            <SkeletonBox width="32%" height={14} />
-            <SkeletonBox width="26%" height={14} />
+            <SkeletonBox width="48%" height={40} radius={12} />
+            <SkeletonBox width="48%" height={40} radius={12} />
           </View>
-          <SkeletonBox width="100%" height={42} radius={8} />
         </View>
       </View>
 
-      <View
-        style={[
-          styles.bottomBar,
-          { backgroundColor: colors.surface, borderTopColor: colors.border },
-        ]}
-      >
-        <SkeletonBox width={54} height={14} />
-        <SkeletonBox width={54} height={14} />
-        <SkeletonBox width={54} height={14} />
+      <View style={[styles.bottomDock, { backgroundColor: colors.dockBg }]}>
+        <SkeletonBox width={54} height={14} radius={7} style={{ opacity: 0.28 }} />
+        <SkeletonBox width={54} height={14} radius={7} style={{ opacity: 0.28 }} />
+        <SkeletonBox width={54} height={14} radius={7} style={{ opacity: 0.28 }} />
       </View>
     </SkeletonGroup>
   );
@@ -217,7 +200,7 @@ const styles = StyleSheet.create({
   },
   card: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 20,
     padding: 16,
     gap: 12,
   },
@@ -257,40 +240,41 @@ const styles = StyleSheet.create({
   },
   shell: {
     flex: 1,
+    paddingTop: 8,
   },
-  topBar: {
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
+  balticCardSkeleton: {
+    marginHorizontal: 14,
+    borderRadius: 26,
+    padding: 16,
+    gap: 12,
+    maxWidth: MaxContentWidth - 28,
+    alignSelf: 'center',
+    width: '92%',
+  },
+  balticBottomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  topBarText: {
-    gap: 6,
+    marginTop: 4,
   },
   shellBody: {
     flex: 1,
     width: '100%',
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
-    padding: 24,
-    gap: 24,
+    padding: 14,
+    gap: 16,
   },
-  headingGroup: {
-    gap: 10,
-    paddingTop: 8,
-  },
-  divider: {
-    height: 1,
-    marginVertical: 4,
-  },
-  bottomBar: {
-    height: 56,
-    borderTopWidth: 1,
+  bottomDock: {
+    marginHorizontal: 14,
+    marginBottom: 14,
+    height: 62,
+    borderRadius: 31,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingHorizontal: 16,
+    maxWidth: 460,
+    alignSelf: 'center',
+    width: '92%',
   },
 });

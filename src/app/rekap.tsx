@@ -1,61 +1,310 @@
-/**
- * Rekap Screen — AL-06 / FR-09
- * Rekap kehadiran per sesi secara real-time untuk Asisten.
- */
-
-import { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { ChevronDown, Download } from 'lucide-react-native';
 
+import { AccordionGroup } from '@/components/ui/accordion-group';
+import { AppHeader, getFirstName } from '@/components/ui/app-header';
+import { PickerBottomSheet, type PickerOption } from '@/components/ui/picker-bottom-sheet';
+import { SearchFilterBar } from '@/components/ui/search-filter-bar';
 import { CardListSkeleton, RowListSkeleton } from '@/components/ui/skeleton';
-import { Colors, MaxContentWidth } from '@/constants/theme';
+import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useSessionAttendance } from '@/features/attendance';
 import { useAuth } from '@/features/auth';
+import { useAssistantLeaveRequests } from '@/features/leave';
 import {
+  type ClassMember,
   formatSessionDate,
   formatSessionTime,
-  usePracticum,
   type PracticumSession,
+  type StudentCandidate,
+  usePracticum,
 } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { normalizeSessionStatus, type SessionStatus, type SessionStatusV2 } from '@/types';
+import { showAlert } from '@/lib/cross-platform-alert';
+import type { LeaveStatus } from '@/types';
 
-function getSessionCourseLabel(session: PracticumSession): string {
-  return [session.className, session.courseName].filter(Boolean).join(' · ');
+type RecapFilterMode = 'all' | 'hadir' | 'izin' | 'belum';
+
+type LeaveMemberRow = {
+  id: string;
+  displayName: string;
+  identifier: string;
+  leaveStatus: LeaveStatus;
+};
+
+const FILTER_OPTIONS: PickerOption[] = [
+  { value: 'all', label: 'Semua', subtitle: 'Tampilkan Hadir, Izin, dan Belum Presensi' },
+  { value: 'hadir', label: 'Hadir', subtitle: 'Fokus praktikan yang sudah tercatat hadir' },
+  { value: 'izin', label: 'Izin', subtitle: 'Praktikan yang mengajukan izin pada sesi ini' },
+  { value: 'belum', label: 'Belum Presensi', subtitle: 'Praktikan yang belum presensi maupun izin' },
+];
+
+function formatSessionCourseLabel(session: PracticumSession): string {
+  const parts = [session.courseName ?? session.className, session.title].filter(Boolean);
+  return parts.join(' · ');
 }
 
-function getStatusLabel(status: SessionStatus | SessionStatusV2): string {
-  const normalized = normalizeSessionStatus(status);
-  if (normalized === 'open') return '● Berlangsung';
-  if (normalized === 'closed') return '✓ Selesai';
-  return '◷ Belum dibuka';
+function leaveStatusLabel(status: LeaveStatus): string {
+  if (status === 'approved') return 'Disetujui';
+  if (status === 'rejected') return 'Ditolak';
+  return 'Pending';
 }
 
 export default function RecapScreen() {
-  const { user } = useAuth();
-  const { sessions, loadingSessions } = usePracticum();
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
+  const { user } = useAuth();
+  const { classes, sessions, loadingSessions, getClassMembers, getRegisteredStudents } =
+    usePracticum();
 
   const defaultSessionId = useMemo(() => {
-    const openSession = sessions.find((item) => item.status === 'open');
-    return openSession?.id ?? sessions[0]?.id ?? null;
+    const open = sessions.find((item) => item.status === 'open');
+    return open?.id ?? sessions[0]?.id ?? null;
   }, [sessions]);
 
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [sessionSheetVisible, setSessionSheetVisible] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterMode, setFilterMode] = useState<RecapFilterMode>('all');
+  const [filterSheetVisible, setFilterSheetVisible] = useState(false);
+
+  const [presentExpanded, setPresentExpanded] = useState(true);
+  const [leaveExpanded, setLeaveExpanded] = useState(true);
+  const [absentExpanded, setAbsentExpanded] = useState(true);
+  const [memberSnapshot, setMemberSnapshot] = useState<{
+    classId: string;
+    members: ClassMember[];
+  } | null>(null);
+  const [registeredStudents, setRegisteredStudents] = useState<StudentCandidate[]>([]);
+
   const activeSession = useMemo(() => {
     const targetId = selectedSessionId ?? defaultSessionId;
     return sessions.find((item) => item.id === targetId) ?? sessions[0] ?? null;
   }, [defaultSessionId, selectedSessionId, sessions]);
 
-  const { records, loading, error, fromCache, retry } = useSessionAttendance(
+  const { records, loading, error, retry } = useSessionAttendance(
     activeSession?.id ?? null,
     activeSession?.classId ?? null,
   );
+
+  const classIds = useMemo(() => classes.map((c) => c.id), [classes]);
+  const { requests: leaveRequests } = useAssistantLeaveRequests(
+    classIds,
+    undefined,
+    classes.length > 0,
+  );
+
+  useEffect(() => {
+    if (user?.role !== 'assistant') return;
+    let cancelled = false;
+    getRegisteredStudents()
+      .then((list) => {
+        if (!cancelled) setRegisteredStudents(list);
+      })
+      .catch(() => {
+        if (!cancelled) setRegisteredStudents([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [getRegisteredStudents, user?.role]);
+
+  useEffect(() => {
+    const targetClassId = activeSession?.classId;
+    if (!targetClassId) return;
+    let cancelled = false;
+    getClassMembers(targetClassId)
+      .then((list) => {
+        if (!cancelled) {
+          setMemberSnapshot({ classId: targetClassId, members: list });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setMemberSnapshot({ classId: targetClassId, members: [] });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSession?.classId, getClassMembers]);
+
+  const classMembers = useMemo(
+    () =>
+      activeSession?.classId && memberSnapshot?.classId === activeSession.classId
+        ? memberSnapshot.members
+        : [],
+    [activeSession, memberSnapshot],
+  );
+
+  const studentByKey = useMemo(() => {
+    const map = new Map<string, StudentCandidate>();
+    registeredStudents.forEach((student) => {
+      if (student.authUid) map.set(student.authUid, student);
+      map.set(student.userId, student);
+      map.set(student.identifier.trim().toLowerCase(), student);
+    });
+    return map;
+  }, [registeredStudents]);
+
+  const attendedIdentifiers = useMemo(
+    () => new Set(records.map((r) => r.studentIdentifier.trim().toLowerCase())),
+    [records],
+  );
+  const attendedIds = useMemo(() => new Set(records.map((r) => r.studentId)), [records]);
+
+  const sessionLeaves = useMemo(
+    () =>
+      activeSession
+        ? leaveRequests.filter((req) => req.sessionId === activeSession.id)
+        : [],
+    [activeSession, leaveRequests],
+  );
+
+  const { leaveMembers, notAttendedMembers } = useMemo(() => {
+    const leaveRows: LeaveMemberRow[] = [];
+    const leaveMemberKeys = new Set<string>();
+
+    sessionLeaves.forEach((req) => {
+      const registered = studentByKey.get(req.studentId);
+      const matchedMember = classMembers.find(
+        (m) =>
+          m.userId === req.studentId ||
+          (registered !== undefined &&
+            (m.userId === registered.userId ||
+              m.identifier.trim().toLowerCase() === registered.identifier.trim().toLowerCase())),
+      );
+
+      const resolvedIdentifier =
+        matchedMember?.identifier ?? registered?.identifier ?? req.studentId;
+      const resolvedName =
+        matchedMember?.displayName ?? registered?.displayName ?? req.studentId;
+      const normalizedIdentifier = resolvedIdentifier.trim().toLowerCase();
+
+      const alreadyPresent =
+        attendedIds.has(req.studentId) ||
+        (matchedMember !== undefined && attendedIds.has(matchedMember.userId)) ||
+        attendedIdentifiers.has(normalizedIdentifier);
+
+      if (matchedMember) {
+        leaveMemberKeys.add(matchedMember.userId);
+      }
+      leaveMemberKeys.add(normalizedIdentifier);
+
+      if (!alreadyPresent) {
+        leaveRows.push({
+          id: req.id,
+          displayName: resolvedName,
+          identifier: resolvedIdentifier,
+          leaveStatus: req.status,
+        });
+      }
+    });
+
+    const missing = classMembers.filter((member) => {
+      const normalized = member.identifier.trim().toLowerCase();
+      if (attendedIds.has(member.userId) || attendedIdentifiers.has(normalized)) {
+        return false;
+      }
+      if (leaveMemberKeys.has(member.userId) || leaveMemberKeys.has(normalized)) {
+        return false;
+      }
+      return true;
+    });
+
+    return { leaveMembers: leaveRows, notAttendedMembers: missing };
+  }, [attendedIdentifiers, attendedIds, classMembers, sessionLeaves, studentByKey]);
+
+  const filteredPresent = useMemo(() => {
+    if (filterMode !== 'all' && filterMode !== 'hadir') return [];
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return records;
+    return records.filter(
+      (r) =>
+        r.studentName.toLowerCase().includes(q) ||
+        r.studentIdentifier.toLowerCase().includes(q),
+    );
+  }, [filterMode, records, searchQuery]);
+
+  const filteredLeave = useMemo(() => {
+    if (filterMode !== 'all' && filterMode !== 'izin') return [];
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return leaveMembers;
+    return leaveMembers.filter(
+      (item) =>
+        item.displayName.toLowerCase().includes(q) ||
+        item.identifier.toLowerCase().includes(q),
+    );
+  }, [filterMode, leaveMembers, searchQuery]);
+
+  const filteredNotAttended = useMemo(() => {
+    if (filterMode !== 'all' && filterMode !== 'belum') return [];
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return notAttendedMembers;
+    return notAttendedMembers.filter(
+      (m) =>
+        m.displayName.toLowerCase().includes(q) ||
+        m.identifier.toLowerCase().includes(q),
+    );
+  }, [filterMode, notAttendedMembers, searchQuery]);
+
+  const sessionOptions = useMemo<PickerOption[]>(
+    () =>
+      sessions.map((s) => ({
+        value: s.id,
+        label: formatSessionCourseLabel(s),
+        subtitle: `${formatSessionDate(s.date, s.startsAt)} · ${formatSessionTime(s.startsAt)} · ${s.location}`,
+      })),
+    [sessions],
+  );
+
+  const handleExportCsv = async () => {
+    if (!activeSession) return;
+    const header = 'Nama,NIM,Status,Waktu Scan';
+    const presentRows = records.map(
+      (r) =>
+        `"${r.studentName.replace(/"/g, '""')}","${r.studentIdentifier}","Hadir","${r.attendedAt}"`,
+    );
+    const leaveRows = leaveMembers.map(
+      (l) =>
+        `"${l.displayName.replace(/"/g, '""')}","${l.identifier}","Izin (${leaveStatusLabel(l.leaveStatus)})","-"`,
+    );
+    const notAttendedRows = notAttendedMembers.map(
+      (m) =>
+        `"${m.displayName.replace(/"/g, '""')}","${m.identifier}","Belum Presensi","-"`,
+    );
+    const csv = [header, ...presentRows, ...leaveRows, ...notAttendedRows].join('\n');
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof Blob !== 'undefined') {
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `rekap-${activeSession.id}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    try {
+      await Share.share({
+        title: `Rekap ${activeSession.title}`,
+        message: csv,
+      });
+    } catch {
+      showAlert('Ekspor CSV', 'Tidak dapat membagikan berkas CSV saat ini.');
+    }
+  };
 
   if (user?.role !== 'assistant') {
     return (
@@ -70,385 +319,434 @@ export default function RecapScreen() {
     );
   }
 
+  const totalEnrolled = Math.max(classMembers.length, records.length);
+  const filterLabel =
+    FILTER_OPTIONS.find((opt) => opt.value === filterMode)?.label ?? 'Semua';
+
   return (
-    <ScrollView
-      style={{ backgroundColor: colors.background }}
-      contentContainerStyle={[
-        styles.content,
-        { maxWidth: MaxContentWidth, alignSelf: 'center', width: '100%' },
-      ]}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.heading}>
-        <View style={styles.headingRow}>
-          <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>Ruang asisten</Text>
-          <View
-            style={[
-              styles.syncBadge,
-              { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
-            ]}
-          >
-            <Text style={[styles.syncBadgeText, { color: colors.textSecondary }]}>
-              {fromCache ? 'Cache lokal' : 'Sinkron real-time'}
-            </Text>
-          </View>
-        </View>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Rekap kehadiran</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Pilih sesi untuk memantau daftar hadir praktikan secara real-time.
-        </Text>
-      </View>
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <AppHeader
+          eyebrow={`Rekap Sesi · ${activeSession?.className ?? 'Asisten'}`}
+          title={`Hai, ${getFirstName(user.displayName)}`}
+          monoBadge={activeSession ? activeSession.title.toUpperCase().slice(0, 18) : 'BELUM ADA SESI'}
+          statusBadge={`${records.length} / ${totalEnrolled} Masuk`}
+        />
 
-      {loadingSessions && sessions.length === 0 ? (
-        <CardListSkeleton count={2} label="Memuat daftar sesi praktikum" />
-      ) : sessions.length === 0 ? (
-        <View
-          style={[
-            styles.stateCard,
-            { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
-          ]}
-        >
-          <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>
-            Belum ada sesi praktikum
-          </Text>
-          <Text style={[styles.stateBody, { color: colors.textSecondary }]}>
-            Sesi praktikum akan tampil di sini setelah dibuat pada kelas terkait.
-          </Text>
-        </View>
-      ) : (
-        <>
-          <View style={styles.selectorList}>
-            {sessions.map((session) => {
-              const selected = session.id === activeSession?.id;
-              const classLabel = getSessionCourseLabel(session);
-              return (
-                <Pressable
-                  key={session.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Pilih sesi ${session.title}`}
-                  accessibilityState={{ selected }}
-                  onPress={() => setSelectedSessionId(session.id)}
-                  style={({ pressed }) => [
-                    styles.selectorChip,
-                    {
-                      backgroundColor: selected ? colors.actionPrimary : colors.surface,
-                      borderColor: selected ? colors.actionPrimary : colors.border,
-                    },
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.selectorChipText,
-                      { color: selected ? colors.actionSecondary : colors.textPrimary },
-                    ]}
-                  >
-                    {session.title}
-                    {classLabel ? ` · ${classLabel}` : ''}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {activeSession ? (
+        <View style={styles.bodyContainer}>
+          {loadingSessions && sessions.length === 0 ? (
+            <CardListSkeleton count={2} label="Memuat daftar sesi praktikum" />
+          ) : sessions.length === 0 ? (
             <View
               style={[
-                styles.sessionCard,
+                styles.emptyCard,
                 { backgroundColor: colors.surface, borderColor: colors.border },
               ]}
             >
-              <View style={styles.sessionHeader}>
-                <View style={styles.sessionTitleGroup}>
-                  <Text style={[styles.sessionTitle, { color: colors.textPrimary }]}>
-                    {activeSession.title}
-                    {getSessionCourseLabel(activeSession)
-                      ? ` · ${getSessionCourseLabel(activeSession)}`
-                      : ''}
-                  </Text>
-                  <Text style={[styles.sessionMeta, { color: colors.textSecondary }, styles.tabular]}>
-                    {formatSessionDate(activeSession.date, activeSession.startsAt)} ·{' '}
-                    {formatSessionTime(activeSession.startsAt)}–
-                    {formatSessionTime(activeSession.endsAt)} · {activeSession.location}
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.statusBadge,
-                    { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
+              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+                Belum ada sesi praktikum
+              </Text>
+              <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
+                Buat sesi praktikum terlebih dahulu untuk memantau rekap presensi real-time.
+              </Text>
+            </View>
+          ) : (
+            <>
+              <View style={styles.topControlsRow}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setSessionSheetVisible(true)}
+                  style={({ pressed }) => [
+                    styles.classDropdown,
+                    { backgroundColor: colors.baltic },
+                    pressed && styles.pressed,
                   ]}
                 >
-                  <Text style={[styles.statusText, { color: colors.textPrimary }]}>
-                    {getStatusLabel(activeSession.status)}
+                  <Text style={styles.classDropdownText} numberOfLines={1}>
+                    {activeSession ? formatSessionCourseLabel(activeSession) : 'Pilih Sesi'}
                   </Text>
-                </View>
+                  <ChevronDown size={16} color="#FCFCFA" strokeWidth={2.2} />
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Unduh CSV Rekap Presensi"
+                  onPress={() => void handleExportCsv()}
+                  style={({ pressed }) => [
+                    styles.csvBtn,
+                    { backgroundColor: colors.pacificSoft },
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Download size={15} color={colors.pacificDark} strokeWidth={2.2} />
+                  <Text style={[styles.csvBtnText, { color: colors.pacificDark }]}>CSV</Text>
+                </Pressable>
               </View>
 
-              <View style={[styles.countRow, { borderTopColor: colors.border }]}>
-                <Text style={[styles.countText, { color: colors.textPrimary }, styles.tabular]}>
-                  {records.length} praktikan hadir
-                </Text>
-              </View>
+              <SearchFilterBar
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                searchPlaceholder="Cari nama atau NIM..."
+                filterLabel={filterLabel}
+                onPressFilter={() => setFilterSheetVisible(true)}
+              />
 
               {loading ? (
-                <RowListSkeleton count={4} label="Memuat rekap kehadiran" />
+                <View
+                  style={[
+                    styles.loadingCard,
+                    { backgroundColor: colors.surface, borderColor: colors.border },
+                  ]}
+                >
+                  <RowListSkeleton count={4} label="Memuat rekap presensi" />
+                </View>
               ) : error ? (
-                <View accessibilityRole="alert" style={styles.innerState}>
-                  <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>
+                <View
+                  style={[
+                    styles.emptyCard,
+                    { backgroundColor: colors.surface, borderColor: colors.border },
+                  ]}
+                >
+                  <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
                     Gagal memuat rekap
                   </Text>
-                  <Text style={[styles.stateBody, { color: colors.textSecondary }]}>{error}</Text>
+                  <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>{error}</Text>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel="Muat ulang rekap kehadiran"
                     onPress={retry}
                     style={({ pressed }) => [
-                      styles.retryButton,
-                      { backgroundColor: colors.actionPrimary },
+                      styles.retryBtn,
+                      { backgroundColor: colors.balticSoft },
                       pressed && styles.pressed,
                     ]}
                   >
-                    <Text style={[styles.retryButtonText, { color: colors.actionSecondary }]}>
-                      Coba lagi
-                    </Text>
+                    <Text style={[styles.retryText, { color: colors.baltic }]}>Coba lagi</Text>
                   </Pressable>
                 </View>
-              ) : records.length === 0 ? (
-                <View style={styles.innerState}>
-                  <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>
-                    Belum ada presensi
-                  </Text>
-                  <Text style={[styles.stateBody, { color: colors.textSecondary }]}>
-                    Presensi praktikan akan muncul di sini setelah dicatat.
-                  </Text>
-                </View>
               ) : (
-                <View style={styles.attendeeList}>
-                  {records.map((record) => (
-                    <View
-                      key={record.id}
-                      style={[styles.attendeeRow, { borderTopColor: colors.border }]}
+                <>
+                  {filterMode === 'all' || filterMode === 'hadir' ? (
+                    <AccordionGroup
+                      title="Terdaftar scan QR"
+                      badgeText={`${filteredPresent.length}`}
+                      badgeTone="pacific"
+                      expanded={presentExpanded || filterMode === 'hadir'}
+                      onToggle={() => setPresentExpanded((v) => !v)}
                     >
-                      <View style={styles.attendeeInfo}>
-                        <Text style={[styles.studentName, { color: colors.textPrimary }]}>
-                          {record.studentName}
+                      {filteredPresent.length === 0 ? (
+                        <Text style={[styles.innerEmpty, { color: colors.textSecondary }]}>
+                          Belum ada praktikan yang tercatat hadir.
                         </Text>
-                        <Text
-                          style={[
-                            styles.studentIdentifier,
-                            { color: colors.textSecondary },
-                            styles.tabular,
-                          ]}
-                        >
-                          {record.studentIdentifier}
+                      ) : (
+                        filteredPresent.map((record) => (
+                          <View
+                            key={record.id}
+                            style={[styles.recapRow, { backgroundColor: colors.background }]}
+                          >
+                            <View style={styles.recapLeft}>
+                              <Text
+                                style={[styles.studentName, { color: colors.textPrimary }]}
+                                numberOfLines={1}
+                              >
+                                {record.studentName}
+                              </Text>
+                              <Text style={[styles.studentNim, { color: colors.textSubtle }]}>
+                                {record.studentIdentifier}
+                              </Text>
+                            </View>
+                            <Text style={[styles.timeText, { color: colors.pacificDark }]}>
+                              {record.hasPendingWrites ? 'Sinkron' : record.attendedAt}
+                            </Text>
+                          </View>
+                        ))
+                      )}
+                    </AccordionGroup>
+                  ) : null}
+
+                  {filterMode === 'all' || filterMode === 'izin' ? (
+                    <AccordionGroup
+                      title="Izin"
+                      badgeText={`${filteredLeave.length} orang`}
+                      badgeTone="muted"
+                      expanded={leaveExpanded || filterMode === 'izin'}
+                      onToggle={() => setLeaveExpanded((v) => !v)}
+                    >
+                      {filteredLeave.length === 0 ? (
+                        <Text style={[styles.innerEmpty, { color: colors.textSecondary }]}>
+                          Tidak ada praktikan yang mengajukan izin pada sesi ini.
                         </Text>
-                      </View>
-                      <Text
-                        style={[
-                          styles.attendedAt,
-                          { color: colors.textSecondary },
-                          styles.tabular,
-                        ]}
-                      >
-                        {record.hasPendingWrites ? 'Menunggu sinkron' : record.attendedAt}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
+                      ) : (
+                        filteredLeave.map((member) => {
+                          const approved = member.leaveStatus === 'approved';
+                          return (
+                            <View
+                              key={member.id}
+                              style={[styles.recapRow, { backgroundColor: colors.background }]}
+                            >
+                              <View style={styles.recapLeft}>
+                                <Text
+                                  style={[styles.studentName, { color: colors.textPrimary }]}
+                                  numberOfLines={1}
+                                >
+                                  {member.displayName}
+                                </Text>
+                                <Text style={[styles.studentNim, { color: colors.textSubtle }]}>
+                                  {member.identifier}
+                                </Text>
+                              </View>
+                              <View
+                                style={[
+                                  styles.leaveBadge,
+                                  {
+                                    backgroundColor: approved
+                                      ? colors.pacificSoft
+                                      : member.leaveStatus === 'rejected'
+                                        ? colors.rosySoft
+                                        : colors.balticSoft,
+                                  },
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.leaveBadgeText,
+                                    {
+                                      color: approved
+                                        ? colors.pacificDark
+                                        : member.leaveStatus === 'rejected'
+                                          ? colors.rosyDark
+                                          : colors.baltic,
+                                    },
+                                  ]}
+                                >
+                                  {leaveStatusLabel(member.leaveStatus)}
+                                </Text>
+                              </View>
+                            </View>
+                          );
+                        })
+                      )}
+                    </AccordionGroup>
+                  ) : null}
+
+                  {filterMode === 'all' || filterMode === 'belum' ? (
+                    <AccordionGroup
+                      title="Belum Presensi"
+                      badgeText={`${filteredNotAttended.length} orang`}
+                      badgeTone="rosy"
+                      expanded={absentExpanded || filterMode === 'belum'}
+                      onToggle={() => setAbsentExpanded((v) => !v)}
+                    >
+                      {filteredNotAttended.length === 0 ? (
+                        <Text style={[styles.innerEmpty, { color: colors.textSecondary }]}>
+                          Semua anggota terdaftar sudah melakukan presensi atau izin.
+                        </Text>
+                      ) : (
+                        filteredNotAttended.map((member) => (
+                          <View
+                            key={member.userId}
+                            style={[styles.recapRow, { backgroundColor: colors.background }]}
+                          >
+                            <View style={styles.recapLeft}>
+                              <Text
+                                style={[styles.studentName, { color: colors.textPrimary }]}
+                                numberOfLines={1}
+                              >
+                                {member.displayName}
+                              </Text>
+                              <Text style={[styles.studentNim, { color: colors.textSubtle }]}>
+                                {member.identifier}
+                              </Text>
+                            </View>
+                            <View
+                              style={[
+                                styles.leaveBadge,
+                                { backgroundColor: colors.rosySoft },
+                              ]}
+                            >
+                              <Text style={[styles.leaveBadgeText, { color: colors.rosyDark }]}>
+                                Belum Presensi
+                              </Text>
+                            </View>
+                          </View>
+                        ))
+                      )}
+                    </AccordionGroup>
+                  ) : null}
+                </>
               )}
-            </View>
-          ) : null}
-        </>
-      )}
-    </ScrollView>
+            </>
+          )}
+        </View>
+      </ScrollView>
+
+      <PickerBottomSheet
+        visible={sessionSheetVisible}
+        onClose={() => setSessionSheetVisible(false)}
+        title="Pilih Kelas & Sesi"
+        subtitle="Ketuk salah satu untuk mengganti tampilan rekap"
+        options={sessionOptions}
+        selectedValue={activeSession?.id ?? ''}
+        onSelect={setSelectedSessionId}
+      />
+
+      <PickerBottomSheet
+        visible={filterSheetVisible}
+        onClose={() => setFilterSheetVisible(false)}
+        title="Filter Kehadiran"
+        searchable={false}
+        options={FILTER_OPTIONS}
+        selectedValue={filterMode}
+        onSelect={(val) => setFilterMode(val as RecapFilterMode)}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    padding: 20,
-    paddingBottom: 40,
-    gap: 16,
+  screen: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 112,
+    gap: 14,
+  },
+  bodyContainer: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
+    paddingHorizontal: 14,
+    gap: 12,
   },
   guard: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     padding: 32,
     gap: 8,
   },
   guardTitle: {
+    fontFamily: FontFamily.displayBold,
     fontSize: 18,
-    fontWeight: '600',
     textAlign: 'center',
   },
   guardBody: {
-    fontSize: 14,
-    fontWeight: '400',
-    lineHeight: 20,
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 13.5,
     textAlign: 'center',
+    lineHeight: 19,
   },
-  heading: {
+  topControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  classDropdown: {
+    flex: 1,
+    height: 44,
+    borderRadius: 22,
+    paddingHorizontal: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  classDropdownText: {
+    flex: 1,
+    fontFamily: FontFamily.sansBold,
+    fontSize: 13,
+    color: '#FCFCFA',
+  },
+  csvBtn: {
+    height: 44,
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingTop: 4,
   },
-  headingRow: {
+  csvBtnText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 12.5,
+  },
+  loadingCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 15,
+  },
+  recapRow: {
+    borderRadius: 14,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: 10,
   },
-  eyebrow: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  syncBadge: {
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  syncBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    lineHeight: 30,
-  },
-  subtitle: {
-    fontSize: 14,
-    fontWeight: '400',
-    lineHeight: 20,
-  },
-  selectorList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  selectorChip: {
-    minHeight: 40,
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    justifyContent: 'center',
-  },
-  selectorChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  sessionCard: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
-  },
-  sessionHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  sessionTitleGroup: {
+  recapLeft: {
     flex: 1,
-    gap: 4,
-  },
-  sessionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    lineHeight: 22,
-  },
-  sessionMeta: {
-    fontSize: 13,
-    fontWeight: '400',
-    lineHeight: 18,
-  },
-  statusBadge: {
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  countRow: {
-    borderTopWidth: 1,
-    paddingTop: 12,
-  },
-  countText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  innerState: {
-    paddingVertical: 16,
-    alignItems: 'center',
-    gap: 8,
-  },
-  stateCard: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 24,
-    alignItems: 'center',
-    gap: 8,
-  },
-  stateTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  stateBody: {
-    fontSize: 14,
-    fontWeight: '400',
-    lineHeight: 20,
-    textAlign: 'center',
-  },
-  retryButton: {
-    minHeight: 44,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  retryButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  attendeeList: {
-    gap: 4,
-  },
-  attendeeRow: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 12,
-    paddingBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  attendeeInfo: {
-    flex: 1,
-    gap: 2,
+    gap: 8,
   },
   studentName: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: FontFamily.sansBold,
+    fontSize: 13,
+    flexShrink: 1,
   },
-  studentIdentifier: {
+  studentNim: {
+    fontFamily: FontFamily.monoMedium,
     fontSize: 12,
-    fontWeight: '400',
-  },
-  attendedAt: {
-    fontSize: 12,
-    fontWeight: '400',
-  },
-  tabular: {
     fontVariant: ['tabular-nums'],
   },
+  timeText: {
+    fontFamily: FontFamily.monoMedium,
+    fontSize: 12,
+    fontVariant: ['tabular-nums'],
+  },
+  leaveBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  leaveBadgeText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 11,
+  },
+  innerEmpty: {
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 12.5,
+    paddingVertical: 4,
+  },
+  emptyCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 22,
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyTitle: {
+    fontFamily: FontFamily.displayBold,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  emptyBody: {
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  retryBtn: {
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginTop: 4,
+  },
+  retryText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 12.5,
+  },
   pressed: {
-    opacity: 0.72,
+    opacity: 0.78,
   },
 });

@@ -1,15 +1,20 @@
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
   ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
-import { PracticumSession } from '../types';
-import { Colors } from '@/constants/theme';
+import { CheckCircle2, Play, Square, Trash2 } from 'lucide-react-native';
+
+import { FlyAwayBottomSheet } from '@/components/ui/fly-away-bottom-sheet';
+import { Colors, FontFamily } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+
+import type { PracticumSession } from '../types';
+
+type LifecycleAction = 'open' | 'close' | 'delete';
 
 interface SessionLifecycleButtonsProps {
   session: PracticumSession;
@@ -28,197 +33,327 @@ export function SessionLifecycleButtons({
   onDeleteSession,
   onBusyChange,
 }: SessionLifecycleButtonsProps) {
-  const scheme = useColorScheme();
-  const isDark = scheme === 'dark';
-  const colors = isDark ? Colors.dark : Colors.light;
-
+  const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const [loading, setLoading] = useState(false);
+  const [pendingAction, setPendingAction] = useState<LifecycleAction | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   if (!isAssistant) {
     return null;
   }
 
-  const handleOpen = () => {
+  const openConfirmSheet = (action: LifecycleAction) => {
     if (loading) return;
-
-    Alert.alert(
-      'Buka Sesi Praktikum',
-      `Buka sesi "${session.title}" sekarang? Praktikan yang terdaftar akan dapat melakukan presensi kehadiran secara real-time.`,
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Buka Sesi',
-          onPress: async () => {
-            if (loading) return;
-            try {
-              setLoading(true);
-              onBusyChange?.(true);
-              await onOpenSession(session.id);
-            } catch (err: any) {
-              Alert.alert('Gagal Membuka Sesi', err.message ?? 'Terjadi kesalahan');
-            } finally {
-              setLoading(false);
-              onBusyChange?.(false);
-            }
-          },
-        },
-      ]
-    );
+    setErrorMessage(null);
+    setPendingAction(action);
   };
 
-  const handleClose = () => {
-    if (loading) return;
+  const handleConfirm = async () => {
+    if (!pendingAction || loading) return;
 
-    Alert.alert(
-      'Tutup Sesi Praktikum',
-      'Tutup sesi praktikum ini? Catatan: Sesuai aturan bisnis Sprint 2, sesi yang telah ditutup tidak dapat dibuka kembali.',
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Tutup Sesi',
-          style: 'destructive',
-          onPress: async () => {
-            if (loading) return;
-            try {
-              setLoading(true);
-              onBusyChange?.(true);
-              await onCloseSession(session.id);
-            } catch (err: any) {
-              Alert.alert('Gagal Menutup Sesi', err.message ?? 'Terjadi kesalahan');
-            } finally {
-              setLoading(false);
-              onBusyChange?.(false);
-            }
-          },
-        },
-      ]
-    );
+    try {
+      setLoading(true);
+      setErrorMessage(null);
+      onBusyChange?.(true);
+
+      if (pendingAction === 'open') {
+        await onOpenSession(session.id);
+      } else if (pendingAction === 'close') {
+        await onCloseSession(session.id);
+      } else if (pendingAction === 'delete' && onDeleteSession) {
+        await onDeleteSession(session.id);
+      }
+
+      setPendingAction(null);
+    } catch (err: any) {
+      setErrorMessage(err?.message ?? 'Terjadi kesalahan saat memperbarui sesi.');
+    } finally {
+      setLoading(false);
+      onBusyChange?.(false);
+    }
   };
 
-  const handleDelete = () => {
-    if (!onDeleteSession || loading) return;
-    Alert.alert(
-      'Hapus Sesi Praktikum',
-      `Yakin ingin menghapus sesi "${session.title}"?`,
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Hapus Sesi',
-          style: 'destructive',
-          onPress: async () => {
-            if (loading) return;
-            try {
-              setLoading(true);
-              onBusyChange?.(true);
-              await onDeleteSession(session.id);
-            } catch (err: any) {
-              Alert.alert('Gagal Menghapus Sesi', err.message ?? 'Terjadi kesalahan');
-            } finally {
-              setLoading(false);
-              onBusyChange?.(false);
+  const sheetMeta =
+    pendingAction === 'open'
+      ? {
+          title: 'Buka Sesi Praktikum',
+          subtitle: session.title,
+          body: `Buka sesi "${session.title}" sekarang? Praktikan yang terdaftar akan dapat melakukan presensi kehadiran secara real-time.`,
+          confirmText: 'Buka Sesi',
+          confirmBg: colors.pacific,
+        }
+      : pendingAction === 'close'
+        ? {
+            title: 'Tutup Sesi Praktikum',
+            subtitle: session.title,
+            body: 'Tutup sesi praktikum ini? Praktikan tidak dapat mencatat presensi baru setelah sesi ditutup dan selesai.',
+            confirmText: 'Tutup Sesi',
+            confirmBg: colors.rosy,
+          }
+        : pendingAction === 'delete'
+          ? {
+              title: 'Hapus Sesi Praktikum',
+              subtitle: session.title,
+              body: `Yakin ingin menghapus sesi "${session.title}"? Tindakan ini tidak dapat dibatalkan.`,
+              confirmText: 'Hapus Sesi',
+              confirmBg: colors.rosy,
             }
-          },
-        },
-      ]
-    );
-  };
+          : null;
 
   return (
     <View style={styles.container}>
-      {session.status === 'scheduled' && (
+      {session.status === 'scheduled' ? (
         <View style={styles.buttonGroup}>
-          <TouchableOpacity
-            style={[styles.primaryButton, { backgroundColor: '#10b981' }]}
-            onPress={handleOpen}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => openConfirmSheet('open')}
             disabled={loading}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              { backgroundColor: colors.pacific },
+              pressed && styles.pressed,
+            ]}
           >
-            {loading ? (
-              <ActivityIndicator color="#fff" size="small" />
+            {loading && pendingAction === 'open' ? (
+              <ActivityIndicator color="#FCFCFA" size="small" />
             ) : (
-              <Text style={styles.primaryButtonText}>▶ Buka Sesi Praktikum</Text>
+              <>
+                <Play size={14} color="#FCFCFA" strokeWidth={2.3} />
+                <Text style={styles.primaryButtonText}>Buka Sesi Praktikum</Text>
+              </>
             )}
-          </TouchableOpacity>
+          </Pressable>
 
-          {onDeleteSession && (
-            <TouchableOpacity
-              style={[styles.dangerOutlineButton, { borderColor: '#ef4444' }]}
-              onPress={handleDelete}
+          {onDeleteSession ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => openConfirmSheet('delete')}
               disabled={loading}
+              style={({ pressed }) => [
+                styles.dangerOutlineButton,
+                { backgroundColor: colors.rosySoft, borderColor: colors.rosyBorder },
+                pressed && styles.pressed,
+              ]}
             >
-              <Text style={{ color: '#ef4444', fontWeight: '600', fontSize: 13 }}>
+              <Trash2 size={14} color={colors.rosyDark} strokeWidth={2.1} />
+              <Text style={[styles.dangerOutlineText, { color: colors.rosyDark }]}>
                 Hapus Sesi
               </Text>
-            </TouchableOpacity>
-          )}
+            </Pressable>
+          ) : null}
         </View>
-      )}
+      ) : null}
 
-      {session.status === 'open' && (
-        <TouchableOpacity
-          style={[styles.primaryButton, { backgroundColor: '#f59e0b' }]}
-          onPress={handleClose}
+      {session.status === 'open' ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => openConfirmSheet('close')}
           disabled={loading}
+          style={({ pressed }) => [
+            styles.primaryButton,
+            { backgroundColor: colors.baltic },
+            pressed && styles.pressed,
+          ]}
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" size="small" />
+          {loading && pendingAction === 'close' ? (
+            <ActivityIndicator color="#FCFCFA" size="small" />
           ) : (
-            <Text style={styles.primaryButtonText}>⏹ Tutup Sesi Praktikum</Text>
+            <>
+              <Square size={14} color="#FCFCFA" strokeWidth={2.2} />
+              <Text style={styles.primaryButtonText}>Tutup Sesi Praktikum</Text>
+            </>
           )}
-        </TouchableOpacity>
-      )}
+        </Pressable>
+      ) : null}
 
-      {session.status === 'closed' && (
+      {session.status === 'closed' ? (
         <View
           style={[
             styles.closedNotice,
-            { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
+            { backgroundColor: colors.pacificSoft, borderColor: colors.pacificLight },
           ]}
         >
-          <Text style={[styles.closedText, { color: colors.textSecondary }]}>
-            ✓ Sesi ini telah ditutup dan selesai.
+          <CheckCircle2 size={15} color={colors.pacificDark} strokeWidth={2.1} />
+          <Text style={[styles.closedText, { color: colors.pacificDark }]}>
+            Sesi ini telah ditutup dan selesai.
           </Text>
         </View>
-      )}
+      ) : null}
+
+      <FlyAwayBottomSheet
+        visible={Boolean(pendingAction)}
+        onClose={() => {
+          if (!loading) {
+            setPendingAction(null);
+            setErrorMessage(null);
+          }
+        }}
+        title={sheetMeta?.title ?? 'Konfirmasi Sesi'}
+        subtitle={sheetMeta?.subtitle}
+        dismissDisabled={loading}
+        maxHeight="52%"
+      >
+        <View style={styles.sheetBody}>
+          {sheetMeta ? (
+            <Text style={[styles.sheetDescription, { color: colors.textSecondary }]}>
+              {sheetMeta.body}
+            </Text>
+          ) : null}
+
+          {errorMessage ? (
+            <View
+              accessibilityRole="alert"
+              style={[
+                styles.errorBox,
+                { backgroundColor: colors.rosySoft, borderColor: colors.rosyBorder },
+              ]}
+            >
+              <Text style={[styles.errorText, { color: colors.rosyDark }]}>
+                {errorMessage}
+              </Text>
+            </View>
+          ) : null}
+
+          <View style={styles.sheetActions}>
+            <Pressable
+              accessibilityRole="button"
+              disabled={loading}
+              onPress={() => {
+                setPendingAction(null);
+                setErrorMessage(null);
+              }}
+              style={({ pressed }) => [
+                styles.cancelBtn,
+                { backgroundColor: colors.background, borderColor: colors.border },
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={[styles.cancelBtnText, { color: colors.textSecondary }]}>Batal</Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              disabled={loading}
+              onPress={() => void handleConfirm()}
+              style={({ pressed }) => [
+                styles.confirmBtn,
+                { backgroundColor: sheetMeta?.confirmBg ?? colors.baltic },
+                pressed && styles.pressed,
+              ]}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FCFCFA" size="small" />
+              ) : (
+                <Text style={styles.confirmBtnText}>
+                  {sheetMeta?.confirmText ?? 'Lanjutkan'}
+                </Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </FlyAwayBottomSheet>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 10,
+    marginVertical: 6,
     width: '100%',
   },
   buttonGroup: {
     gap: 8,
   },
   primaryButton: {
-    paddingVertical: 12,
+    height: 44,
     paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: 14,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
   },
   primaryButtonText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
+    color: '#FCFCFA',
+    fontFamily: FontFamily.sansBold,
+    fontSize: 13.5,
   },
   dangerOutlineButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    height: 40,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  dangerOutlineText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 12.5,
+  },
+  closedNotice: {
+    height: 42,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+  },
+  closedText: {
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 12.5,
+  },
+  sheetBody: {
+    gap: 14,
+    paddingBottom: 6,
+  },
+  sheetDescription: {
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 13.5,
+    lineHeight: 20,
+  },
+  errorBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  errorText: {
+    fontFamily: FontFamily.sansMedium,
+    fontSize: 12.5,
+  },
+  sheetActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  cancelBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 16,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  closedNotice: {
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
+  cancelBtnText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 13.5,
   },
-  closedText: {
-    fontSize: 13,
-    fontWeight: '600',
+  confirmBtn: {
+    flex: 1.3,
+    height: 46,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmBtnText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 13.5,
+    color: '#FCFCFA',
+  },
+  pressed: {
+    opacity: 0.78,
   },
 });
