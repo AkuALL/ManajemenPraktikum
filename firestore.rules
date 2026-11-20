@@ -461,6 +461,28 @@ service cloud.firestore {
         && resource.data.status == 'scheduled';
     }
 
+    match /labs/{labId} {
+      allow get, list: if signedIn();
+      allow create, update: if hasRole('assistant')
+        && request.resource.data.keys().hasAll([
+          'id', 'name', 'building', 'latitude', 'longitude', 'radiusMeters', 'isActive'
+        ])
+        && request.resource.data.id == labId
+        && validText(request.resource.data.name, 2, 120)
+        && validText(request.resource.data.building, 2, 160)
+        && request.resource.data.latitude is number
+        && request.resource.data.latitude >= -90
+        && request.resource.data.latitude <= 90
+        && request.resource.data.longitude is number
+        && request.resource.data.longitude >= -180
+        && request.resource.data.longitude <= 180
+        && request.resource.data.radiusMeters is number
+        && request.resource.data.radiusMeters >= 10
+        && request.resource.data.radiusMeters <= 500
+        && request.resource.data.isActive is bool;
+      allow delete: if hasRole('assistant');
+    }
+
     match /attendance/{attendanceId} {
       allow get, list: if signedIn()
         && (request.auth.uid == resource.data.studentId

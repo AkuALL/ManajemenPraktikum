@@ -268,20 +268,20 @@ export function BerandaScreen() {
 
               <Pressable
                 accessibilityRole="button"
-                accessibilityState={{ disabled: true }}
-                disabled
-                style={[
+                accessibilityLabel="Buka Master Lab"
+                onPress={() => router.push(APP_ROUTES.MASTER_LAB as never)}
+                style={({ pressed }) => [
                   styles.assistantActionBtn,
                   {
-                    backgroundColor: colors.disabledSurface,
-                    borderColor: colors.border,
+                    backgroundColor: colors.pacificSoft,
+                    borderColor: colors.pacificLight,
                     borderWidth: 1,
-                    opacity: 0.55,
                   },
+                  pressed && styles.pressed,
                 ]}
               >
-                <SlidersHorizontal size={15} color={colors.disabledText} strokeWidth={2} />
-                <Text style={[styles.assistantActionSecondaryText, { color: colors.disabledText }]}>
+                <SlidersHorizontal size={15} color={colors.pacificDark} strokeWidth={2} />
+                <Text style={[styles.assistantActionSecondaryText, { color: colors.pacificDark }]}>
                   Master Lab
                 </Text>
               </Pressable>
