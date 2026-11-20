@@ -86,6 +86,12 @@ export interface CreateSessionInput {
   classId: string;
   title: string;
   location: string;
+  /** Snapshot lokasi Master Lab ketika sesi dibuat/diubah untuk validasi presensi. */
+  labId?: string;
+  locationName?: string;
+  latitude?: number;
+  longitude?: number;
+  radiusMeters?: number;
   startsAt: string;
   endsAt: string;
   date?: string;
@@ -94,6 +100,11 @@ export interface CreateSessionInput {
 export interface UpdateSessionInput {
   title?: string;
   location?: string;
+  labId?: string;
+  locationName?: string;
+  latitude?: number;
+  longitude?: number;
+  radiusMeters?: number;
   startsAt?: string;
   endsAt?: string;
   date?: string;

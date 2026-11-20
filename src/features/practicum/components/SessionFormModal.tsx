@@ -12,6 +12,8 @@ import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react-
 
 import { FlyAwayBottomSheet } from '@/components/ui/fly-away-bottom-sheet';
 import { Colors, FontFamily } from '@/constants/theme';
+import { FSM_UNDIP_LABS } from '@/features/labs/fsm-undip-labs';
+import { useLabs } from '@/features/labs/firestore-labs';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 import type { CreateSessionInput, PracticumClass, PracticumSession } from '../types';
@@ -87,6 +89,8 @@ function SessionFormContent({
   onSubmit: (input: CreateSessionInput) => Promise<void>;
 }) {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
+  const { labs: storedLabs, loading: labsLoading } = useLabs();
+  const labs = storedLabs.length > 0 ? storedLabs : FSM_UNDIP_LABS;
 
   const initialStartsAt = sessionTimeInput(initialSession?.startsAt, '08:00');
   const initialEndsAt = sessionTimeInput(initialSession?.endsAt, '10:00');
@@ -99,9 +103,7 @@ function SessionFormContent({
     initialSession?.classId ?? (defaultClassId || (classes[0]?.id ?? '')),
   );
   const [title, setTitle] = useState(initialSession?.title ?? '');
-  const [location, setLocation] = useState(
-    initialSession?.location ?? (classes[0]?.lab || 'Lab Komputer 2'),
-  );
+  const [selectedLabId, setSelectedLabId] = useState(initialSession?.labId ?? '');
   const [date, setDate] = useState(initialDate);
   const [calendarCursor, setCalendarCursor] = useState(() => parseYearMonth(initialDate));
   const [showCalendar, setShowCalendar] = useState(false);
@@ -123,6 +125,12 @@ function SessionFormContent({
   const todayDateStr = useMemo(() => defaultSessionDate(), []);
   const activeSlot =
     SESSION_TIME_SLOTS.find((slot) => slot.id === selectedSlotId) ?? SESSION_TIME_SLOTS[0];
+  const automaticLabId =
+    initialSession?.location
+      ? labs.find((lab) => lab.name.toLowerCase() === initialSession.location.toLowerCase())?.id
+      : labs[0]?.id;
+  const activeLabId = selectedLabId || automaticLabId;
+  const selectedLab = labs.find((lab) => lab.id === activeLabId) ?? null;
 
   const shiftCalendarMonth = (delta: number) => {
     setCalendarCursor((prev) => {
@@ -147,12 +155,16 @@ function SessionFormContent({
 
   const handleSubmit = async () => {
     if (submitting) return;
+    if (!selectedLab) {
+      setErrorMessage('Pilih Master Lab agar koordinat dan radius presensi sesi tersimpan.');
+      return;
+    }
 
     const validation = validateSessionInput(
       {
         classId: selectedClassId,
         title,
-        location,
+        location: selectedLab.name,
         date,
         startsAt,
         endsAt,
@@ -167,7 +179,15 @@ function SessionFormContent({
     try {
       setSubmitting(true);
       setErrorMessage('');
-      await onSubmit(validation.value);
+      await onSubmit({
+        ...validation.value,
+        location: selectedLab.name,
+        labId: selectedLab.id,
+        locationName: selectedLab.name,
+        latitude: selectedLab.latitude,
+        longitude: selectedLab.longitude,
+        radiusMeters: selectedLab.radiusMeters,
+      });
       onClose();
     } catch (err: any) {
       setErrorMessage(err.message ?? 'Gagal menyimpan sesi');
@@ -257,27 +277,55 @@ function SessionFormContent({
 
         <View style={styles.fieldGroup}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>
-            Ruang Laboratorium
+            Master Lab & Radius Presensi
           </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                color: colors.textPrimary,
-                borderColor: colors.border,
-                backgroundColor: colors.background,
-              },
-            ]}
-            placeholder="Contoh: Lab Jarkom 302"
-            placeholderTextColor={colors.textSubtle}
-            value={location}
-            onChangeText={(value) => {
-              setLocation(value);
-              setErrorMessage('');
-            }}
-            editable={!submitting}
-            maxLength={120}
-          />
+          {labsLoading && storedLabs.length === 0 ? (
+            <ActivityIndicator size="small" color={colors.baltic} />
+          ) : (
+            <View style={styles.classChips}>
+              {labs.map((lab) => {
+                const isSelected = lab.id === activeLabId;
+                return (
+                  <Pressable
+                    key={lab.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    onPress={() => {
+                      setSelectedLabId(lab.id);
+                      setErrorMessage('');
+                    }}
+                    disabled={submitting}
+                    style={[
+                      styles.chip,
+                      {
+                        borderColor: isSelected ? colors.pacific : colors.border,
+                        backgroundColor: isSelected ? colors.pacificSoft : colors.background,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.chipText,
+                        { color: isSelected ? colors.pacificDark : colors.textPrimary },
+                      ]}
+                    >
+                      {lab.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+          {selectedLab ? (
+            <View style={[styles.labHint, { backgroundColor: colors.balticSoft }]}>
+              <Text style={[styles.labHintTitle, { color: colors.baltic }]}>
+                {selectedLab.building}
+              </Text>
+              <Text style={[styles.labHintText, { color: colors.textSecondary }]}>
+                Koordinat dan radius {selectedLab.radiusMeters} m disalin ke sesi ini.
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.fieldGroup}>
@@ -655,6 +703,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     fontFamily: FontFamily.sansRegular,
     fontSize: 13.5,
+  },
+  labHint: {
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    gap: 2,
+  },
+  labHintTitle: {
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 12,
+  },
+  labHintText: {
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 11.5,
   },
   selectorButton: {
     borderWidth: 1,
