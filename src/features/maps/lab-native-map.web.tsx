@@ -16,7 +16,7 @@ type LabNativeMapProps = {
   onSelectLab: (labId: string) => void;
 };
 
-/** react-native-maps tidak mendukung web; layar peta menampilkan denah web sebagai fallback. */
+/** @maplibre/maplibre-react-native tidak mendukung web; layar peta menampilkan denah web sebagai fallback. */
 export function LabNativeMap(_props: LabNativeMapProps): ReactElement | null {
   return null;
 }

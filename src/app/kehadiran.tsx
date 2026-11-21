@@ -29,7 +29,6 @@ type UnifiedHistoryItem = {
 };
 
 const FILTER_OPTIONS: PickerOption[] = [
-  { value: 'all', label: 'Semua', subtitle: 'Tampilkan kehadiran dan status pengajuan izin' },
   { value: 'hadir', label: 'Hadir', subtitle: 'Hanya presensi yang tercatat hadir' },
   { value: 'izin', label: 'Izin', subtitle: 'Hanya status pengajuan izin (Pending / Disetujui / Ditolak)' },
 ];
@@ -192,6 +191,8 @@ export default function AttendanceHistoryScreen() {
             searchPlaceholder="Cari matkul atau modul..."
             filterLabel={filterLabel}
             onPressFilter={() => setFilterSheetVisible(true)}
+            isFilterActive={filterMode !== 'all'}
+            onResetFilter={() => setFilterMode('all')}
           />
 
           {loading && groupedCourses.length === 0 ? (

@@ -249,7 +249,7 @@ export class MockPracticumAdapter implements PracticumPort {
     this.notifyClasses();
   }
 
-  async deleteClass(classId: string): Promise<void> {
+  async deleteClass(classId: string, _assistantId?: string): Promise<void> {
     const cls = this.classes.find((c) => c.id === classId);
     if (!cls) throw new Error('Kelas tidak ditemukan');
 
@@ -506,7 +506,7 @@ export class MockPracticumAdapter implements PracticumPort {
     this.notifySessions();
   }
 
-  async deleteSession(sessionId: string): Promise<void> {
+  async deleteSession(sessionId: string, _assistantId?: string): Promise<void> {
     const session = this.sessions.find((s) => s.id === sessionId);
     if (!session) throw new Error('Sesi tidak ditemukan');
     if (session.status !== 'scheduled') {

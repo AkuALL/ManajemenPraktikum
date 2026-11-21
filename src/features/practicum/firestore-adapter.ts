@@ -132,6 +132,17 @@ export class FirestorePracticumAdapter implements PracticumPort {
     return this.firestoreInstance;
   }
 
+  private async getActorUid(assistantId?: string): Promise<string> {
+    const candidate = assistantId?.trim();
+    if (candidate) return candidate;
+    const { auth } = await import('@/lib/firebase');
+    const currentUid = auth.currentUser?.uid;
+    if (!currentUid) {
+      throw new Error('Pengguna belum terautentikasi.');
+    }
+    return currentUid;
+  }
+
   // === KELAS ===
 
   async getClasses(assistantId?: string): Promise<PracticumClass[]> {
@@ -144,7 +155,9 @@ export class FirestorePracticumAdapter implements PracticumPort {
       : classesRef;
 
     const snapshot = await getDocs(q);
-    return snapshot.docs.map((docSnap) => mapClassDoc(docSnap.id, docSnap.data()));
+    return snapshot.docs
+      .filter((docSnap) => docSnap.data().archived !== true)
+      .map((docSnap) => mapClassDoc(docSnap.id, docSnap.data()));
   }
 
   subscribeClasses(
@@ -171,7 +184,9 @@ export class FirestorePracticumAdapter implements PracticumPort {
             q,
             { includeMetadataChanges: true },
             (snapshot) => {
-              const list = snapshot.docs.map((docSnap) => mapClassDoc(docSnap.id, docSnap.data()));
+              const list = snapshot.docs
+                .filter((docSnap) => docSnap.data().archived !== true)
+                .map((docSnap) => mapClassDoc(docSnap.id, docSnap.data()));
               onData(list, { fromCache: snapshot.metadata.fromCache });
             },
             (err) => {
@@ -239,23 +254,24 @@ export class FirestorePracticumAdapter implements PracticumPort {
     await updateDoc(doc(db, 'classes', classId), updatePayload);
   }
 
-  async deleteClass(classId: string): Promise<void> {
+  async deleteClass(classId: string, assistantId?: string): Promise<void> {
     const db = await this.getDb();
-    const { collection, doc, getDoc, getDocs, limit, query, where, writeBatch } =
+    const { collection, doc, getDoc, getDocs, limit, query, serverTimestamp, where, writeBatch } =
       await import('firebase/firestore');
 
     const classRef = doc(db, 'classes', classId);
     const classSnap = await getDoc(classRef);
-    if (!classSnap.exists()) {
+    if (!classSnap.exists() || classSnap.data().archived === true) {
       throw new Error('Kelas tidak ditemukan');
     }
 
     // Ambil semua sesi milik kelas ini
     const sessionsQuery = query(collection(db, 'sessions'), where('classId', '==', classId));
     const sessionsSnap = await getDocs(sessionsQuery);
+    const activeSessions = sessionsSnap.docs.filter((d) => d.data().status !== 'cancelled');
 
-    // Pastikan tidak ada sesi yang statusnya bukan scheduled (sedang berjalan atau selesai)
-    const nonScheduled = sessionsSnap.docs.find((d) => d.data().status !== 'scheduled');
+    // Pastikan tidak ada sesi aktif yang statusnya bukan scheduled (sedang berjalan atau selesai)
+    const nonScheduled = activeSessions.find((d) => d.data().status !== 'scheduled');
     if (nonScheduled) {
       throw new Error('Kelas tidak dapat dihapus karena terdapat sesi yang sedang berjalan atau sudah selesai.');
     }
@@ -277,7 +293,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
     }
 
     // Periksa juga per-sessionId untuk memastikan tidak ada presensi/izin yang tertaut
-    for (const sDoc of sessionsSnap.docs) {
+    for (const sDoc of activeSessions) {
       const attSessionSnap = await getDocs(
         query(collection(db, 'attendance'), where('sessionId', '==', sDoc.id), limit(1))
       );
@@ -293,21 +309,26 @@ export class FirestorePracticumAdapter implements PracticumPort {
       }
     }
 
-    // Ambil seluruh anggota kelas dari subkoleksi members
-    const membersSnap = await getDocs(collection(db, 'classes', classId, 'members'));
+    const actorUid = await this.getActorUid(assistantId);
 
-    // Hapus sesi, anggota subkoleksi, dan kelas dalam batch agar tidak meninggalkan data yatim
+    // Soft-delete: batalkan sesi terjadwal aktif dan arsipkan kelas tanpa menghapus riwayat anggota
     const batch = writeBatch(db);
 
-    sessionsSnap.docs.forEach((sDoc) => {
-      batch.delete(sDoc.ref);
+    activeSessions.forEach((sDoc) => {
+      batch.update(sDoc.ref, {
+        status: 'cancelled',
+        cancelledBy: actorUid,
+        cancelledAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
     });
 
-    membersSnap.docs.forEach((mDoc) => {
-      batch.delete(mDoc.ref);
+    batch.update(classRef, {
+      archived: true,
+      archivedBy: actorUid,
+      archivedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
-
-    batch.delete(classRef);
 
     await batch.commit();
   }
@@ -452,7 +473,9 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
     const snapshot = await getDocs(q);
     return sortSessionsByStart(
-      snapshot.docs.map((docSnap) => mapSessionDoc(docSnap.id, docSnap.data())),
+      snapshot.docs
+        .filter((docSnap) => docSnap.data().status !== 'cancelled')
+        .map((docSnap) => mapSessionDoc(docSnap.id, docSnap.data())),
     );
   }
 
@@ -489,7 +512,9 @@ export class FirestorePracticumAdapter implements PracticumPort {
               (snapshot) => {
                 byClass.set(
                   cId,
-                  snapshot.docs.map((docSnap) => mapSessionDoc(docSnap.id, docSnap.data())),
+                  snapshot.docs
+                    .filter((docSnap) => docSnap.data().status !== 'cancelled')
+                    .map((docSnap) => mapSessionDoc(docSnap.id, docSnap.data())),
                 );
                 fromCacheByClass.set(cId, snapshot.metadata.fromCache);
                 resolved.add(cId);
@@ -528,7 +553,9 @@ export class FirestorePracticumAdapter implements PracticumPort {
             qClasses,
             { includeMetadataChanges: true },
             (classSnap) => {
-              const classIds = classSnap.docs.map((d) => d.id);
+              const classIds = classSnap.docs
+                .filter((d) => d.data().archived !== true)
+                .map((d) => d.id);
               const nextKey = [...classIds].sort().join(',');
               if (nextKey === prevClassIdsKey) return;
               prevClassIdsKey = nextKey;
@@ -562,7 +589,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
     const db = await this.getDb();
     const { doc, getDoc } = await import('firebase/firestore');
     const docSnap = await getDoc(doc(db, 'sessions', sessionId));
-    if (!docSnap.exists()) return null;
+    if (!docSnap.exists() || docSnap.data().status === 'cancelled') return null;
 
     return mapSessionDoc(docSnap.id, docSnap.data());
   }
@@ -583,7 +610,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
         unsubscribe = onSnapshot(
           doc(db, 'sessions', sessionId),
           (docSnap) => {
-            if (!docSnap.exists()) {
+            if (!docSnap.exists() || docSnap.data().status === 'cancelled') {
               onData(null);
               return;
             }
@@ -654,6 +681,9 @@ export class FirestorePracticumAdapter implements PracticumPort {
       throw new Error('Sesi tidak ditemukan');
     }
     const current = snapshot.data();
+    if (current.status !== 'scheduled') {
+      throw new Error('Sesi yang sudah dibuka, selesai, atau dibatalkan tidak dapat diubah isinya.');
+    }
     const updatePayload: Record<string, any> = {
       updatedAt: serverTimestamp(),
     };
@@ -697,14 +727,14 @@ export class FirestorePracticumAdapter implements PracticumPort {
     }
   }
 
-  async deleteSession(sessionId: string): Promise<void> {
+  async deleteSession(sessionId: string, assistantId?: string): Promise<void> {
     const db = await this.getDb();
-    const { collection, deleteDoc, doc, getDoc, getDocs, limit, query, where } =
+    const { collection, doc, getDoc, getDocs, limit, query, serverTimestamp, updateDoc, where } =
       await import('firebase/firestore');
 
     const sessionRef = doc(db, 'sessions', sessionId);
     const snap = await getDoc(sessionRef);
-    if (!snap.exists()) throw new Error('Sesi tidak ditemukan');
+    if (!snap.exists() || snap.data().status === 'cancelled') throw new Error('Sesi tidak ditemukan');
 
     const data = snap.data();
     if (data.status !== 'scheduled') {
@@ -727,7 +757,14 @@ export class FirestorePracticumAdapter implements PracticumPort {
       throw new Error('Sesi tidak dapat dihapus karena sudah memiliki data pengajuan izin.');
     }
 
-    await deleteDoc(sessionRef);
+    const actorUid = await this.getActorUid(assistantId);
+
+    await updateDoc(sessionRef, {
+      status: 'cancelled',
+      cancelledBy: actorUid,
+      cancelledAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
   }
 
   // === LIFECYCLE SESI (BUKA & TUTUP) ===

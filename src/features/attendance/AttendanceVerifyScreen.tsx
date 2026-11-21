@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,7 +13,7 @@ import {
   ChevronDown,
   Clock,
   MapPin,
-  ShieldCheck,
+  QrCode,
   UserCheck,
 } from 'lucide-react-native';
 
@@ -49,19 +48,13 @@ export function AttendanceVerifyScreen() {
   const { user } = useAuth();
   const { labs } = useLabs();
   const { sessions, loadingSessions, sessionsError, retryData } = usePracticum();
-  const { records, submitAttendance } = useAttendance();
+  const { records } = useAttendance();
 
   const isStudent = user?.role === 'student';
   const location = useAttendanceLocation(isStudent);
 
   const [pickedSessionId, setPickedSessionId] = useState<string | null>(null);
   const [sessionPickerVisible, setSessionPickerVisible] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitFeedback, setSubmitFeedback] = useState<{
-    tone: 'success' | 'error';
-    text: string;
-    canRetry?: boolean;
-  } | null>(null);
 
   const paramSessionId =
     typeof sessionId === 'string' && sessionId.trim().length > 0
@@ -157,54 +150,14 @@ export function AttendanceVerifyScreen() {
     }
   };
 
-  const handleSubmit = async () => {
-    if (
-      !activeSession ||
-      !eligibility?.canSubmit ||
-      !geofence.userCoords ||
-      submitting ||
-      existingRecord
-    ) {
+  const handleOpenQrScanner = () => {
+    if (!activeSession || !eligibility?.canSubmit || existingRecord) {
       return;
     }
-
-    setSubmitting(true);
-    setSubmitFeedback(null);
-    try {
-      const result = await submitAttendance(
-        {
-          id: activeSession.id,
-          classId: activeSession.classId,
-          status: activeSession.status,
-        },
-        {
-          latitude: geofence.userCoords.latitude,
-          longitude: geofence.userCoords.longitude,
-          accuracy:
-            typeof geofence.userCoords.accuracy === 'number' &&
-            Number.isFinite(geofence.userCoords.accuracy)
-              ? geofence.userCoords.accuracy
-              : 0,
-          distanceMeters: geofence.distanceMeters,
-          isWithinRadius: geofence.isWithinRadius,
-        },
-      );
-
-      if (result.ok) {
-        setSubmitFeedback({
-          tone: 'success',
-          text: 'Presensi berhasil dicatat beserta audit lokasi Anda.',
-        });
-      } else {
-        setSubmitFeedback({
-          tone: 'error',
-          text: result.message,
-          canRetry: result.reason === 'network' || result.reason === 'unknown',
-        });
-      }
-    } finally {
-      setSubmitting(false);
-    }
+    router.push({
+      pathname: APP_ROUTES.SCAN,
+      params: { sessionId: activeSession.id },
+    } as never);
   };
 
   if (!isStudent) {
@@ -416,58 +369,7 @@ export function AttendanceVerifyScreen() {
                 }}
               />
 
-              {submitFeedback ? (
-                <View
-                  accessibilityRole="alert"
-                  style={[
-                    styles.feedbackBanner,
-                    {
-                      backgroundColor:
-                        submitFeedback.tone === 'success'
-                          ? colors.pacificSoft
-                          : colors.rosySoft,
-                      borderColor:
-                        submitFeedback.tone === 'success'
-                          ? colors.pacificLight
-                          : colors.rosyBorder,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.feedbackBannerText,
-                      {
-                        color:
-                          submitFeedback.tone === 'success'
-                            ? colors.pacificDark
-                            : colors.rosyDark,
-                      },
-                    ]}
-                  >
-                    {submitFeedback.text}
-                  </Text>
-                  {submitFeedback.tone === 'error' &&
-                  submitFeedback.canRetry &&
-                  eligibility.canSubmit &&
-                  !submitting ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => {
-                        void handleSubmit();
-                      }}
-                      style={({ pressed }) => [
-                        styles.feedbackRetryBtn,
-                        { backgroundColor: colors.rosy },
-                        pressed && styles.pressed,
-                      ]}
-                    >
-                      <Text style={styles.feedbackRetryText}>Coba Kirim Ulang</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              ) : null}
-
-              {/* Area Aksi Presensi Terproteksi (FR-01 & FR-04) */}
+              {/* Area Aksi Presensi Terproteksi: hanya membuka Scan QR bila validasi radius lolos */}
               {existingRecord ? (
                 <View
                   style={[
@@ -513,53 +415,42 @@ export function AttendanceVerifyScreen() {
                 >
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel="Kirim Presensi"
-                    accessibilityState={{ disabled: !eligibility.canSubmit || submitting }}
-                    disabled={!eligibility.canSubmit || submitting}
-                    onPress={() => {
-                      void handleSubmit();
-                    }}
+                    accessibilityLabel="Scan QR Presensi"
+                    accessibilityState={{ disabled: !eligibility.canSubmit }}
+                    disabled={!eligibility.canSubmit}
+                    onPress={handleOpenQrScanner}
                     style={({ pressed }) => [
                       styles.submitBtn,
                       {
-                        backgroundColor:
-                          eligibility.canSubmit && !submitting
-                            ? colors.rosy
-                            : colors.disabledSurface,
+                        backgroundColor: eligibility.canSubmit
+                          ? colors.rosy
+                          : colors.disabledSurface,
                       },
-                      pressed && eligibility.canSubmit && !submitting && styles.pressed,
+                      pressed && eligibility.canSubmit && styles.pressed,
                     ]}
                   >
-                    {submitting ? (
-                      <ActivityIndicator size="small" color="#FCFCFA" />
-                    ) : (
-                      <>
-                        <ShieldCheck
-                          size={18}
-                          color={
-                            eligibility.canSubmit ? '#FCFCFA' : colors.disabledText
-                          }
-                          strokeWidth={2.2}
-                        />
-                        <Text
-                          style={[
-                            styles.submitBtnText,
-                            {
-                              color: eligibility.canSubmit
-                                ? '#FCFCFA'
-                                : colors.disabledText,
-                            },
-                          ]}
-                        >
-                          Kirim Presensi
-                        </Text>
-                      </>
-                    )}
+                    <QrCode
+                      size={18}
+                      color={eligibility.canSubmit ? '#FCFCFA' : colors.disabledText}
+                      strokeWidth={2.2}
+                    />
+                    <Text
+                      style={[
+                        styles.submitBtnText,
+                        {
+                          color: eligibility.canSubmit
+                            ? '#FCFCFA'
+                            : colors.disabledText,
+                        },
+                      ]}
+                    >
+                      Scan QR Presensi
+                    </Text>
                   </Pressable>
 
                   <Text style={[styles.submitHint, { color: colors.textSecondary }]}>
                     {eligibility.canSubmit
-                      ? 'Sesi berlangsung dan posisi Anda terverifikasi di dalam radius lab.'
+                      ? 'Posisi berada dalam radius lab. Tekan untuk memindai QR presensi dari Asisten.'
                       : eligibility.reason}
                   </Text>
                 </View>
@@ -578,7 +469,6 @@ export function AttendanceVerifyScreen() {
         selectedValue={activeSession?.id ?? ''}
         onSelect={(val) => {
           setPickedSessionId(val);
-          setSubmitFeedback(null);
         }}
       />
     </View>

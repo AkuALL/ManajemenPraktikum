@@ -46,7 +46,8 @@ type LeaveContextValue = {
   fromCache: boolean;
   classificationErrors: Record<string, string>;
   submitLeave: (session: SessionSummary, reason: string) => Promise<SubmitLeaveResult>;
-  retryClassification: (leaveRequestId: string) => Promise<void>;
+  classifyLeave: (leaveRequestId: string, reason: string) => Promise<void>;
+  retryClassification: (leaveRequestId: string, reason?: string) => Promise<void>;
   reviewLeave: (
     leaveRequestId: string,
     decision: 'approved' | 'rejected',
@@ -112,6 +113,8 @@ export function LeaveProvider({
 
   const requestClassification = useCallback(
     async (leaveRequestId: string, reason?: string) => {
+      if (!user || user.role !== 'assistant') return;
+
       setClassificationErrors((current) => {
         const { [leaveRequestId]: _discarded, ...rest } = current;
         return rest;
@@ -132,7 +135,7 @@ export function LeaveProvider({
         await port.markClassificationFailed(leaveRequestId).catch(() => undefined);
       }
     },
-    [port],
+    [port, user],
   );
 
   const submitLeave = useCallback(
@@ -146,7 +149,6 @@ export function LeaveProvider({
 
       try {
         const request = await port.createLeaveRequest({ session, user, reason });
-        void requestClassification(request.id, request.reason);
         return { ok: true, request };
       } catch (error) {
         return {
@@ -158,13 +160,20 @@ export function LeaveProvider({
         };
       }
     },
-    [port, requestClassification, user],
+    [port, user],
+  );
+
+  const classifyLeave = useCallback(
+    async (leaveRequestId: string, reason: string) => {
+      await requestClassification(leaveRequestId, reason);
+    },
+    [requestClassification],
   );
 
   const retryClassification = useCallback(
-    async (leaveRequestId: string) => {
+    async (leaveRequestId: string, reason?: string) => {
       const target = snapshot?.requests.find((item) => item.id === leaveRequestId);
-      await requestClassification(leaveRequestId, target?.reason);
+      await requestClassification(leaveRequestId, reason ?? target?.reason);
     },
     [requestClassification, snapshot?.requests],
   );
@@ -211,12 +220,23 @@ export function LeaveProvider({
       fromCache: active?.fromCache ?? false,
       classificationErrors,
       submitLeave,
+      classifyLeave,
       retryClassification,
       reviewLeave,
       retry,
       registerConsumer,
     }),
-    [active, classificationErrors, registerConsumer, retry, retryClassification, reviewLeave, studentId, submitLeave],
+    [
+      active,
+      classificationErrors,
+      classifyLeave,
+      registerConsumer,
+      retry,
+      retryClassification,
+      reviewLeave,
+      studentId,
+      submitLeave,
+    ],
   );
 
   return <LeaveContext.Provider value={value}>{children}</LeaveContext.Provider>;

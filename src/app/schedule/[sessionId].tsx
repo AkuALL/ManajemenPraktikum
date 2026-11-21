@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { CheckCircle2, FileText, MapPin, QrCode } from 'lucide-react-native';
+import { CheckCircle2, FileText, QrCode } from 'lucide-react-native';
 
 import { SubScreenHeader } from '@/components/ui/app-header';
 import { QrSessionBottomSheet } from '@/components/ui/qr-session-bottom-sheet';
@@ -235,31 +235,20 @@ export default function SessionDetailScreen() {
                 </View>
               ) : (
                 <View style={styles.studentActionsWrap}>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() =>
-                      router.push({
-                        pathname: APP_ROUTES.PRESENSI,
-                        params: { sessionId: practicumSession.id },
-                      } as never)
-                    }
-                    style={({ pressed }) => [
-                      styles.attendanceCtaBtn,
-                      {
-                        backgroundColor: attendanceEntry
-                          ? colors.pacific
-                          : practicumSession.status === 'open'
-                            ? colors.rosy
-                            : colors.baltic,
-                      },
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <MapPin size={16} color="#FCFCFA" strokeWidth={2.1} />
-                    <Text style={styles.attendanceCtaText}>
-                      {attendanceEntry ? 'Lihat Status Presensi' : 'Buka Halaman Presensi'}
-                    </Text>
-                  </Pressable>
+                  {attendanceEntry ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => router.push(APP_ROUTES.STUDENT_ATTENDANCE as never)}
+                      style={({ pressed }) => [
+                        styles.attendanceCtaBtn,
+                        { backgroundColor: colors.pacific },
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <CheckCircle2 size={16} color="#FCFCFA" strokeWidth={2.1} />
+                      <Text style={styles.attendanceCtaText}>Lihat Status Presensi</Text>
+                    </Pressable>
+                  ) : null}
 
                   <View style={styles.actionRow}>
                     <Pressable

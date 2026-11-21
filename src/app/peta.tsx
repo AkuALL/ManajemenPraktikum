@@ -88,10 +88,7 @@ export default function PetaLabScreen() {
 
   const floorOptions = useMemo<PickerOption[]>(() => {
     const floors = Array.from(new Set(rooms.map((r) => r.floor))).sort();
-    return [
-      { value: 'Semua', label: 'Semua Lantai', subtitle: 'Tampilkan seluruh ruang laboratorium' },
-      ...floors.map((f) => ({ value: f, label: f, subtitle: `Ruangan pada ${f}` })),
-    ];
+    return floors.map((f) => ({ value: f, label: f, subtitle: `Ruangan pada ${f}` }));
   }, [rooms]);
 
   const filteredRooms = useMemo(() => {
@@ -134,6 +131,8 @@ export default function PetaLabScreen() {
             searchPlaceholder="Cari ruang lab..."
             filterLabel={floorFilter}
             onPressFilter={() => setFloorSheetVisible(true)}
+            isFilterActive={floorFilter !== 'Semua'}
+            onResetFilter={() => setFloorFilter('Semua')}
           />
 
           {Platform.OS !== 'web' ? (

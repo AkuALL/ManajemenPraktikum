@@ -41,7 +41,6 @@ type LeaveMemberRow = {
 };
 
 const FILTER_OPTIONS: PickerOption[] = [
-  { value: 'all', label: 'Semua', subtitle: 'Tampilkan Hadir, Izin, dan Belum Presensi' },
   { value: 'hadir', label: 'Hadir', subtitle: 'Fokus praktikan yang sudah tercatat hadir' },
   { value: 'izin', label: 'Izin', subtitle: 'Praktikan yang mengajukan izin pada sesi ini' },
   { value: 'belum', label: 'Belum Presensi', subtitle: 'Praktikan yang belum presensi maupun izin' },
@@ -389,6 +388,8 @@ export default function RecapScreen() {
                 searchPlaceholder="Cari nama atau NIM..."
                 filterLabel={filterLabel}
                 onPressFilter={() => setFilterSheetVisible(true)}
+                isFilterActive={filterMode !== 'all'}
+                onResetFilter={() => setFilterMode('all')}
               />
 
               {loading ? (

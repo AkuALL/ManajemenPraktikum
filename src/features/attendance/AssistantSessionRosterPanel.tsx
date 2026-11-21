@@ -348,7 +348,7 @@ export function AssistantSessionRosterPanel({
                     <Text
                       style={[
                         styles.actionPillText,
-                        { color: isSelected ? colors.textPrimary : colors.baltic },
+                        { color: colors.textPrimary },
                       ]}
                     >
                       {isSelected ? 'Batal' : 'Set Hadir'}

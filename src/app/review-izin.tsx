@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -36,7 +36,6 @@ type ReviewFilterMode = 'pending' | 'all' | 'done';
 
 const FILTER_OPTIONS: PickerOption[] = [
   { value: 'pending', label: 'Pending', subtitle: 'Pengajuan izin yang menunggu konfirmasi' },
-  { value: 'all', label: 'Semua', subtitle: 'Tampilkan pending dan yang sudah diproses' },
   { value: 'done', label: 'Selesai', subtitle: 'Riwayat izin yang sudah disetujui / ditolak' },
 ];
 
@@ -58,15 +57,25 @@ export default function LeaveReviewScreen() {
     undefined,
     !loadingClasses,
   );
-  const { reviewLeave } = useLeave();
+  const { classifyLeave, reviewLeave } = useLeave();
 
   const [students, setStudents] = useState<StudentCandidate[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterMode, setFilterMode] = useState<ReviewFilterMode>('pending');
+  const [filterMode, setFilterMode] = useState<ReviewFilterMode>('all');
   const [filterSheetVisible, setFilterSheetVisible] = useState(false);
   const [focusedRequestId, setFocusedRequestId] = useState<string | null>(null);
   const [doneExpanded, setDoneExpanded] = useState(false);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const [classifyingId, setClassifyingId] = useState<string | null>(null);
+  const attemptedAiIdsRef = useRef<Set<string>>(new Set());
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (user?.role !== 'assistant') return;
@@ -83,10 +92,15 @@ export default function LeaveReviewScreen() {
     };
   }, [getRegisteredStudents, user?.role]);
 
-  const studentById = useMemo(
-    () => new Map(students.map((s) => [s.userId, s])),
-    [students],
-  );
+  const studentById = useMemo(() => {
+    const map = new Map<string, StudentCandidate>();
+    students.forEach((s) => {
+      if (s.authUid) map.set(s.authUid, s);
+      map.set(s.userId, s);
+      map.set(s.identifier.trim().toLowerCase(), s);
+    });
+    return map;
+  }, [students]);
 
   const pendingRequests = useMemo(
     () => requests.filter((r) => r.status === 'pending'),
@@ -127,6 +141,50 @@ export default function LeaveReviewScreen() {
     return pool.find((r) => r.id === focusedRequestId) ?? pool[0] ?? null;
   }, [filteredPending, filteredProcessed, focusedRequestId]);
 
+  const spotlightId = spotlightRequest?.id;
+  const spotlightStatus = spotlightRequest?.status;
+  const spotlightAiStatus = spotlightRequest?.aiStatus;
+  const spotlightReason = spotlightRequest?.reason;
+
+  useEffect(() => {
+    if (
+      user?.role !== 'assistant' ||
+      !spotlightId ||
+      spotlightStatus !== 'pending' ||
+      spotlightAiStatus !== 'pending' ||
+      !spotlightReason ||
+      attemptedAiIdsRef.current.has(spotlightId)
+    ) {
+      return;
+    }
+
+    attemptedAiIdsRef.current.add(spotlightId);
+    setClassifyingId(spotlightId);
+    void classifyLeave(spotlightId, spotlightReason).finally(() => {
+      if (isMountedRef.current) {
+        setClassifyingId((current) => (current === spotlightId ? null : current));
+      }
+    });
+  }, [
+    classifyLeave,
+    spotlightAiStatus,
+    spotlightId,
+    spotlightReason,
+    spotlightStatus,
+    user?.role,
+  ]);
+
+  const handleRetryAi = (request: LeaveRequest) => {
+    if (classifyingId === request.id) return;
+    attemptedAiIdsRef.current.add(request.id);
+    setClassifyingId(request.id);
+    void classifyLeave(request.id, request.reason).finally(() => {
+      if (isMountedRef.current) {
+        setClassifyingId((current) => (current === request.id ? null : current));
+      }
+    });
+  };
+
   const remainingPending = filteredPending.filter((r) => r.id !== spotlightRequest?.id);
 
   const decide = (request: LeaveRequest, decision: 'approved' | 'rejected') => {
@@ -162,7 +220,7 @@ export default function LeaveReviewScreen() {
 
   const primaryLab = classes[0]?.lab ?? 'Asisten Lab';
   const filterLabel =
-    FILTER_OPTIONS.find((opt) => opt.value === filterMode)?.label ?? 'Pending';
+    FILTER_OPTIONS.find((opt) => opt.value === filterMode)?.label ?? 'Semua';
 
   const renderSpotlightCard = (request: LeaveRequest) => {
     const session = sessionById.get(request.sessionId);
@@ -185,12 +243,14 @@ export default function LeaveReviewScreen() {
       .filter(Boolean)
       .join(' · ');
 
-    const aiCategory =
-      request.aiStatus === 'success'
+    const isClassifying = classifyingId === request.id;
+    const aiCategory = isClassifying
+      ? 'Mengklasifikasi...'
+      : request.aiStatus === 'success'
         ? capitalizeLabel(request.aiCategory)
         : aiStatusLabel(request.aiStatus);
     const aiConfidence =
-      request.aiStatus === 'success' && typeof request.aiConfidence === 'number'
+      !isClassifying && request.aiStatus === 'success' && typeof request.aiConfidence === 'number'
         ? `${Math.round(request.aiConfidence * 100)}%`
         : null;
 
@@ -249,7 +309,21 @@ export default function LeaveReviewScreen() {
           <Text style={[styles.aiBannerLeft, { color: colors.pacificDark }]}>
             Klasifikasi: {aiCategory}
           </Text>
-          {aiConfidence ? (
+          {isClassifying ? (
+            <ActivityIndicator size="small" color={colors.pacificDark} />
+          ) : request.status === 'pending' && request.aiStatus === 'failed' ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => handleRetryAi(request)}
+              style={({ pressed }) => [
+                styles.aiRetryBtn,
+                { borderColor: colors.pacificDark },
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={[styles.aiRetryText, { color: colors.pacificDark }]}>Ulangi AI</Text>
+            </Pressable>
+          ) : aiConfidence ? (
             <Text style={[styles.aiBannerPct, { color: colors.pacificDark }]}>
               {aiConfidence}
             </Text>
@@ -323,6 +397,8 @@ export default function LeaveReviewScreen() {
             searchPlaceholder="Cari nama atau NIM..."
             filterLabel={filterLabel}
             onPressFilter={() => setFilterSheetVisible(true)}
+            isFilterActive={filterMode !== 'all'}
+            onResetFilter={() => setFilterMode('all')}
           />
 
           {loading || loadingClasses ? (
@@ -428,7 +504,10 @@ export default function LeaveReviewScreen() {
                               {student?.displayName ?? item.studentId}
                             </Text>
                             <Text style={[styles.doneSub, { color: colors.textSecondary }]} numberOfLines={1}>
-                              {sessionById.get(item.sessionId)?.courseName ?? item.sessionId}
+                              {sessionById.get(item.sessionId)?.courseName ??
+                                sessionById.get(item.sessionId)?.title ??
+                                item.sessionId}
+                              {student?.identifier ? ` · ${student.identifier}` : ''}
                             </Text>
                           </View>
                           <View
@@ -540,6 +619,17 @@ const styles = StyleSheet.create({
   aiBannerLeft: {
     fontFamily: FontFamily.sansBold,
     fontSize: 12.5,
+    flexShrink: 1,
+  },
+  aiRetryBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+  },
+  aiRetryText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 11,
   },
   aiBannerPct: {
     fontFamily: FontFamily.monoMedium,

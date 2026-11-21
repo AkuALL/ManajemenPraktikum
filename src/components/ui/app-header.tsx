@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Bell, ChevronLeft, LogOut } from 'lucide-react-native';
 
@@ -9,6 +9,10 @@ import { APP_ROUTES } from '@/features/navigation';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 import { FlyAwayBottomSheet } from './fly-away-bottom-sheet';
+import {
+  NotificationsBottomSheet,
+  useUnreadNotificationsCount,
+} from './notifications-bottom-sheet';
 
 function getInitials(name?: string | null): string {
   if (!name) return 'MP';
@@ -36,11 +40,46 @@ export function AppHeader({
   title,
   monoBadge,
   statusBadge,
+  hasUnreadNotification = false,
 }: AppHeaderProps) {
   const router = useRouter();
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const { user, logout } = useAuth();
   const [accountVisible, setAccountVisible] = useState(false);
+  const [notificationsVisible, setNotificationsVisible] = useState(false);
+  const unreadCount = useUnreadNotificationsCount();
+  const showUnread = hasUnreadNotification || unreadCount > 0;
+  const [bellShake] = useState(() => new Animated.Value(0));
+
+  useEffect(() => {
+    if (!showUnread) {
+      bellShake.setValue(0);
+      return undefined;
+    }
+
+    const triggerShake = () => {
+      Animated.sequence([
+        Animated.timing(bellShake, { toValue: 1, duration: 55, useNativeDriver: true }),
+        Animated.timing(bellShake, { toValue: -1, duration: 55, useNativeDriver: true }),
+        Animated.timing(bellShake, { toValue: 0.8, duration: 55, useNativeDriver: true }),
+        Animated.timing(bellShake, { toValue: -0.8, duration: 55, useNativeDriver: true }),
+        Animated.timing(bellShake, { toValue: 0.4, duration: 50, useNativeDriver: true }),
+        Animated.timing(bellShake, { toValue: 0, duration: 50, useNativeDriver: true }),
+      ]).start();
+    };
+
+    triggerShake();
+    const timer = setInterval(triggerShake, 5000);
+    return () => {
+      clearInterval(timer);
+      bellShake.setValue(0);
+    };
+  }, [bellShake, showUnread]);
+
+  const bellRotate = bellShake.interpolate({
+    inputRange: [-1, 0, 1],
+    outputRange: ['-18deg', '0deg', '18deg'],
+  });
 
   const initials = getInitials(user?.displayName);
 
@@ -71,12 +110,16 @@ export function AppHeader({
             <View style={styles.actionsRow}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Notifikasi dinonaktifkan sementara"
-                accessibilityState={{ disabled: true }}
-                disabled
-                style={[styles.bellBtn, styles.bellBtnDisabled]}
+                accessibilityLabel="Buka notifikasi"
+                onPress={() => setNotificationsVisible(true)}
+                style={({ pressed }) => [styles.bellBtn, pressed && styles.pressed]}
               >
-                <Bell size={17} color="rgba(252, 252, 250, 0.55)" strokeWidth={2} />
+                <Animated.View style={{ transform: [{ rotate: bellRotate }] }}>
+                  <Bell size={17} color="#FCFCFA" strokeWidth={2} />
+                </Animated.View>
+                {showUnread ? (
+                  <View style={styles.unreadDot} />
+                ) : null}
               </Pressable>
 
               <Pressable
@@ -110,6 +153,11 @@ export function AppHeader({
           </View>
         </View>
       </View>
+
+      <NotificationsBottomSheet
+        visible={notificationsVisible}
+        onClose={() => setNotificationsVisible(false)}
+      />
 
       <FlyAwayBottomSheet
         visible={accountVisible}
@@ -290,8 +338,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bellBtnDisabled: {
-    opacity: 0.45,
+  unreadDot: {
+    position: 'absolute',
+    top: 7,
+    right: 7,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#F97316',
   },
   avatarCircle: {
     width: 38,

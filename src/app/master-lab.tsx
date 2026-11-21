@@ -12,7 +12,6 @@ import { ChevronDown, Plus, Trash2 } from 'lucide-react-native';
 
 import { AppHeader, getFirstName } from '@/components/ui/app-header';
 import { PickerBottomSheet, type PickerOption } from '@/components/ui/picker-bottom-sheet';
-import { QrSessionBottomSheet } from '@/components/ui/qr-session-bottom-sheet';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
 import { FSM_UNDIP_LABS } from '@/features/labs/fsm-undip-labs';
@@ -33,7 +32,7 @@ type MasterLabItem = {
 export default function MasterLabScreen() {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const { user } = useAuth();
-  const { sessions, updateClass, openSession } = usePracticum();
+  const { updateClass } = usePracticum();
   const {
     labs: storedLabs,
     loading: labsLoading,
@@ -45,7 +44,6 @@ export default function MasterLabScreen() {
 
   const [selectedLabId, setSelectedLabId] = useState<string>('');
   const [labPickerVisible, setLabPickerVisible] = useState(false);
-  const [qrVisible, setQrVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const seedStarted = useRef(false);
@@ -204,12 +202,6 @@ export default function MasterLabScreen() {
     }
   };
 
-  const activeSession = useMemo(
-    () => sessions.find((s) => s.status === 'open') ?? sessions[0] ?? null,
-    [sessions],
-  );
-  const qrSessionId = activeSession?.id ?? activeLab?.id ?? 'lab-qr';
-
   const labOptions: PickerOption[] = labs.map((l) => ({
     value: l.id,
     label: `${l.name} (${l.roomCode})`,
@@ -233,10 +225,10 @@ export default function MasterLabScreen() {
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <AppHeader
-          eyebrow="Master Lab & QR Sesi"
+          eyebrow="Master Data Laboratorium"
           title={`Hai, ${getFirstName(user.displayName)}`}
           monoBadge={`${labs.length} RUANG LAB`}
-          statusBadge="QR Aktif"
+          statusBadge="Kelola Ruangan"
         />
 
         <View style={styles.bodyContainer}>
@@ -400,35 +392,6 @@ export default function MasterLabScreen() {
               <Text style={[styles.helperText, { color: colors.textSubtle }]}>Batas yang diizinkan: 10–500 meter.</Text>
             </View>
 
-            <View style={[styles.qrStrip, { backgroundColor: colors.balticSoft }]}>
-              <View style={styles.qrStripText}>
-                <Text style={[styles.qrStripTitle, { color: colors.textPrimary }]}>
-                  QR Presensi Sesi Aktif
-                </Text>
-                <Text style={[styles.qrStripMeta, { color: colors.textSecondary }]}>
-                  Berlaku 5 menit · dibuat saat sesi dibuka
-                </Text>
-              </View>
-
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  if (!activeSession) {
-                    showAlert('Belum ada sesi aktif', 'Buka atau pilih sesi praktikum terlebih dahulu sebelum membuat QR presensi.');
-                    return;
-                  }
-                  setQrVisible(true);
-                }}
-                style={({ pressed }) => [
-                  styles.showQrPill,
-                  { backgroundColor: colors.baltic },
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text style={styles.showQrPillText}>Tampilkan QR</Text>
-              </Pressable>
-            </View>
-
             <Pressable
               accessibilityRole="button"
               disabled={saving}
@@ -487,17 +450,6 @@ export default function MasterLabScreen() {
           const picked = labs.find((l) => l.id === val);
           if (picked) syncFormToLab(picked);
         }}
-      />
-
-      <QrSessionBottomSheet
-        visible={qrVisible}
-        onClose={() => setQrVisible(false)}
-        sessionId={qrSessionId}
-        classId={activeSession?.classId}
-        sessionTitle={activeSession?.courseName ?? draftName}
-        subtitle={`${draftCode} · ${draftBuilding}`}
-        sessionStatus={activeSession?.status ?? 'open'}
-        onOpenSession={activeSession ? () => openSession(activeSession.id) : undefined}
       />
     </View>
   );

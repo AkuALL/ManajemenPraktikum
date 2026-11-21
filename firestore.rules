@@ -36,6 +36,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/sessionQr/$(sessionId);
     }
 
+    function labPath(labId) {
+      return /databases/$(database)/documents/labs/$(labId);
+    }
+
     function isClassAssistant(classId) {
       return signedIn()
         && exists(classPath(classId))
@@ -127,12 +131,16 @@ service cloud.firestore {
     }
 
     function validClassUpdate() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      return !resource.data.get('archived', false)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'practicumName',
           'className',
           'lab',
           'assistantIds',
           'memberUids',
+          'archived',
+          'archivedBy',
+          'archivedAt',
           'updatedAt'
         ])
         && request.resource.data.createdBy == resource.data.createdBy
@@ -144,6 +152,30 @@ service cloud.firestore {
           || validText(request.resource.data.lab, 2, 120))
         && (!request.resource.data.keys().hasAll(['memberUids'])
           || request.resource.data.memberUids is list)
+        && (
+          (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+              'archived',
+              'archivedBy',
+              'archivedAt'
+            ])
+            && !request.resource.data.keys().hasAny(['archivedBy', 'archivedAt'])
+            && (!('archived' in request.resource.data)
+              || request.resource.data.archived == false)
+          )
+          || (
+            request.resource.data.keys().hasAll(['archived', 'archivedBy', 'archivedAt'])
+            && request.resource.data.archived == true
+            && request.resource.data.archivedBy == request.auth.uid
+            && request.resource.data.archivedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'archived',
+              'archivedBy',
+              'archivedAt',
+              'updatedAt'
+            ])
+          )
+        )
         && request.resource.data.updatedAt == request.time;
     }
 
@@ -215,9 +247,10 @@ service cloud.firestore {
         && request.resource.data.startsAt is timestamp
         && request.resource.data.endsAt is timestamp
         && request.resource.data.startsAt < request.resource.data.endsAt
+        && request.resource.data.startsAt >= request.time - duration.value(5, 'm')
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
-        && validSessionLocationSnapshot();
+        && validMasterLabSnapshot();
     }
 
     function validSessionLocationSnapshot() {
@@ -238,6 +271,37 @@ service cloud.firestore {
           && request.resource.data.radiusMeters <= 500);
     }
 
+    function matchesMasterLabData(lab) {
+      return lab.isActive == true
+        && request.resource.data.locationName == lab.name
+        && request.resource.data.location == lab.name
+        && request.resource.data.latitude == lab.latitude
+        && request.resource.data.longitude == lab.longitude
+        && request.resource.data.radiusMeters == lab.radiusMeters;
+    }
+
+    function validMasterLabSnapshot() {
+      let locationKeys = ['labId', 'locationName', 'latitude', 'longitude', 'radiusMeters'];
+      return request.resource.data.keys().hasAll(locationKeys)
+        && validText(request.resource.data.labId, 1, 160)
+        && request.resource.data.labId.matches('^[^/]+$')
+        && request.resource.data.labId != '.'
+        && request.resource.data.labId != '..'
+        && validText(request.resource.data.locationName, 2, 120)
+        && request.resource.data.location == request.resource.data.locationName
+        && request.resource.data.latitude is number
+        && request.resource.data.latitude >= -90
+        && request.resource.data.latitude <= 90
+        && request.resource.data.longitude is number
+        && request.resource.data.longitude >= -180
+        && request.resource.data.longitude <= 180
+        && request.resource.data.radiusMeters is number
+        && request.resource.data.radiusMeters >= 10
+        && request.resource.data.radiusMeters <= 500
+        && exists(labPath(request.resource.data.labId))
+        && matchesMasterLabData(get(labPath(request.resource.data.labId)).data);
+    }
+
     function validSessionStatusTransition() {
       return request.resource.data.status == resource.data.status
         || (
@@ -251,6 +315,12 @@ service cloud.firestore {
           && request.resource.data.status == 'closed'
           && request.resource.data.closedBy == request.auth.uid
           && request.resource.data.closedAt == request.time
+        )
+        || (
+          resource.data.status == 'scheduled'
+          && request.resource.data.status == 'cancelled'
+          && request.resource.data.cancelledBy == request.auth.uid
+          && request.resource.data.cancelledAt == request.time
         );
     }
 
@@ -271,10 +341,13 @@ service cloud.firestore {
           'openedAt',
           'closedBy',
           'closedAt',
+          'cancelledBy',
+          'cancelledAt',
           'createdBy',
           'createdAt',
           'updatedAt'
         ])
+        && resource.data.status != 'cancelled'
         && request.resource.data.classId == resource.data.classId
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.createdAt == resource.data.createdAt
@@ -284,7 +357,46 @@ service cloud.firestore {
         && request.resource.data.endsAt is timestamp
         && request.resource.data.startsAt < request.resource.data.endsAt
         && request.resource.data.updatedAt == request.time
-        && validSessionLocationSnapshot()
+        && (
+          (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+              'location',
+              'labId',
+              'locationName',
+              'latitude',
+              'longitude',
+              'radiusMeters'
+            ])
+            && validSessionLocationSnapshot()
+          )
+          || validMasterLabSnapshot()
+        )
+        && (
+          resource.data.status == 'scheduled'
+          || request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status',
+            'openedBy',
+            'openedAt',
+            'closedBy',
+            'closedAt',
+            'updatedAt'
+          ])
+        )
+        && (
+          (
+            request.resource.data.status != 'cancelled'
+            && !request.resource.data.keys().hasAny(['cancelledBy', 'cancelledAt'])
+          )
+          || (
+            request.resource.data.status == 'cancelled'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status',
+              'cancelledBy',
+              'cancelledAt',
+              'updatedAt'
+            ])
+          )
+        )
         && validSessionStatusTransition();
     }
 
@@ -293,6 +405,28 @@ service cloud.firestore {
         && exists(sessionPath(sessionId))
         && get(sessionPath(sessionId)).data.classId == classId
         && get(sessionPath(sessionId)).data.status == 'open';
+    }
+
+    function withinSessionCoords(s) {
+      let dLat = (request.resource.data.latitude - s.latitude) * 111195;
+      let dLng = (request.resource.data.longitude - s.longitude) * 111195 * 0.9924;
+      let allowedRadius = s.radiusMeters + 1;
+      return dLat * dLat + dLng * dLng <= allowedRadius * allowedRadius
+        && request.resource.data.distanceMeters <= allowedRadius;
+    }
+
+    function hasValidSessionGeo(s) {
+      return s.keys().hasAll(['latitude', 'longitude', 'radiusMeters'])
+        && s.latitude is number
+        && s.longitude is number
+        && s.radiusMeters is number
+        && s.radiusMeters > 0
+        && withinSessionCoords(s);
+    }
+
+    function withinSessionRadius(sessionId) {
+      return exists(sessionPath(sessionId))
+        && hasValidSessionGeo(get(sessionPath(sessionId)).data);
     }
 
     function isLeaveEligibleSession(sessionId, classId) {
@@ -354,6 +488,7 @@ service cloud.firestore {
           request.resource.data.sessionId,
           request.resource.data.classId
         )
+        && withinSessionRadius(request.resource.data.sessionId)
         && request.resource.data.attendanceMethod == 'qr'
         && validText(request.resource.data.qrToken, 12, 160)
         && exists(sessionQrPath(request.resource.data.sessionId))
@@ -505,15 +640,20 @@ service cloud.firestore {
           || request.auth.uid in resource.data.memberUids);
       allow create: if hasRole('assistant') && validClassCreate();
       allow update: if isClassAssistant(classId) && validClassUpdate();
-      allow delete: if isClassAssistant(classId);
+      allow delete: if false;
 
       match /members/{memberId} {
         allow get: if isClassAssistant(classId)
           || (signedIn() && (currentUserIdentifier() == memberId || request.auth.uid == memberId));
         allow list: if isClassAssistant(classId);
-        allow create: if isClassAssistant(classId) && validMemberCreate(memberId);
-        allow update: if isClassAssistant(classId) && validMemberUpdate();
-        allow delete: if isClassAssistant(classId);
+        allow create: if isClassAssistant(classId)
+          && !get(classPath(classId)).data.get('archived', false)
+          && validMemberCreate(memberId);
+        allow update: if isClassAssistant(classId)
+          && !get(classPath(classId)).data.get('archived', false)
+          && validMemberUpdate();
+        allow delete: if isClassAssistant(classId)
+          && !get(classPath(classId)).data.get('archived', false);
       }
     }
 
@@ -531,11 +671,11 @@ service cloud.firestore {
             || exists(memberPath(resource.data.classId, request.auth.uid))));
       allow create: if hasRole('assistant')
         && isClassAssistant(request.resource.data.classId)
+        && !get(classPath(request.resource.data.classId)).data.get('archived', false)
         && validSessionCreate();
       allow update: if isClassAssistant(resource.data.classId)
         && validSessionUpdate();
-      allow delete: if isClassAssistant(resource.data.classId)
-        && resource.data.status == 'scheduled';
+      allow delete: if false;
     }
 
     match /sessionQr/{sessionId} {
@@ -601,11 +741,11 @@ service cloud.firestore {
           || isClassAssistant(resource.data.classId));
       allow create: if hasRole('student') && validLeaveCreate(leaveId);
       allow update: if isClassAssistant(resource.data.classId)
-        && validLeaveDecision()
-        || (signedIn()
-          && request.auth.uid == resource.data.studentId
-          && (validLeaveClassificationFailure()
-            || validLeaveClassificationSuccess()));
+        && (
+          validLeaveDecision()
+          || validLeaveClassificationFailure()
+          || validLeaveClassificationSuccess()
+        );
       allow delete: if false;
     }
 

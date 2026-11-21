@@ -1,13 +1,17 @@
-import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
   FileText,
   MapPin,
   Plus,
   QrCode,
   SlidersHorizontal,
 } from 'lucide-react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader, getFirstName } from '@/components/ui/app-header';
 import { QrSessionBottomSheet } from '@/components/ui/qr-session-bottom-sheet';
@@ -44,6 +48,30 @@ function toIsoDateLocal(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+function shiftIsoDate(dateStr: string, daysOffset: number): string {
+  const base = new Date(`${dateStr}T00:00:00`);
+  const safe = Number.isNaN(base.getTime()) ? new Date() : base;
+  safe.setDate(safe.getDate() + daysOffset);
+  return toIsoDateLocal(safe);
+}
+
+function formatWeekRangeLabel(days: DayChip[]): string {
+  if (days.length === 0) return '';
+  const start = new Date(`${days[0].dateStr}T00:00:00`);
+  const end = new Date(`${days[days.length - 1].dateStr}T00:00:00`);
+  const sameMonth = start.getMonth() === end.getMonth();
+  const startLabel = start.toLocaleDateString('id-ID', {
+    day: 'numeric',
+    ...(sameMonth ? {} : { month: 'short' }),
+  });
+  const endLabel = end.toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+  return `${startLabel} – ${endLabel}`;
+}
+
 function buildWeekStrip(sessions: PracticumSession[], anchorDateStr: string): DayChip[] {
   const anchor = new Date(`${anchorDateStr}T00:00:00`);
   const safeAnchor = Number.isNaN(anchor.getTime()) ? new Date() : anchor;
@@ -57,7 +85,7 @@ function buildWeekStrip(sessions: PracticumSession[], anchorDateStr: string): Da
   );
 
   const days: DayChip[] = [];
-  for (let i = 0; i < 6; i += 1) {
+  for (let i = 0; i < 7; i += 1) {
     const current = new Date(monday);
     current.setDate(monday.getDate() + i);
     const iso = toIsoDateLocal(current);
@@ -105,40 +133,67 @@ export function BerandaScreen() {
     return target ? sessionDateInput(target.date, target.startsAt) : todayStr;
   }, [sessions, todayStr]);
 
+  const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDayStr, setSelectedDayStr] = useState<string | null>(null);
+  const [openExpanded, setOpenExpanded] = useState(true);
+  const [scheduledExpanded, setScheduledExpanded] = useState(true);
+  const [closedExpanded, setClosedExpanded] = useState(false);
   const [qrSession, setQrSession] = useState<PracticumSession | null>(null);
   const [formVisible, setFormVisible] = useState(false);
   const [editingSession, setEditingSession] = useState<PracticumSession | null>(null);
 
-  const weekDays = useMemo(
-    () => buildWeekStrip(sessions, selectedDayStr ?? defaultAnchorDate),
-    [defaultAnchorDate, selectedDayStr, sessions],
+  const weekAnchorDate = useMemo(
+    () => shiftIsoDate(defaultAnchorDate, weekOffset * 7),
+    [defaultAnchorDate, weekOffset],
   );
 
-  const activeDayStr = selectedDayStr ?? defaultAnchorDate;
+  const weekDays = useMemo(
+    () => buildWeekStrip(sessions, weekAnchorDate),
+    [sessions, weekAnchorDate],
+  );
 
-  const daySessions = useMemo(() => {
-    if (!selectedDayStr) return sessions;
-    const matched = sessions.filter(
-      (s) => sessionDateInput(s.date, s.startsAt) === selectedDayStr,
-    );
-    return matched;
-  }, [selectedDayStr, sessions]);
+  const weekRangeLabel = useMemo(() => formatWeekRangeLabel(weekDays), [weekDays]);
 
-  const featuredSession = useMemo(() => {
-    const source = daySessions.length > 0 ? daySessions : [];
-    return (
-      source.find((s) => s.status === 'open') ??
-      source.find((s) => s.status === 'scheduled') ??
-      source[0] ??
-      null
-    );
-  }, [daySessions]);
+  const activeDayStr = useMemo(() => {
+    if (selectedDayStr && weekDays.some((d) => d.dateStr === selectedDayStr)) {
+      return selectedDayStr;
+    }
+    if (weekOffset === 0 && weekDays.some((d) => d.dateStr === defaultAnchorDate)) {
+      return defaultAnchorDate;
+    }
+    return weekDays.find((d) => d.hasSession)?.dateStr ?? weekDays[0]?.dateStr ?? defaultAnchorDate;
+  }, [defaultAnchorDate, selectedDayStr, weekDays, weekOffset]);
 
-  const upcomingSessions = useMemo(() => {
-    const list = selectedDayStr ? daySessions : sessions;
-    return list.filter((s) => s.id !== featuredSession?.id).slice(0, 6);
-  }, [daySessions, featuredSession?.id, selectedDayStr, sessions]);
+  const daySessions = useMemo(
+    () => sessions.filter((s) => sessionDateInput(s.date, s.startsAt) === activeDayStr),
+    [activeDayStr, sessions],
+  );
+
+  const openSessions = useMemo(
+    () => daySessions.filter((s) => s.status === 'open'),
+    [daySessions],
+  );
+
+  const scheduledSessions = useMemo(
+    () => daySessions.filter((s) => s.status === 'scheduled'),
+    [daySessions],
+  );
+
+  const closedSessions = useMemo(
+    () => daySessions.filter((s) => s.status === 'closed'),
+    [daySessions],
+  );
+
+  const handleShiftWeek = (deltaWeeks: number) => {
+    const nextOffset = weekOffset + deltaWeeks;
+    setWeekOffset(nextOffset);
+    setSelectedDayStr((prev) => (prev ? shiftIsoDate(prev, deltaWeeks * 7) : null));
+  };
+
+  const handleResetToCurrentWeek = () => {
+    setWeekOffset(0);
+    setSelectedDayStr(null);
+  };
 
   const activeCountToday = useMemo(() => {
     const todayMatches = sessions.filter(
@@ -195,6 +250,64 @@ export function BerandaScreen() {
         />
 
         <View style={styles.bodyContainer}>
+          {weekOffset !== 0 || selectedDayStr !== null ? (
+            <View style={styles.weekResetTopRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Reset ke minggu ini"
+                onPress={handleResetToCurrentWeek}
+                style={({ pressed }) => [
+                  styles.weekResetBtn,
+                  { backgroundColor: colors.pacificSoft, borderColor: colors.pacificLight },
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={[styles.weekResetHint, { color: colors.pacificDark }]}>
+                  Reset
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          <View style={styles.weekNavRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Minggu sebelumnya"
+              onPress={() => handleShiftWeek(-1)}
+              style={({ pressed }) => [
+                styles.weekNavBtn,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+                pressed && styles.pressed,
+              ]}
+            >
+              <ChevronLeft size={16} color={colors.textPrimary} />
+            </Pressable>
+
+            <View
+              style={[
+                styles.weekRangePill,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[styles.weekRangeText, { color: colors.textPrimary }]} numberOfLines={1}>
+                {weekRangeLabel}
+              </Text>
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Minggu berikutnya"
+              onPress={() => handleShiftWeek(1)}
+              style={({ pressed }) => [
+                styles.weekNavBtn,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+                pressed && styles.pressed,
+              ]}
+            >
+              <ChevronRight size={16} color={colors.textPrimary} />
+            </Pressable>
+          </View>
+
           <View style={styles.weekRow}>
             {weekDays.map((day) => {
               const selected = day.dateStr === activeDayStr;
@@ -203,11 +316,7 @@ export function BerandaScreen() {
                   key={day.dateStr}
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
-                  onPress={() =>
-                    setSelectedDayStr((prev) =>
-                      prev === day.dateStr ? null : day.dateStr,
-                    )
-                  }
+                  onPress={() => setSelectedDayStr(day.dateStr)}
                   style={({ pressed }) => [
                     styles.dayChip,
                     {
@@ -315,182 +424,305 @@ export function BerandaScreen() {
                 <Text style={[styles.retryText, { color: colors.baltic }]}>Coba lagi</Text>
               </Pressable>
             </View>
-          ) : featuredSession ? (
-            <View
-              style={[
-                styles.heroSessionCard,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-              ]}
-            >
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Buka detail ${featuredSession.title}`}
-                onPress={() =>
-                  router.push({
-                    pathname: '/schedule/[sessionId]',
-                    params: { sessionId: featuredSession.id },
-                  })
-                }
-                style={({ pressed }) => [
-                  styles.heroCardBody,
-                  pressed && styles.cardPressed,
-                ]}
-              >
-                <View style={styles.heroCardTop}>
-                  <View
-                    style={[
-                      styles.statusTag,
-                      {
-                        backgroundColor:
-                          featuredSession.status === 'closed'
-                            ? colors.pacificSoft
-                            : colors.rosySoft,
-                      },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.statusTagDot,
-                        {
-                          backgroundColor:
-                            featuredSession.status === 'closed' ? colors.pacific : colors.rosy,
-                        },
-                      ]}
-                    />
-                    <Text
-                      style={[
-                        styles.statusTagText,
-                        {
-                          color:
-                            featuredSession.status === 'closed'
-                              ? colors.pacificDark
-                              : colors.rosy,
-                        },
-                      ]}
-                    >
-                      {featuredSession.status === 'open'
-                        ? `BERLANGSUNG · ${formatSessionTime(featuredSession.startsAt)}`
-                        : featuredSession.status === 'closed'
-                          ? 'SELESAI'
-                          : `TERJADWAL · ${formatSessionTime(featuredSession.startsAt)}`}
-                    </Text>
-                  </View>
-
-                  <View style={[styles.roomTag, { backgroundColor: colors.pacificSoft }]}>
-                    <Text
-                      style={[styles.roomTagText, { color: colors.pacificDark }]}
-                      numberOfLines={1}
-                    >
-                      {featuredSession.location}
-                    </Text>
-                  </View>
-                </View>
-
-                <Text style={[styles.courseHeading, { color: colors.textPrimary }]}>
-                  {featuredSession.courseName ?? featuredSession.className ?? 'Praktikum Lab'}
-                </Text>
-                <Text style={[styles.sessionSubtitle, { color: colors.textSecondary }]}>
-                  {featuredSession.title}
-                </Text>
-
-                <View
-                  style={[
-                    styles.metaStrip,
-                    { backgroundColor: colors.background },
-                  ]}
-                >
-                  <Text style={[styles.metaStripLeft, { color: colors.textPrimary }]} numberOfLines={1}>
-                    {formatSessionTime(featuredSession.startsAt)} –{' '}
-                    {formatSessionTime(featuredSession.endsAt)} · {featuredSession.location}
-                  </Text>
-                  <Text style={[styles.metaStripRight, { color: colors.textSecondary }]} numberOfLines={1}>
-                    {featuredSession.assistantName ?? (featuredSession.className ?? 'Asisten')}
-                  </Text>
-                </View>
-              </Pressable>
-
-              {isAssistant ? (
-                <View style={styles.assistantHeroActions}>
-                  <SessionLifecycleButtons
-                    session={featuredSession}
-                    isAssistant={isAssistant}
-                    onOpenSession={openSession}
-                    onCloseSession={closeSession}
-                  />
+          ) : daySessions.length > 0 ? (
+            <View style={styles.groupsContainer}>
+              {openSessions.length > 0 ? (
+                <View style={styles.dropdownGroup}>
                   <Pressable
                     accessibilityRole="button"
-                    onPress={() => setQrSession(featuredSession)}
+                    accessibilityState={{ expanded: openExpanded }}
+                    onPress={() => setOpenExpanded((prev) => !prev)}
                     style={({ pressed }) => [
-                      styles.qrBtn,
-                      { backgroundColor: colors.rosy },
+                      styles.dropdownHeader,
+                      { backgroundColor: colors.surface, borderColor: colors.border },
                       pressed && styles.pressed,
                     ]}
                   >
-                    <QrCode size={16} color="#FCFCFA" strokeWidth={2} />
-                    <Text style={styles.qrBtnText}>Tampilkan QR Sesi</Text>
+                    <View style={styles.dropdownTitleRow}>
+                      <View style={[styles.statusTagDot, { backgroundColor: colors.rosy }]} />
+                      <Text style={[styles.dropdownTitle, { color: colors.textPrimary }]}>
+                        Sedang Berlangsung
+                      </Text>
+                      <View style={[styles.dropdownCountPill, { backgroundColor: colors.rosySoft }]}>
+                        <Text style={[styles.dropdownCountText, { color: colors.rosy }]}>
+                          {openSessions.length}
+                        </Text>
+                      </View>
+                    </View>
+                    {openExpanded ? (
+                      <ChevronUp size={17} color={colors.textSecondary} />
+                    ) : (
+                      <ChevronDown size={17} color={colors.textSecondary} />
+                    )}
                   </Pressable>
+
+                  {openExpanded ? (
+                    <View style={styles.dropdownBody}>
+                      {openSessions.map((sessionItem) => (
+                        <View
+                          key={sessionItem.id}
+                          style={[
+                            styles.heroSessionCard,
+                            { backgroundColor: colors.surface, borderColor: colors.border },
+                          ]}
+                        >
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Buka detail ${sessionItem.title}`}
+                            onPress={() =>
+                              router.push({
+                                pathname: '/schedule/[sessionId]',
+                                params: { sessionId: sessionItem.id },
+                              })
+                            }
+                            style={({ pressed }) => [
+                              styles.heroCardBody,
+                              pressed && styles.cardPressed,
+                            ]}
+                          >
+                            <View style={styles.heroCardTop}>
+                              <View style={[styles.statusTag, { backgroundColor: colors.rosySoft }]}>
+                                <View style={[styles.statusTagDot, { backgroundColor: colors.rosy }]} />
+                                <Text style={[styles.statusTagText, { color: colors.rosy }]}>
+                                  {`BERLANGSUNG · ${formatSessionTime(sessionItem.startsAt)}`}
+                                </Text>
+                              </View>
+
+                              <View style={[styles.roomTag, { backgroundColor: colors.pacificSoft }]}>
+                                <Text
+                                  style={[styles.roomTagText, { color: colors.pacificDark }]}
+                                  numberOfLines={1}
+                                >
+                                  {sessionItem.location}
+                                </Text>
+                              </View>
+                            </View>
+
+                            <Text style={[styles.courseHeading, { color: colors.textPrimary }]}>
+                              {sessionItem.courseName ?? sessionItem.className ?? 'Praktikum Lab'}
+                            </Text>
+                            <Text style={[styles.sessionSubtitle, { color: colors.textSecondary }]}>
+                              {sessionItem.title}
+                            </Text>
+
+                            <View style={[styles.metaStrip, { backgroundColor: colors.background }]}>
+                              <Text style={[styles.metaStripLeft, { color: colors.textPrimary }]} numberOfLines={1}>
+                                {formatSessionTime(sessionItem.startsAt)} –{' '}
+                                {formatSessionTime(sessionItem.endsAt)} · {sessionItem.location}
+                              </Text>
+                              <Text style={[styles.metaStripRight, { color: colors.textSecondary }]} numberOfLines={1}>
+                                {sessionItem.assistantName ?? (sessionItem.className ?? 'Asisten')}
+                              </Text>
+                            </View>
+                          </Pressable>
+
+                          {isAssistant ? (
+                            <View style={styles.assistantHeroActions}>
+                              <SessionLifecycleButtons
+                                session={sessionItem}
+                                isAssistant={isAssistant}
+                                onOpenSession={openSession}
+                                onCloseSession={closeSession}
+                              />
+                              <Pressable
+                                accessibilityRole="button"
+                                onPress={() => setQrSession(sessionItem)}
+                                style={({ pressed }) => [
+                                  styles.qrBtn,
+                                  { backgroundColor: colors.rosy },
+                                  pressed && styles.pressed,
+                                ]}
+                              >
+                                <QrCode size={16} color="#FCFCFA" strokeWidth={2} />
+                                <Text style={styles.qrBtnText}>Tampilkan QR Sesi</Text>
+                              </Pressable>
+                            </View>
+                          ) : (
+                            <View style={styles.studentHeroActions}>
+                              <View style={styles.studentActionsRow}>
+                                <Pressable
+                                  accessibilityRole="button"
+                                  onPress={() =>
+                                    router.push({
+                                      pathname: '/schedule/[sessionId]',
+                                      params: { sessionId: sessionItem.id },
+                                    })
+                                  }
+                                  style={({ pressed }) => [
+                                    styles.secondaryHeroBtn,
+                                    { backgroundColor: colors.balticSoft },
+                                    pressed && styles.pressed,
+                                  ]}
+                                >
+                                  <FileText size={15} color={colors.baltic} strokeWidth={2} />
+                                  <Text style={[styles.secondaryHeroBtnText, { color: colors.baltic }]}>
+                                    Modul PDF
+                                  </Text>
+                                </Pressable>
+
+                                <Pressable
+                                  accessibilityRole="button"
+                                  accessibilityState={{ disabled: true }}
+                                  disabled
+                                  style={[
+                                    styles.secondaryHeroBtn,
+                                    { backgroundColor: colors.disabledSurface, opacity: 0.55 },
+                                  ]}
+                                >
+                                  <MapPin size={15} color={colors.disabledText} strokeWidth={2} />
+                                  <Text style={[styles.secondaryHeroBtnText, { color: colors.disabledText }]}>
+                                    Denah Lab
+                                  </Text>
+                                </Pressable>
+                              </View>
+                            </View>
+                          )}
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
                 </View>
-              ) : (
-                <View style={styles.studentHeroActions}>
+              ) : null}
+
+              {scheduledSessions.length > 0 ? (
+                <View style={styles.dropdownGroup}>
                   <Pressable
                     accessibilityRole="button"
-                    onPress={() =>
-                      router.push({
-                        pathname: APP_ROUTES.PRESENSI,
-                        params: { sessionId: featuredSession.id },
-                      } as never)
-                    }
+                    accessibilityState={{ expanded: scheduledExpanded }}
+                    onPress={() => setScheduledExpanded((prev) => !prev)}
                     style={({ pressed }) => [
-                      styles.presensiHeroBtn,
-                      {
-                        backgroundColor:
-                          featuredSession.status === 'open' ? colors.rosy : colors.baltic,
-                      },
+                      styles.dropdownHeader,
+                      { backgroundColor: colors.surface, borderColor: colors.border },
                       pressed && styles.pressed,
                     ]}
                   >
-                    <MapPin size={15} color="#FCFCFA" strokeWidth={2.1} />
-                    <Text style={styles.presensiHeroBtnText}>Buka Halaman Presensi</Text>
+                    <View style={styles.dropdownTitleRow}>
+                      <View style={[styles.statusTagDot, { backgroundColor: colors.pacific }]} />
+                      <Text style={[styles.dropdownTitle, { color: colors.textPrimary }]}>
+                        Sesi Mendatang
+                      </Text>
+                      <View style={[styles.dropdownCountPill, { backgroundColor: colors.pacificSoft }]}>
+                        <Text style={[styles.dropdownCountText, { color: colors.pacificDark }]}>
+                          {scheduledSessions.length}
+                        </Text>
+                      </View>
+                    </View>
+                    {scheduledExpanded ? (
+                      <ChevronUp size={17} color={colors.textSecondary} />
+                    ) : (
+                      <ChevronDown size={17} color={colors.textSecondary} />
+                    )}
                   </Pressable>
 
-                  <View style={styles.studentActionsRow}>
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() =>
-                        router.push({
-                          pathname: '/schedule/[sessionId]',
-                          params: { sessionId: featuredSession.id },
-                        })
-                      }
-                      style={({ pressed }) => [
-                        styles.secondaryHeroBtn,
-                        { backgroundColor: colors.balticSoft },
-                        pressed && styles.pressed,
-                      ]}
-                    >
-                      <FileText size={15} color={colors.baltic} strokeWidth={2} />
-                      <Text style={[styles.secondaryHeroBtnText, { color: colors.baltic }]}>
-                        Modul PDF
-                      </Text>
-                    </Pressable>
+                  {scheduledExpanded ? (
+                    <View style={styles.dropdownBody}>
+                      {scheduledSessions.map((item, idx) => (
+                        <Pressable
+                          key={item.id}
+                          accessibilityRole="button"
+                          onPress={() =>
+                            router.push({
+                              pathname: '/schedule/[sessionId]',
+                              params: { sessionId: item.id },
+                            })
+                          }
+                          style={({ pressed }) => [
+                            styles.compactCard,
+                            { backgroundColor: colors.surface, borderColor: colors.border },
+                            pressed && styles.cardPressed,
+                          ]}
+                        >
+                          <View style={styles.compactText}>
+                            <Text style={[styles.compactMeta, { color: colors.textSubtle }]} numberOfLines={1}>
+                              {formatSessionTime(item.startsAt)} – {formatSessionTime(item.endsAt)} ·{' '}
+                              {item.className ?? 'Praktikum'}
+                            </Text>
+                            <Text style={[styles.compactTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                              {(item.courseName ?? item.title)} · {item.location}
+                            </Text>
+                          </View>
 
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityState={{ disabled: true }}
-                      disabled
-                      style={[
-                        styles.secondaryHeroBtn,
-                        { backgroundColor: colors.disabledSurface, opacity: 0.55 },
-                      ]}
-                    >
-                      <MapPin size={15} color={colors.disabledText} strokeWidth={2} />
-                      <Text style={[styles.secondaryHeroBtnText, { color: colors.disabledText }]}>
-                        Denah Lab
-                      </Text>
-                    </Pressable>
-                  </View>
+                          <View style={[styles.compactBadge, { backgroundColor: colors.pacificSoft }]}>
+                            <Text style={[styles.compactBadgeText, { color: colors.pacificDark }]}>
+                              {extractModuleTag(item.title, idx)}
+                            </Text>
+                          </View>
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : null}
                 </View>
-              )}
+              ) : null}
+
+              {closedSessions.length > 0 ? (
+                <View style={styles.dropdownGroup}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: closedExpanded }}
+                    onPress={() => setClosedExpanded((prev) => !prev)}
+                    style={({ pressed }) => [
+                      styles.dropdownHeader,
+                      { backgroundColor: colors.surface, borderColor: colors.border },
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <View style={styles.dropdownTitleRow}>
+                      <View style={[styles.statusTagDot, { backgroundColor: colors.textSubtle }]} />
+                      <Text style={[styles.dropdownTitle, { color: colors.textPrimary }]}>
+                        Sesi Selesai
+                      </Text>
+                      <View style={[styles.dropdownCountPill, { backgroundColor: colors.surfaceMuted }]}>
+                        <Text style={[styles.dropdownCountText, { color: colors.textSecondary }]}>
+                          {closedSessions.length}
+                        </Text>
+                      </View>
+                    </View>
+                    {closedExpanded ? (
+                      <ChevronUp size={17} color={colors.textSecondary} />
+                    ) : (
+                      <ChevronDown size={17} color={colors.textSecondary} />
+                    )}
+                  </Pressable>
+
+                  {closedExpanded ? (
+                    <View style={styles.dropdownBody}>
+                      {closedSessions.map((item) => (
+                        <Pressable
+                          key={item.id}
+                          accessibilityRole="button"
+                          onPress={() =>
+                            router.push({
+                              pathname: '/schedule/[sessionId]',
+                              params: { sessionId: item.id },
+                            })
+                          }
+                          style={({ pressed }) => [
+                            styles.compactCard,
+                            { backgroundColor: colors.surface, borderColor: colors.border },
+                            pressed && styles.cardPressed,
+                          ]}
+                        >
+                          <View style={styles.compactText}>
+                            <Text style={[styles.compactMeta, { color: colors.textSubtle }]} numberOfLines={1}>
+                              {formatSessionTime(item.startsAt)} – {formatSessionTime(item.endsAt)} ·{' '}
+                              {item.className ?? 'Praktikum'}
+                            </Text>
+                            <Text style={[styles.compactTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                              {(item.courseName ?? item.title)} · {item.location}
+                            </Text>
+                          </View>
+
+                          <View style={[styles.compactBadge, { backgroundColor: colors.surfaceMuted }]}>
+                            <Text style={[styles.compactBadgeText, { color: colors.textSecondary }]}>
+                              Selesai
+                            </Text>
+                          </View>
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
             </View>
           ) : (
             <View
@@ -500,88 +732,13 @@ export function BerandaScreen() {
               ]}
             >
               <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-                {selectedDayStr ? 'Tidak ada jadwal pada hari ini' : 'Belum ada jadwal praktikum'}
+                Tidak ada jadwal pada {formatSessionDate(activeDayStr)}
               </Text>
               <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
-                {selectedDayStr
-                  ? 'Ketuk tanggal yang memiliki indikator titik atau tampilkan semua jadwal.'
-                  : isAssistant
-                    ? 'Tambahkan kelas dan sesi praktikum untuk memulai jadwal.'
-                    : 'Jadwal praktikum dari kelas yang Anda ikuti akan muncul di sini.'}
+                Ketuk tanggal untuk melihat sesi.
               </Text>
-              {selectedDayStr ? (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setSelectedDayStr(null)}
-                  style={({ pressed }) => [
-                    styles.retryBtn,
-                    { backgroundColor: colors.pacificSoft },
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={[styles.retryText, { color: colors.pacificDark }]}>
-                    Tampilkan Semua Jadwal
-                  </Text>
-                </Pressable>
-              ) : null}
             </View>
           )}
-
-          {upcomingSessions.length > 0 ? (
-            <View style={styles.upcomingList}>
-              {upcomingSessions.map((item, idx) => (
-                <Pressable
-                  key={item.id}
-                  accessibilityRole="button"
-                  onPress={() =>
-                    router.push({
-                      pathname: '/schedule/[sessionId]',
-                      params: { sessionId: item.id },
-                    })
-                  }
-                  style={({ pressed }) => [
-                    styles.compactCard,
-                    { backgroundColor: colors.surface, borderColor: colors.border },
-                    pressed && styles.cardPressed,
-                  ]}
-                >
-                  <View style={styles.compactText}>
-                    <Text style={[styles.compactMeta, { color: colors.textSubtle }]} numberOfLines={1}>
-                      {formatSessionDate(item.date, item.startsAt)} ·{' '}
-                      {formatSessionTime(item.startsAt)}
-                    </Text>
-                    <Text style={[styles.compactTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                      {(item.courseName ?? item.title)} · {item.location}
-                    </Text>
-                  </View>
-
-                  <View
-                    style={[
-                      styles.compactBadge,
-                      {
-                        backgroundColor:
-                          item.status === 'open' ? colors.rosySoft : colors.pacificSoft,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.compactBadgeText,
-                        {
-                          color:
-                            item.status === 'open' ? colors.rosy : colors.pacificDark,
-                        },
-                      ]}
-                    >
-                      {item.status === 'open'
-                        ? 'Live'
-                        : extractModuleTag(item.title, idx)}
-                    </Text>
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
         </View>
       </ScrollView>
 
@@ -624,9 +781,87 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     gap: 12,
   },
+  weekResetTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  weekResetBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+  },
+  weekNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  weekNavBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weekRangePill: {
+    flex: 1,
+    height: 34,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weekRangeText: {
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 12.5,
+  },
+  weekResetHint: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 12,
+  },
   weekRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 5,
+  },
+  groupsContainer: {
+    gap: 12,
+  },
+  dropdownGroup: {
+    gap: 8,
+  },
+  dropdownHeader: {
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dropdownTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dropdownTitle: {
+    fontFamily: FontFamily.displayBold,
+    fontSize: 14,
+  },
+  dropdownCountPill: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  dropdownCountText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 11.5,
+    fontVariant: ['tabular-nums'],
+  },
+  dropdownBody: {
+    gap: 8,
   },
   dayChip: {
     flex: 1,
