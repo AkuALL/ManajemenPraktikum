@@ -39,6 +39,14 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Izinkan $(PRODUCT_NAME) menggunakan kamera untuk memindai QR presensi praktikum.",
+          "barcodeScannerEnabled": true,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
         "expo-notifications",
         {
           "color": "#12597F",

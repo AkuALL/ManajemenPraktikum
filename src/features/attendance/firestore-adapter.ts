@@ -13,13 +13,15 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase';
-import { buildAttendanceDocId, type AttendanceEntry } from '@/types';
+import { buildAttendanceDocId, type AttendanceEntry, type AuthUser } from '@/types';
+import type { PracticumSession } from '@/features/practicum';
 
 import {
   AttendancePortError,
   formatServerTime,
   mapAttendanceError,
   sortAttendanceEntries,
+  type SubmitAttendanceResult,
   validateAttendanceLocationAudit,
   type AttendanceListenerMeta,
   type AttendancePort,
@@ -72,6 +74,11 @@ function parseAttendanceDoc(
       typeof data.distanceMeters === 'number' ? data.distanceMeters : undefined,
     isWithinRadius:
       typeof data.isWithinRadius === 'boolean' ? data.isWithinRadius : undefined,
+    attendanceMethod:
+      data.attendanceMethod === 'assistant_override' ? 'assistant_override' :
+        data.attendanceMethod === 'qr' ? 'qr' : undefined,
+    recordedBy: typeof data.recordedBy === 'string' ? data.recordedBy : undefined,
+    assistanceReason: typeof data.assistanceReason === 'string' ? data.assistanceReason : undefined,
     fromCache: meta?.fromCache,
     hasPendingWrites: meta?.hasPendingWrites,
   };
@@ -127,7 +134,7 @@ function subscribeAttendanceQuery(
 }
 
 export const firestoreAttendanceAdapter: AttendancePort = {
-  async submitAttendance({ session, user, location }) {
+  async submitAttendance({ session, user, location, qrToken }) {
     if (user.role !== 'student') {
       return {
         ok: false,
@@ -157,6 +164,14 @@ export const firestoreAttendanceAdapter: AttendancePort = {
     }
     const validLocation = locationCheck.value;
 
+    if (typeof qrToken !== 'string' || qrToken.trim().length < 12) {
+      return {
+        ok: false,
+        reason: 'qr-required',
+        message: 'Pindai QR presensi aktif dari Asisten terlebih dahulu.',
+      };
+    }
+
     const docId = buildAttendanceDocId(session.id, user.uid);
 
     try {
@@ -182,6 +197,8 @@ export const firestoreAttendanceAdapter: AttendancePort = {
         accuracy: validLocation.accuracy,
         distanceMeters: validLocation.distanceMeters,
         isWithinRadius: true,
+        attendanceMethod: 'qr',
+        qrToken: qrToken.trim(),
       });
 
       const created = await findExistingAttendance(session.id, user.uid);
@@ -218,6 +235,7 @@ export const firestoreAttendanceAdapter: AttendancePort = {
             message: 'Kehadiran Anda pada sesi ini sudah tercatat.',
           };
         }
+
       }
 
       return {
@@ -250,3 +268,42 @@ export const firestoreAttendanceAdapter: AttendancePort = {
     return subscribeAttendanceQuery(constraints, true, onData, onError);
   },
 };
+
+/** Catatan audit untuk praktikan yang benar-benar mengalami kendala presensi mandiri. */
+export async function recordAssistantAttendance(input: {
+  session: PracticumSession;
+  assistant: AuthUser;
+  student: { uid: string; displayName: string; identifier: string };
+  reason: string;
+}): Promise<SubmitAttendanceResult> {
+  const { session, assistant, student } = input;
+  const reason = input.reason.trim();
+  if (assistant.role !== 'assistant') return { ok: false, reason: 'role', message: 'Hanya Asisten yang dapat melakukan presensi bantuan.' };
+  if (session.status !== 'open') return { ok: false, reason: 'status', message: 'Presensi bantuan hanya dapat dilakukan saat sesi dibuka.' };
+  if (typeof session.latitude !== 'number' || typeof session.longitude !== 'number') return { ok: false, reason: 'unknown', message: 'Lokasi sesi belum lengkap.' };
+  if (reason.length < 5) return { ok: false, reason: 'unknown', message: 'Tuliskan alasan kendala minimal 5 karakter.' };
+
+  const id = buildAttendanceDocId(session.id, student.uid);
+  try {
+    const existing = await findExistingAttendance(session.id, student.uid);
+    if (existing) return { ok: false, reason: 'duplicate', record: existing, message: 'Presensi praktikan ini sudah tercatat.' };
+    await setDoc(doc(db, 'attendance', id), {
+      sessionId: session.id, classId: session.classId, studentId: student.uid,
+      studentName: student.displayName, studentIdentifier: student.identifier,
+      attendedAt: serverTimestamp(), latitude: session.latitude, longitude: session.longitude,
+      accuracy: 0, distanceMeters: 0, isWithinRadius: false,
+      attendanceMethod: 'assistant_override', recordedBy: assistant.uid, assistanceReason: reason,
+    });
+    return { ok: true, record: {
+      id, sessionId: session.id, classId: session.classId, studentId: student.uid,
+      studentName: student.displayName, studentIdentifier: student.identifier,
+      attendedAtMs: null, attendedAt: formatServerTime(null, 'datetime'),
+      latitude: session.latitude, longitude: session.longitude, accuracy: 0, distanceMeters: 0,
+      isWithinRadius: false, attendanceMethod: 'assistant_override', recordedBy: assistant.uid,
+      assistanceReason: reason, hasPendingWrites: true,
+    } };
+  } catch (error) {
+    const mapped = mapAttendanceError(error);
+    return { ok: false, reason: mapped.code === 'forbidden' || mapped.code === 'network' ? mapped.code : 'unknown', message: mapped.message };
+  }
+}
