@@ -50,8 +50,19 @@ export function QrSessionBottomSheet({
     if (!visible || !classId || user?.role !== 'assistant') return;
     let alive = true;
     void getSessionQrChallenge(sessionId)
-      .then((current) => { if (alive && current?.classId === classId) { setChallenge(current); setNow(Date.now()); } })
-      .catch(() => { if (alive) setError('QR belum dapat dimuat. Buat QR baru untuk sesi ini.'); });
+      .then((current) => {
+        if (!alive) return;
+        setError(null);
+        if (current?.classId === classId) {
+          setChallenge(current);
+          setNow(Date.now());
+        } else {
+          setChallenge(null);
+        }
+      })
+      .catch(() => {
+        if (alive) setError('QR belum dapat dimuat. Buat QR baru atau pastikan Firestore Rules sudah di-deploy.');
+      });
     return () => { alive = false; };
   }, [classId, sessionId, user?.role, visible]);
 
@@ -65,8 +76,20 @@ export function QrSessionBottomSheet({
     try {
       setChallenge(await createSessionQrChallenge({ sessionId, classId, assistantId: user.uid }));
       setNow(Date.now());
-    } catch {
-      setError('QR tidak dapat dibuat. Pastikan sesi sudah dibuka dan Anda adalah Asisten kelas ini.');
+    } catch (err) {
+      const code =
+        typeof err === 'object' && err !== null && 'code' in err
+          ? String((err as { code?: unknown }).code)
+          : '';
+      if (code === 'unavailable' || code === 'deadline-exceeded') {
+        setError('Koneksi ke server terputus. Periksa jaringan lalu coba buat QR lagi.');
+      } else if (code === 'permission-denied') {
+        setError(
+          'Akses ditolak Firestore (permission-denied). Pastikan sesi berstatus open, Anda Asisten kelas ini, jam perangkat sinkron, dan firestore.rules terbaru sudah di-deploy.',
+        );
+      } else {
+        setError('QR tidak dapat dibuat. Pastikan sesi sudah dibuka dan Anda adalah Asisten kelas ini.');
+      }
     } finally { setLoading(false); }
   };
 

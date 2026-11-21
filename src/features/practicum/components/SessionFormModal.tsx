@@ -12,7 +12,6 @@ import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react-
 
 import { FlyAwayBottomSheet } from '@/components/ui/fly-away-bottom-sheet';
 import { Colors, FontFamily } from '@/constants/theme';
-import { FSM_UNDIP_LABS } from '@/features/labs/fsm-undip-labs';
 import { useLabs } from '@/features/labs/firestore-labs';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -90,7 +89,10 @@ function SessionFormContent({
 }) {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const { labs: storedLabs, loading: labsLoading } = useLabs();
-  const labs = storedLabs.length > 0 ? storedLabs : FSM_UNDIP_LABS;
+  const labs = useMemo(
+    () => storedLabs.filter((item) => item.isActive),
+    [storedLabs],
+  );
 
   const initialStartsAt = sessionTimeInput(initialSession?.startsAt, '08:00');
   const initialEndsAt = sessionTimeInput(initialSession?.endsAt, '10:00');

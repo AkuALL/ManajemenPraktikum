@@ -1,11 +1,28 @@
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Crosshair, MapPin, RefreshCw, Settings } from 'lucide-react-native';
-import MapView, { Circle, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Camera,
+  type CameraRef,
+  GeoJSONSource,
+  Layer,
+  Map,
+  Marker,
+} from '@maplibre/maplibre-react-native';
+import { Crosshair, LocateFixed, MapPin, RefreshCw, Settings } from 'lucide-react-native';
 
 import { Colors, FontFamily } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { FSM_UNDIP_MAP_CAMERA } from '@/features/labs/fsm-undip-labs';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import {
+  createLabRadiusFeatureCollection,
+  createUserLocationFeatureCollection,
+} from './lab-map-geojson';
 import { useMapLocation } from './use-map-location';
+
+const OPENFREEMAP_STYLES = {
+  light: 'https://tiles.openfreemap.org/styles/liberty',
+  dark: 'https://tiles.openfreemap.org/styles/dark',
+} as const;
 
 export type MappedLab = {
   id: string;
@@ -25,38 +42,152 @@ type LabNativeMapProps = {
 
 /** Peta react-native-maps untuk Android/iOS; dapat diuji langsung dengan Expo Go. */
 export function LabNativeMap({ labs, selectedLabId, onSelectLab }: LabNativeMapProps) {
-  const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
+  const colorScheme = useColorScheme();
+  const colors = colorScheme === 'dark' ? Colors.dark : Colors.light;
+  const mapStyleUrl = colorScheme === 'dark' ? OPENFREEMAP_STYLES.dark : OPENFREEMAP_STYLES.light;
   const location = useMapLocation();
+  const cameraRef = useRef<CameraRef>(null);
+  const [mapReady, setMapReady] = useState(false);
+
+  const radiusGeoJson = useMemo(
+    () => createLabRadiusFeatureCollection(labs, selectedLabId),
+    [labs, selectedLabId],
+  );
+
+  const userLocationGeoJson = useMemo(
+    () => createUserLocationFeatureCollection(location.coordinates),
+    [location.coordinates],
+  );
+
+  const orderedLabs = useMemo(() => {
+    if (!selectedLabId) return labs;
+    return [
+      ...labs.filter((lab) => lab.id !== selectedLabId),
+      ...labs.filter((lab) => lab.id === selectedLabId),
+    ];
+  }, [labs, selectedLabId]);
+
+  useEffect(() => {
+    if (!mapReady || !selectedLabId) return;
+    const selectedLab = labs.find((lab) => lab.id === selectedLabId);
+    if (!selectedLab) return;
+
+    try {
+      cameraRef.current?.easeTo({
+        center: [selectedLab.longitude, selectedLab.latitude],
+        zoom: 17,
+        duration: 450,
+      });
+    } catch {
+      // Abaikan jika kamera belum terpasang penuh saat transisi layar.
+    }
+  }, [labs, mapReady, selectedLabId]);
+
+  const handleRecenterUser = () => {
+    if (!location.coordinates) return;
+    try {
+      cameraRef.current?.easeTo({
+        center: [location.coordinates.longitude, location.coordinates.latitude],
+        zoom: 17,
+        duration: 450,
+      });
+    } catch {
+      // Abaikan jika kamera belum siap menerima perintah.
+    }
+  };
 
   return (
     <View style={[styles.card, { borderColor: colors.border, backgroundColor: colors.surface }]}>
       <View style={styles.mapViewport}>
-        <MapView
-          provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+        <Map
           style={StyleSheet.absoluteFill}
-          initialRegion={{
-            latitude: FSM_UNDIP_MAP_CAMERA.coordinates.latitude,
-            longitude: FSM_UNDIP_MAP_CAMERA.coordinates.longitude,
-            latitudeDelta: 0.006,
-            longitudeDelta: 0.006,
-          }}
-          showsUserLocation={Boolean(location.coordinates)}
-          showsMyLocationButton={Boolean(location.coordinates)}
-          showsCompass
-          zoomEnabled
-          scrollEnabled
+          mapStyle={mapStyleUrl}
+          androidView="texture"
+          compass
+          attribution
+          onDidFinishLoadingMap={() => setMapReady(true)}
         >
-          {labs.map((lab) => {
+          <Camera
+            ref={cameraRef}
+            initialViewState={{
+              center: [
+                FSM_UNDIP_MAP_CAMERA.coordinates.longitude,
+                FSM_UNDIP_MAP_CAMERA.coordinates.latitude,
+              ],
+              zoom: FSM_UNDIP_MAP_CAMERA.zoom,
+            }}
+          />
+
+          <GeoJSONSource id="lab-radius-source" data={radiusGeoJson}>
+            <Layer
+              id="lab-radius-fill-default"
+              type="fill"
+              filter={['!=', ['get', 'isSelected'], 1]}
+              paint={{
+                'fill-color': colors.pacific,
+                'fill-opacity': 0.08,
+              }}
+            />
+            <Layer
+              id="lab-radius-stroke-default"
+              type="line"
+              filter={['!=', ['get', 'isSelected'], 1]}
+              paint={{
+                'line-color': colors.pacific,
+                'line-width': 1,
+              }}
+            />
+            <Layer
+              id="lab-radius-fill-selected"
+              type="fill"
+              filter={['==', ['get', 'isSelected'], 1]}
+              paint={{
+                'fill-color': colors.baltic,
+                'fill-opacity': 0.18,
+              }}
+            />
+            <Layer
+              id="lab-radius-stroke-selected"
+              type="line"
+              filter={['==', ['get', 'isSelected'], 1]}
+              paint={{
+                'line-color': colors.baltic,
+                'line-width': 2,
+              }}
+            />
+          </GeoJSONSource>
+
+          <GeoJSONSource id="user-location-source" data={userLocationGeoJson}>
+            <Layer
+              id="user-location-halo"
+              type="circle"
+              paint={{
+                'circle-radius': 14,
+                'circle-color': '#2563EB',
+                'circle-opacity': 0.2,
+              }}
+            />
+            <Layer
+              id="user-location-dot"
+              type="circle"
+              paint={{
+                'circle-radius': 7,
+                'circle-color': '#2563EB',
+                'circle-stroke-width': 2.5,
+                'circle-stroke-color': '#FCFCFA',
+              }}
+            />
+          </GeoJSONSource>
+
+          {orderedLabs.map((lab) => {
             const selected = lab.id === selectedLabId;
             const markerColor = lab.isActiveNow ? colors.rosy : colors.baltic;
 
             return (
               <Marker
                 key={lab.id}
-                coordinate={{ latitude: lab.latitude, longitude: lab.longitude }}
-                title={lab.name}
-                description={`${lab.building} · ${lab.isActiveNow ? 'Sedang digunakan' : 'Tersedia'}`}
-                pinColor={markerColor}
+                id={lab.id}
+                lngLat={[lab.longitude, lab.latitude]}
                 onPress={() => onSelectLab(lab.id)}
               >
                 <View
@@ -73,18 +204,25 @@ export function LabNativeMap({ labs, selectedLabId, onSelectLab }: LabNativeMapP
               </Marker>
             );
           })}
+        </Map>
 
-          {labs.map((lab) => (
-            <Circle
-              key={`radius-${lab.id}`}
-              center={{ latitude: lab.latitude, longitude: lab.longitude }}
-              radius={lab.radiusMeters}
-              strokeColor={lab.id === selectedLabId ? colors.baltic : colors.pacific}
-              fillColor={lab.id === selectedLabId ? 'rgba(18, 89, 127, 0.18)' : 'rgba(78, 144, 177, 0.08)'}
-              strokeWidth={lab.id === selectedLabId ? 2 : 1}
-            />
-          ))}
-        </MapView>
+        {location.coordinates ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Pusatkan peta ke lokasi saya"
+            onPress={handleRecenterUser}
+            style={({ pressed }) => [
+              styles.recenterButton,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+              pressed && styles.pressed,
+            ]}
+          >
+            <LocateFixed size={18} color={colors.baltic} strokeWidth={2.2} />
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={[styles.legend, { backgroundColor: colors.background, borderColor: colors.border }]}>
@@ -137,6 +275,22 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  recenterButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0D2336',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.14,
+    shadowRadius: 4,
+    elevation: 3,
   },
   legend: { borderTopWidth: 1, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
   legendCopy: { flex: 1, gap: 3 },

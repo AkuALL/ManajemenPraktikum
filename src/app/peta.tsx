@@ -6,7 +6,6 @@ import { FlyAwayBottomSheet } from '@/components/ui/fly-away-bottom-sheet';
 import { PickerBottomSheet, type PickerOption } from '@/components/ui/picker-bottom-sheet';
 import { SearchFilterBar } from '@/components/ui/search-filter-bar';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
-import { FSM_UNDIP_LABS, FSM_UNDIP_MAP_CAMERA } from '@/features/labs/fsm-undip-labs';
 import { useLabs } from '@/features/labs/firestore-labs';
 import { LabNativeMap } from '@/features/maps/lab-native-map';
 import { formatSessionTime, usePracticum } from '@/features/practicum';
@@ -33,7 +32,7 @@ type LabRoomItem = {
 
 export default function PetaLabScreen() {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
-  const { classes, sessions } = usePracticum();
+  const { sessions } = usePracticum();
   const { labs: storedLabs } = useLabs();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,8 +43,7 @@ export default function PetaLabScreen() {
 
   const rooms = useMemo<LabRoomItem[]>(() => {
     const map = new Map<string, Omit<LabRoomItem, 'isActiveNow'>>();
-    const labSource = storedLabs.length > 0 ? storedLabs : FSM_UNDIP_LABS;
-    labSource
+    storedLabs
       .filter((lab) => lab.isActive)
       .forEach((lab) =>
         map.set(lab.name.toLowerCase(), {
@@ -53,46 +51,12 @@ export default function PetaLabScreen() {
           name: lab.name,
           building: lab.building,
           floor: lab.floor ? `Lt. ${lab.floor}` : 'Area gedung',
-          capacity: 'capacity' in lab ? lab.capacity : 32,
+          capacity: lab.capacity,
           latitude: lab.latitude,
           longitude: lab.longitude,
           radiusMeters: lab.radiusMeters,
         }),
       );
-
-    classes.forEach((cls) => {
-      const labName = cls.lab?.trim();
-      if (!labName) return;
-      if (!map.has(labName.toLowerCase())) {
-        map.set(labName.toLowerCase(), {
-          id: `cls-${cls.id}`,
-          name: labName,
-          building: 'Gedung Laboratorium Lantai 2',
-          floor: 'Lt. 2',
-          capacity: 32,
-          latitude: FSM_UNDIP_MAP_CAMERA.coordinates.latitude,
-          longitude: FSM_UNDIP_MAP_CAMERA.coordinates.longitude,
-          radiusMeters: 10,
-        });
-      }
-    });
-
-    sessions.forEach((sess) => {
-      const labName = sess.location?.trim();
-      if (!labName) return;
-      if (!map.has(labName.toLowerCase())) {
-        map.set(labName.toLowerCase(), {
-          id: `sess-${sess.id}`,
-          name: labName,
-          building: 'Gedung Laboratorium Lantai 3',
-          floor: 'Lt. 3',
-          capacity: 32,
-          latitude: FSM_UNDIP_MAP_CAMERA.coordinates.latitude,
-          longitude: FSM_UNDIP_MAP_CAMERA.coordinates.longitude,
-          radiusMeters: 10,
-        });
-      }
-    });
 
     return Array.from(map.values()).map((room) => {
       const activeSession = sessions.find(
@@ -120,14 +84,11 @@ export default function PetaLabScreen() {
           : undefined,
       };
     });
-  }, [classes, sessions, storedLabs]);
+  }, [sessions, storedLabs]);
 
   const floorOptions = useMemo<PickerOption[]>(() => {
     const floors = Array.from(new Set(rooms.map((r) => r.floor))).sort();
-    return [
-      { value: 'Semua', label: 'Semua Lantai', subtitle: 'Tampilkan seluruh ruang laboratorium' },
-      ...floors.map((f) => ({ value: f, label: f, subtitle: `Ruangan pada ${f}` })),
-    ];
+    return floors.map((f) => ({ value: f, label: f, subtitle: `Ruangan pada ${f}` }));
   }, [rooms]);
 
   const filteredRooms = useMemo(() => {
@@ -170,6 +131,8 @@ export default function PetaLabScreen() {
             searchPlaceholder="Cari ruang lab..."
             filterLabel={floorFilter}
             onPressFilter={() => setFloorSheetVisible(true)}
+            isFilterActive={floorFilter !== 'Semua'}
+            onResetFilter={() => setFloorFilter('Semua')}
           />
 
           {Platform.OS !== 'web' ? (

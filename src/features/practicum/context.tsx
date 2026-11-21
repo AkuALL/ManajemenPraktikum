@@ -207,14 +207,14 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
 
   const createClass = useCallback((input: CreateClassInput) => runOperation(() => adapter.createClass(input, currentUserId), 'Gagal membuat kelas.'), [adapter, currentUserId, runOperation]);
   const updateClass = useCallback((classId: string, input: UpdateClassInput) => runOperation(() => adapter.updateClass(classId, input), 'Gagal memperbarui kelas.'), [adapter, runOperation]);
-  const deleteClass = useCallback((classId: string) => runOperation(() => adapter.deleteClass(classId), 'Gagal menghapus kelas.'), [adapter, runOperation]);
+  const deleteClass = useCallback((classId: string) => runOperation(() => adapter.deleteClass(classId, currentUserId), 'Gagal menghapus kelas.'), [adapter, currentUserId, runOperation]);
   const getRegisteredStudents = useCallback(() => runOperation(() => adapter.getRegisteredStudents(), 'Gagal memuat daftar praktikan.'), [adapter, runOperation]);
   const getClassMembers = useCallback((classId: string) => runOperation(() => adapter.getClassMembers(classId), 'Gagal memuat anggota kelas.'), [adapter, runOperation]);
   const addMember = useCallback((classId: string, input: AddMemberInput) => runOperation(() => adapter.addMember(classId, input), 'Gagal menambah anggota.'), [adapter, runOperation]);
   const removeMember = useCallback((classId: string, memberId: string) => runOperation(() => adapter.removeMember(classId, memberId), 'Gagal menghapus anggota.'), [adapter, runOperation]);
   const createSession = useCallback((input: CreateSessionInput) => runOperation(() => adapter.createSession(input, currentUserId), 'Gagal membuat sesi.'), [adapter, currentUserId, runOperation]);
   const updateSession = useCallback((sessionId: string, input: UpdateSessionInput) => runOperation(() => adapter.updateSession(sessionId, input), 'Gagal memperbarui sesi.'), [adapter, runOperation]);
-  const deleteSession = useCallback((sessionId: string) => runOperation(() => adapter.deleteSession(sessionId), 'Gagal menghapus sesi.'), [adapter, runOperation]);
+  const deleteSession = useCallback((sessionId: string) => runOperation(() => adapter.deleteSession(sessionId, currentUserId), 'Gagal menghapus sesi.'), [adapter, currentUserId, runOperation]);
   const openSession = useCallback((sessionId: string) => runOperation(() => adapter.openSession(sessionId, currentUserId), 'Gagal membuka sesi.'), [adapter, currentUserId, runOperation]);
   const closeSession = useCallback((sessionId: string) => runOperation(() => adapter.closeSession(sessionId, currentUserId), 'Gagal menutup sesi.'), [adapter, currentUserId, runOperation]);
 

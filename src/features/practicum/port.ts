@@ -29,7 +29,7 @@ export interface PracticumPort {
   ): () => void;
   createClass(input: CreateClassInput, assistantId: string): Promise<PracticumClass>;
   updateClass(classId: string, input: UpdateClassInput): Promise<void>;
-  deleteClass(classId: string): Promise<void>;
+  deleteClass(classId: string, assistantId?: string): Promise<void>;
 
   // === ANGGOTA KELAS ===
   getRegisteredStudents(): Promise<StudentCandidate[]>;
@@ -60,7 +60,7 @@ export interface PracticumPort {
   ): () => void;
   createSession(input: CreateSessionInput, assistantId: string): Promise<PracticumSession>;
   updateSession(sessionId: string, input: UpdateSessionInput): Promise<void>;
-  deleteSession(sessionId: string): Promise<void>;
+  deleteSession(sessionId: string, assistantId?: string): Promise<void>;
 
   // === LIFECYCLE SESI (BUKA & TUTUP) ===
   openSession(sessionId: string, assistantId: string): Promise<void>;

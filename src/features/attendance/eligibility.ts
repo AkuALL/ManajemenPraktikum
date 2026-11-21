@@ -175,8 +175,8 @@ export function deriveAttendanceEligibility(
       status: 'within-radius',
       canSubmit: true,
       badgeLabel: 'Dalam Radius',
-      headline: 'Lokasi terverifikasi, siap presensi',
-      reason: `Jarak Anda: ${formattedDist} (Maks: ${geofence.radiusMeters} meter).`,
+      headline: 'Lokasi valid, siap scan QR presensi',
+      reason: `Jarak Anda: ${formattedDist} (Maks: ${geofence.radiusMeters} meter). Lanjutkan scan QR dari Asisten untuk mencatat kehadiran.`,
       tone: 'success',
     };
   }
@@ -191,7 +191,7 @@ export function deriveAttendanceEligibility(
     canSubmit: false,
     badgeLabel: 'Di Luar Radius',
     headline: 'Posisi Anda di luar radius lab',
-    reason: `Jarak Anda: ${formattedDist} (Maks: ${geofence.radiusMeters} meter). Mendekatlah sekitar ${shortage} meter lagi ke ${labName}.`,
+    reason: `Jarak Anda: ${formattedDist} (Maks: ${geofence.radiusMeters} meter). Mendekatlah sekitar ${shortage} meter lagi ke ${labName} agar scan QR dapat diterima.`,
     tone: 'danger',
   };
 }

@@ -1,5 +1,13 @@
-import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState, useSyncExternalStore } from 'react';
+import {
+  Animated,
+  PanResponder,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { Colors, FontFamily } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
@@ -21,17 +29,64 @@ type NotificationItem = {
   unread: boolean;
 };
 
-export function NotificationsBottomSheet({
-  visible,
-  onClose,
-}: NotificationsBottomSheetProps) {
-  const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
-  const { user } = useAuth();
-  const { sessions } = usePracticum({ classes: false, sessions: visible });
-  const { requests } = useLeave();
-  const [markedReadAll, setMarkedReadAll] = useState(false);
+type NotificationCenterState = {
+  markedReadAll: boolean;
+  readIds: string[];
+  dismissedIds: string[];
+};
 
-  const items = useMemo<NotificationItem[]>(() => {
+let centerState: NotificationCenterState = {
+  markedReadAll: false,
+  readIds: [],
+  dismissedIds: [],
+};
+const listeners = new Set<() => void>();
+
+function emitChange() {
+  listeners.forEach((listener) => listener());
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function getSnapshot() {
+  return centerState;
+}
+
+function markAllNotificationsRead() {
+  if (centerState.markedReadAll) return;
+  centerState = { ...centerState, markedReadAll: true };
+  emitChange();
+}
+
+function markNotificationRead(id: string) {
+  if (centerState.markedReadAll || centerState.readIds.includes(id)) return;
+  centerState = { ...centerState, readIds: [...centerState.readIds, id] };
+  emitChange();
+}
+
+function dismissNotificationIds(ids: string[]) {
+  const next = Array.from(new Set([...centerState.dismissedIds, ...ids]));
+  if (next.length === centerState.dismissedIds.length) return;
+  centerState = { ...centerState, dismissedIds: next };
+  emitChange();
+}
+
+function useNotificationItems(enabled: boolean): NotificationItem[] {
+  const { user } = useAuth();
+  const { sessions } = usePracticum({ classes: false, sessions: enabled });
+  const { requests } = useLeave();
+  const { markedReadAll, readIds, dismissedIds } = useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    getSnapshot,
+  );
+
+  return useMemo<NotificationItem[]>(() => {
     const result: NotificationItem[] = [];
 
     if (user?.role === 'student') {
@@ -43,11 +98,12 @@ export function NotificationsBottomSheet({
             : req.status === 'rejected'
               ? 'ditolak'
               : 'menunggu konfirmasi';
+        const id = `leave-${req.id}`;
         result.push({
-          id: `leave-${req.id}`,
+          id,
           title: `Izin ${session?.courseName ?? session?.title ?? 'Praktikum'} ${statusText}`,
           meta: req.reviewedBy ? 'Diperbarui asisten' : 'Pengajuan aktif',
-          unread: !markedReadAll && req.status !== 'pending',
+          unread: !markedReadAll && !readIds.includes(id) && req.status !== 'pending',
         });
       });
     }
@@ -56,11 +112,12 @@ export function NotificationsBottomSheet({
       .filter((s) => s.status === 'open')
       .slice(0, 2)
       .forEach((s) => {
+        const id = `session-${s.id}`;
         result.push({
-          id: `session-${s.id}`,
+          id,
           title: `${s.courseName ?? s.title} sedang dibuka`,
           meta: `${formatSessionTime(s.startsAt)} · ${s.location}`,
-          unread: !markedReadAll,
+          unread: !markedReadAll && !readIds.includes(id),
         });
       });
 
@@ -76,41 +133,187 @@ export function NotificationsBottomSheet({
         });
       });
 
-    if (result.length === 0) {
-      result.push({
-        id: 'empty-info',
-        title: 'Semua jadwal praktikum sinkron',
-        meta: 'Belum ada pembaruan baru untuk akun ini',
-        unread: false,
-      });
-    }
+    return result.filter((item) => !dismissedIds.includes(item.id));
+  }, [dismissedIds, markedReadAll, readIds, requests, sessions, user?.role]);
+}
 
-    return result;
-  }, [markedReadAll, requests, sessions, user?.role]);
+export function useUnreadNotificationsCount(): number {
+  const items = useNotificationItems(true);
+  return useMemo(() => items.filter((item) => item.unread).length, [items]);
+}
+
+type SwipeableNotificationRowProps = {
+  item: NotificationItem;
+  colors: typeof Colors.light | typeof Colors.dark;
+  onPress: (id: string) => void;
+  onDismiss: (id: string) => void;
+};
+
+function SwipeableNotificationRow({
+  item,
+  colors,
+  onPress,
+  onDismiss,
+}: SwipeableNotificationRowProps) {
+  const [translateX] = useState(() => new Animated.Value(0));
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          gestureState.dx > 10 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.2,
+        onPanResponderMove: (_, gestureState) => {
+          if (gestureState.dx > 0) {
+            translateX.setValue(gestureState.dx);
+          }
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dx >= 90 || gestureState.vx >= 0.65) {
+            Animated.timing(translateX, {
+              toValue: 360,
+              duration: 180,
+              useNativeDriver: true,
+            }).start(() => onDismiss(item.id));
+          } else {
+            Animated.spring(translateX, {
+              toValue: 0,
+              useNativeDriver: true,
+              bounciness: 6,
+            }).start();
+          }
+        },
+        onPanResponderTerminate: () => {
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 6,
+          }).start();
+        },
+      }),
+    [item.id, onDismiss, translateX],
+  );
+
+  const opacity = translateX.interpolate({
+    inputRange: [0, 180],
+    outputRange: [1, 0.2],
+    extrapolate: 'clamp',
+  });
+
+  return (
+    <Animated.View
+      {...panResponder.panHandlers}
+      style={[
+        styles.row,
+        {
+          backgroundColor: item.unread ? colors.pacificSoft : colors.surfaceMuted,
+          borderColor: item.unread ? colors.pacific : colors.border,
+          transform: [{ translateX }],
+          opacity,
+        },
+      ]}
+    >
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => onPress(item.id)}
+        style={({ pressed }) => [
+          styles.rowPressable,
+          !item.unread && styles.rowRead,
+          pressed && styles.pressed,
+        ]}
+      >
+        <View
+          style={[
+            styles.dot,
+            { backgroundColor: item.unread ? '#F97316' : colors.borderStrong },
+          ]}
+        />
+        <View style={styles.rowText}>
+          <Text
+            style={[
+              styles.rowTitle,
+              { color: item.unread ? colors.textPrimary : colors.textSecondary },
+            ]}
+            numberOfLines={2}
+          >
+            {item.title}
+          </Text>
+          <Text style={[styles.rowMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+            {item.meta}
+          </Text>
+        </View>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+export function NotificationsBottomSheet({
+  visible,
+  onClose,
+}: NotificationsBottomSheetProps) {
+  const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
+  const items = useNotificationItems(visible);
 
   const unreadCount = items.filter((item) => item.unread).length;
+  const readCount = items.length - unreadCount;
+
+  const handleDismiss = (id: string) => {
+    dismissNotificationIds([id]);
+  };
+
+  const handleClearRead = () => {
+    const readIds = items.filter((item) => !item.unread).map((item) => item.id);
+    if (readIds.length === 0) return;
+    dismissNotificationIds(readIds);
+  };
 
   return (
     <FlyAwayBottomSheet
       visible={visible}
       onClose={onClose}
       title="Notifikasi"
-      subtitle={unreadCount > 0 ? `${unreadCount} pembaruan terbaru` : 'Semua sudah terbaca'}
+      subtitle={
+        items.length === 0
+          ? 'Belum ada pembaruan'
+          : unreadCount > 0
+            ? `${unreadCount} pembaruan terbaru`
+            : 'Semua sudah terbaca'
+      }
       maxHeight="72%"
       footer={
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setMarkedReadAll(true)}
-          style={({ pressed }) => [
-            styles.markBtn,
-            { backgroundColor: colors.surfaceMuted },
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text style={[styles.markBtnText, { color: colors.textPrimary }]}>
-            Tandai Semua Dibaca
-          </Text>
-        </Pressable>
+        <View style={styles.footerRow}>
+          <Pressable
+            accessibilityRole="button"
+            disabled={unreadCount === 0}
+            onPress={markAllNotificationsRead}
+            style={({ pressed }) => [
+              styles.markBtn,
+              { backgroundColor: colors.surfaceMuted },
+              unreadCount === 0 && styles.disabledBtn,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={[styles.markBtnText, { color: colors.textPrimary }]}>
+              Tandai Semua Dibaca
+            </Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            disabled={readCount === 0}
+            onPress={handleClearRead}
+            style={({ pressed }) => [
+              styles.markBtn,
+              { backgroundColor: colors.rosySoft },
+              readCount === 0 && styles.disabledBtn,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={[styles.markBtnText, { color: colors.rosy }]}>
+              Hapus Semua
+            </Text>
+          </Pressable>
+        </View>
       }
     >
       <ScrollView
@@ -119,31 +322,13 @@ export function NotificationsBottomSheet({
         showsVerticalScrollIndicator={false}
       >
         {items.map((item) => (
-          <View
+          <SwipeableNotificationRow
             key={item.id}
-            style={[
-              styles.row,
-              {
-                backgroundColor: item.unread ? colors.pacificSoft : colors.background,
-                borderColor: item.unread ? colors.pacificLight : colors.border,
-              },
-            ]}
-          >
-            <View
-              style={[
-                styles.dot,
-                { backgroundColor: item.unread ? colors.rosy : colors.borderStrong },
-              ]}
-            />
-            <View style={styles.rowText}>
-              <Text style={[styles.rowTitle, { color: colors.textPrimary }]} numberOfLines={2}>
-                {item.title}
-              </Text>
-              <Text style={[styles.rowMeta, { color: colors.textSecondary }]} numberOfLines={1}>
-                {item.meta}
-              </Text>
-            </View>
-          </View>
+            item={item}
+            colors={colors}
+            onPress={markNotificationRead}
+            onDismiss={handleDismiss}
+          />
         ))}
       </ScrollView>
     </FlyAwayBottomSheet>
@@ -153,6 +338,7 @@ export function NotificationsBottomSheet({
 const styles = StyleSheet.create({
   scroll: {
     maxHeight: 300,
+    minHeight: 80,
   },
   list: {
     gap: 8,
@@ -160,11 +346,17 @@ const styles = StyleSheet.create({
   row: {
     borderRadius: 16,
     borderWidth: 1,
+    overflow: 'hidden',
+  },
+  rowPressable: {
     paddingHorizontal: 14,
     paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
+  },
+  rowRead: {
+    opacity: 0.52,
   },
   dot: {
     width: 8,
@@ -186,15 +378,26 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     lineHeight: 16,
   },
+  footerRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
   markBtn: {
-    height: 44,
+    flex: 1,
+    minHeight: 44,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   markBtnText: {
     fontFamily: FontFamily.sansBold,
-    fontSize: 13,
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  disabledBtn: {
+    opacity: 0.45,
   },
   pressed: {
     opacity: 0.78,

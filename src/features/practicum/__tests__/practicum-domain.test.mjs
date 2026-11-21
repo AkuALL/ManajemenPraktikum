@@ -71,7 +71,7 @@ test('GA-03 & FR-06: Praktikan only sees sessions from classes they are enrolled
     'asisten-2'
   );
 
-  // Daftarkan Galang ke Kelas A saja, bukan Kelas B
+  // Daftarkan Galang ke kelas A1 saja, bukan B1
   await adapter.addMember(classA.id, {
     userId: '23.11.0001',
     displayName: 'Galang',
@@ -82,7 +82,7 @@ test('GA-03 & FR-06: Praktikan only sees sessions from classes they are enrolled
   await adapter.createSession(
     {
       classId: classA.id,
-      title: 'Sesi Query SQL Kelas A',
+      title: 'Sesi Query SQL A1',
       location: 'Lab 1',
       startsAt: '2026-11-20T08:00:00.000Z',
       endsAt: '2026-11-20T10:00:00.000Z',
@@ -93,7 +93,7 @@ test('GA-03 & FR-06: Praktikan only sees sessions from classes they are enrolled
   await adapter.createSession(
     {
       classId: classB.id,
-      title: 'Sesi Routing Jaringan Kelas B',
+      title: 'Sesi Routing Jaringan B1',
       location: 'Lab 2',
       startsAt: '2026-11-21T08:00:00.000Z',
       endsAt: '2026-11-21T10:00:00.000Z',
@@ -115,7 +115,7 @@ test('GA-03 & FR-06: Praktikan only sees sessions from classes they are enrolled
   );
 
   assert.equal(studentSessions.length, 1);
-  assert.equal(studentSessions[0].title, 'Sesi Query SQL Kelas A');
+  assert.equal(studentSessions[0].title, 'Sesi Query SQL A1');
   assert.equal(studentSessions[0].classId, classA.id);
   assert.equal(studentSessionsMeta?.fromCache, false);
 

@@ -27,7 +27,6 @@ type ClassFilterMode = 'all' | 'active' | 'live';
 const FILTER_OPTIONS: PickerOption[] = [
   { value: 'active', label: 'Aktif', subtitle: 'Tampilkan semua kelas aktif semester ini' },
   { value: 'live', label: 'Live', subtitle: 'Hanya kelas yang sedang memiliki sesi berlangsung' },
-  { value: 'all', label: 'Semua', subtitle: 'Seluruh daftar kelas praktikum' },
 ];
 
 export default function ClassesScreen() {
@@ -53,7 +52,7 @@ export default function ClassesScreen() {
   } = usePracticum();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterMode, setFilterMode] = useState<ClassFilterMode>('active');
+  const [filterMode, setFilterMode] = useState<ClassFilterMode>('all');
   const [filterSheetVisible, setFilterSheetVisible] = useState(false);
   const [expandedMap, setExpandedMap] = useState<Record<string, boolean>>({});
 
@@ -173,7 +172,7 @@ export default function ClassesScreen() {
 
   const primaryLab = classes[0]?.lab ?? 'Asisten Lab';
   const filterLabel =
-    FILTER_OPTIONS.find((opt) => opt.value === filterMode)?.label ?? 'Aktif';
+    FILTER_OPTIONS.find((opt) => opt.value === filterMode)?.label ?? 'Semua';
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -230,6 +229,8 @@ export default function ClassesScreen() {
             searchPlaceholder="Cari nama atau kode kelas..."
             filterLabel={filterLabel}
             onPressFilter={() => setFilterSheetVisible(true)}
+            isFilterActive={filterMode !== 'all'}
+            onResetFilter={() => setFilterMode('all')}
           />
 
           {error ? (

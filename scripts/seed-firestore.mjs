@@ -66,15 +66,74 @@ const SEED_ACCOUNTS = [
   },
 ];
 
+const SEED_LABS = [
+  {
+    id: 'lab-informatika-b',
+    name: 'Lab Informatika B',
+    building: 'Gedung E FSM UNDIP',
+    floor: 2,
+    capacity: 32,
+    latitude: -7.0482375,
+    longitude: 110.440765625,
+    radiusMeters: 10,
+    isActive: true,
+    plusCode: '6P4GXC2R+P82',
+    pointType: 'building_map_reference',
+    roomCenterVerified: false,
+  },
+  {
+    id: 'lab-informatika-c',
+    name: 'Lab Informatika C',
+    building: 'Gedung E FSM UNDIP',
+    floor: 2,
+    capacity: 32,
+    latitude: -7.0482375,
+    longitude: 110.440765625,
+    radiusMeters: 10,
+    isActive: true,
+    plusCode: '6P4GXC2R+P82',
+    pointType: 'building_map_reference',
+    roomCenterVerified: false,
+  },
+  {
+    id: 'lab-informatika-d',
+    name: 'Lab Informatika D',
+    building: 'Gedung E FSM UNDIP',
+    floor: 2,
+    capacity: 32,
+    latitude: -7.0482375,
+    longitude: 110.440765625,
+    radiusMeters: 10,
+    isActive: true,
+    plusCode: '6P4GXC2R+P82',
+    pointType: 'building_map_reference',
+    roomCenterVerified: false,
+  },
+  {
+    id: 'dekanat-fsm',
+    name: 'Dekanat FSM UNDIP',
+    building: 'Gedung Dekanat FSM UNDIP',
+    floor: null,
+    capacity: 32,
+    latitude: -7.0490375,
+    longitude: 110.441484375,
+    radiusMeters: 10,
+    isActive: true,
+    plusCode: '6P4GXC2R+9HQ',
+    pointType: 'building_map_reference',
+    roomCenterVerified: false,
+  },
+];
+
 const SEED_PRACTICUM_COURSES = [
-  { courseName: 'Sistem Operasi', className: 'Kelas A', lab: 'Lab Sistem & Jaringan' },
-  { courseName: 'Pengembangan Platform Khusus', className: 'Kelas A', lab: 'Lab Mobile & IoT' },
-  { courseName: 'Pembelajaran Mesin', className: 'Kelas A', lab: 'Lab Kecerdasan Buatan' },
-  { courseName: 'Struktur Data', className: 'Kelas A', lab: 'Lab Pemrograman 1' },
-  { courseName: 'Basis Data', className: 'Kelas A', lab: 'Lab Basis Data' },
-  { courseName: 'Algoritma Pemrograman', className: 'Kelas A', lab: 'Lab Pemrograman 2' },
-  { courseName: 'Dasar Sistem', className: 'Kelas A', lab: 'Lab Arsitektur Komputer' },
-  { courseName: 'Dasar Pemrograman', className: 'Kelas A', lab: 'Lab Dasar Komputasi' },
+  { courseName: 'Sistem Operasi', className: 'A1', labId: 'lab-informatika-b', lab: 'Lab Informatika B' },
+  { courseName: 'Pengembangan Platform Khusus', className: 'A2', labId: 'lab-informatika-c', lab: 'Lab Informatika C' },
+  { courseName: 'Pembelajaran Mesin', className: 'B1', labId: 'lab-informatika-d', lab: 'Lab Informatika D' },
+  { courseName: 'Struktur Data', className: 'B2', labId: 'lab-informatika-b', lab: 'Lab Informatika B' },
+  { courseName: 'Basis Data', className: 'A1', labId: 'lab-informatika-c', lab: 'Lab Informatika C' },
+  { courseName: 'Algoritma Pemrograman', className: 'A2', labId: 'lab-informatika-d', lab: 'Lab Informatika D' },
+  { courseName: 'Dasar Sistem', className: 'B1', labId: 'lab-informatika-b', lab: 'Lab Informatika B' },
+  { courseName: 'Dasar Pemrograman', className: 'B2', labId: 'lab-informatika-c', lab: 'Lab Informatika C' },
 ];
 
 async function ensureAccount(auth, db, account) {
@@ -149,6 +208,21 @@ async function main() {
 
     await signInWithEmailAndPassword(auth, primaryAssistant.email, primaryAssistant.password);
 
+    console.log('2. Membuat / memverifikasi master data laboratorium (koleksi labs)...');
+    const labById = new Map(SEED_LABS.map((lab) => [lab.id, lab]));
+    for (const lab of SEED_LABS) {
+      await setDoc(
+        doc(db, 'labs', lab.id),
+        {
+          ...lab,
+          createdBy: primaryAssistant.uid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+
     const existingClassesSnap = await getDocs(
       query(collection(db, 'classes'), where('assistantIds', 'array-contains', primaryAssistant.uid)),
     );
@@ -158,7 +232,7 @@ async function main() {
 
     const seededClasses = [];
 
-    console.log('2. Membuat / memverifikasi 8 mata kuliah praktikum...');
+    console.log('3. Membuat / memverifikasi 8 mata kuliah praktikum...');
     for (let index = 0; index < SEED_PRACTICUM_COURSES.length; index += 1) {
       const course = SEED_PRACTICUM_COURSES[index];
       const existing = existingByName.get(course.courseName);
@@ -230,11 +304,17 @@ async function main() {
         start.setHours(8, 0, 0, 0);
         const end = new Date(start);
         end.setHours(10, 0, 0, 0);
+        const labData = labById.get(course.labId) ?? SEED_LABS[0];
 
         await addDoc(collection(db, 'sessions'), {
           classId,
           title: `Pertemuan 1 - Pengenalan ${course.courseName}`,
-          location: course.lab,
+          location: labData.name,
+          labId: labData.id,
+          locationName: labData.name,
+          latitude: labData.latitude,
+          longitude: labData.longitude,
+          radiusMeters: labData.radiusMeters,
           startsAt: Timestamp.fromDate(start),
           endsAt: Timestamp.fromDate(end),
           status: 'scheduled',

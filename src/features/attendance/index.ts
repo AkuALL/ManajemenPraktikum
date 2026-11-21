@@ -1,3 +1,5 @@
+export { AssistantSessionRosterPanel } from './AssistantSessionRosterPanel';
+export type { AssistantSessionRosterPanelProps } from './AssistantSessionRosterPanel';
 export { AttendanceEligibilityCard } from './AttendanceEligibilityCard';
 export type { AttendanceEligibilityCardProps } from './AttendanceEligibilityCard';
 export { AttendanceVerifyScreen } from './AttendanceVerifyScreen';

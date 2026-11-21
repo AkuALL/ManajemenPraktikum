@@ -10,6 +10,7 @@ import {
 
 import { FlyAwayBottomSheet } from '@/components/ui/fly-away-bottom-sheet';
 import { Colors, FontFamily } from '@/constants/theme';
+import { useLabs } from '@/features/labs/firestore-labs';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { confirmAction } from '@/lib/cross-platform-alert';
 
@@ -36,6 +37,8 @@ function ClassFormContent({
   onDelete?: (classId: string) => Promise<void>;
 }) {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
+  const { labs: storedLabs, loading: labsLoading } = useLabs();
+  const activeLabs = storedLabs.filter((item) => item.isActive);
 
   const [courseName, setCourseName] = useState(initialClass?.courseName ?? '');
   const [className, setClassName] = useState(initialClass?.className ?? '');
@@ -137,8 +140,9 @@ function ClassFormContent({
               backgroundColor: colors.background,
             },
           ]}
-          placeholder="Contoh: Kelas B"
+          placeholder="Contoh: A1, A2, B1, B2"
           placeholderTextColor={colors.textSubtle}
+          autoCapitalize="characters"
           value={className}
           onChangeText={(value) => {
             setClassName(value);
@@ -153,25 +157,75 @@ function ClassFormContent({
         <Text style={[styles.label, { color: colors.textSecondary }]}>
           Ruang Laboratorium (Opsional)
         </Text>
-        <TextInput
-          style={[
-            styles.input,
-            {
-              color: colors.textPrimary,
-              borderColor: colors.border,
-              backgroundColor: colors.background,
-            },
-          ]}
-          placeholder="Contoh: Lab Komp 2"
-          placeholderTextColor={colors.textSubtle}
-          value={lab}
-          onChangeText={(value) => {
-            setLab(value);
-            setErrorMessage('');
-          }}
-          editable={!submitting}
-          maxLength={120}
-        />
+        {labsLoading ? (
+          <Text style={[styles.helperNote, { color: colors.textSecondary }]}>
+            Memuat daftar laboratorium dari database...
+          </Text>
+        ) : activeLabs.length === 0 ? (
+          <Text style={[styles.helperNote, { color: colors.rosyDark }]}>
+            Belum ada laboratorium di database. Jalankan seeder atau tambahkan di Master Lab.
+          </Text>
+        ) : (
+          <View style={styles.labChipRow}>
+            <Pressable
+              accessibilityRole="button"
+              disabled={submitting}
+              onPress={() => {
+                setLab('');
+                setErrorMessage('');
+              }}
+              style={({ pressed }) => [
+                styles.labChip,
+                {
+                  backgroundColor: !lab.trim() ? colors.pacificSoft : colors.background,
+                  borderColor: !lab.trim() ? colors.pacific : colors.border,
+                },
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.labChipText,
+                  { color: !lab.trim() ? colors.pacificDark : colors.textSecondary },
+                ]}
+              >
+                Belum ditentukan
+              </Text>
+            </Pressable>
+
+            {activeLabs.map((item) => {
+              const selected = lab.trim().toLowerCase() === item.name.toLowerCase();
+              return (
+                <Pressable
+                  key={item.id}
+                  accessibilityRole="button"
+                  disabled={submitting}
+                  onPress={() => {
+                    setLab(item.name);
+                    setErrorMessage('');
+                  }}
+                  style={({ pressed }) => [
+                    styles.labChip,
+                    {
+                      backgroundColor: selected ? colors.pacificSoft : colors.background,
+                      borderColor: selected ? colors.pacific : colors.border,
+                    },
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.labChipText,
+                      { color: selected ? colors.pacificDark : colors.textPrimary },
+                    ]}
+                  >
+                    {item.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </View>
 
       <View style={styles.buttonRow}>
@@ -280,6 +334,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     fontFamily: FontFamily.sansRegular,
     fontSize: 13.5,
+  },
+  helperNote: {
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  labChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  labChip: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  labChipText: {
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 12.5,
   },
   buttonRow: {
     flexDirection: 'row',
