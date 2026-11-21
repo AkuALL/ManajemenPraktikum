@@ -26,7 +26,19 @@ type UnifiedHistoryItem = {
   statusTone: 'hadir' | 'pending' | 'approved' | 'rejected';
   hasUnreadDot?: boolean;
   sortOrder: number;
+  leaveRequestId?: string;
+  reason?: string;
+  leaveStatus?: 'pending' | 'approved' | 'rejected';
+  aiStatus?: 'pending' | 'success' | 'failed';
+  aiCategory?: string;
+  aiConfidence?: number;
+  reviewNote?: string;
 };
+
+function capitalizeLabel(value?: string): string {
+  if (!value) return 'Lainnya';
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
 
 const FILTER_OPTIONS: PickerOption[] = [
   { value: 'hadir', label: 'Hadir', subtitle: 'Hanya presensi yang tercatat hadir' },
@@ -52,13 +64,24 @@ export default function AttendanceHistoryScreen() {
   const { user } = useAuth();
   const { records, loading: loadingAttendance, error: attendanceError, retry: retryAttendance } =
     useAttendance();
-  const { requests: leaveRequests, loading: loadingLeave } = useLeave();
+  const { requests: leaveRequests, loading: loadingLeave, retryClassification } = useLeave();
   const { sessions, classes } = usePracticum();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [filterSheetVisible, setFilterSheetVisible] = useState(false);
   const [collapsedCourses, setCollapsedCourses] = useState<Record<string, boolean>>({});
+  const [retryingLeaveId, setRetryingLeaveId] = useState<string | null>(null);
+
+  const handleRetryClassification = async (leaveRequestId: string, reason?: string) => {
+    if (retryingLeaveId === leaveRequestId) return;
+    setRetryingLeaveId(leaveRequestId);
+    try {
+      await retryClassification(leaveRequestId, reason);
+    } finally {
+      setRetryingLeaveId((current) => (current === leaveRequestId ? null : current));
+    }
+  };
 
   const sessionById = useMemo(
     () => new Map(sessions.map((item) => [item.id, item])),
@@ -123,6 +146,13 @@ export default function AttendanceHistoryScreen() {
         statusTone,
         hasUnreadDot: req.status === 'pending',
         sortOrder: req.createdAtMs ?? 0,
+        leaveRequestId: req.id,
+        reason: req.reason,
+        leaveStatus: req.status,
+        aiStatus: req.aiStatus,
+        aiCategory: req.aiCategory,
+        aiConfidence: req.aiConfidence,
+        reviewNote: req.reviewNote,
       });
     });
 
@@ -284,46 +314,137 @@ export default function AttendanceHistoryScreen() {
                   {group.entries.map((entry) => {
                     const isRosy =
                       entry.statusTone === 'pending' || entry.statusTone === 'rejected';
+                    const isRetrying =
+                      entry.leaveRequestId !== undefined &&
+                      retryingLeaveId === entry.leaveRequestId;
+                    const aiLabel =
+                      entry.aiStatus === 'success'
+                        ? `${capitalizeLabel(entry.aiCategory)}${
+                            typeof entry.aiConfidence === 'number'
+                              ? ` · ${Math.round(entry.aiConfidence * 100)}%`
+                              : ''
+                          }`
+                        : isRetrying || entry.aiStatus === 'pending'
+                          ? 'Memproses...'
+                          : 'Gagal';
+                    const canRetryAi =
+                      entry.kind === 'izin' &&
+                      entry.aiStatus === 'failed' &&
+                      entry.leaveStatus === 'pending' &&
+                      Boolean(entry.leaveRequestId) &&
+                      !isRetrying;
+
                     return (
                       <View
                         key={entry.id}
                         style={[styles.entryRow, { backgroundColor: colors.background }]}
                       >
-                        <View style={styles.entryInfo}>
-                          <Text
-                            style={[styles.entryTitle, { color: colors.textPrimary }]}
-                            numberOfLines={1}
-                          >
-                            {entry.title}
-                          </Text>
-                          <Text
-                            style={[styles.entryMeta, { color: colors.textSubtle }]}
-                            numberOfLines={1}
-                          >
-                            {entry.subtitle}
-                          </Text>
-                        </View>
+                        <View style={styles.entryMainRow}>
+                          <View style={styles.entryInfo}>
+                            <Text
+                              style={[styles.entryTitle, { color: colors.textPrimary }]}
+                              numberOfLines={1}
+                            >
+                              {entry.title}
+                            </Text>
+                            <Text
+                              style={[styles.entryMeta, { color: colors.textSubtle }]}
+                              numberOfLines={1}
+                            >
+                              {entry.subtitle}
+                            </Text>
+                          </View>
 
-                        <View
-                          style={[
-                            styles.statusBadge,
-                            {
-                              backgroundColor: isRosy ? colors.rosySoft : colors.pacificSoft,
-                            },
-                          ]}
-                        >
-                          {entry.hasUnreadDot ? (
-                            <View style={[styles.dot, { backgroundColor: colors.rosy }]} />
-                          ) : null}
-                          <Text
+                          <View
                             style={[
-                              styles.statusText,
-                              { color: isRosy ? colors.rosyDark : colors.pacificDark },
+                              styles.statusBadge,
+                              {
+                                backgroundColor: isRosy ? colors.rosySoft : colors.pacificSoft,
+                              },
                             ]}
                           >
-                            {entry.statusLabel}
-                          </Text>
+                            {entry.hasUnreadDot ? (
+                              <View style={[styles.dot, { backgroundColor: colors.rosy }]} />
+                            ) : null}
+                            <Text
+                              style={[
+                                styles.statusText,
+                                { color: isRosy ? colors.rosyDark : colors.pacificDark },
+                              ]}
+                            >
+                              {entry.statusLabel}
+                            </Text>
+                          </View>
                         </View>
+
+                        {entry.kind === 'izin' ? (
+                          <View style={styles.izinMetaGroup}>
+                            <View
+                              style={[
+                                styles.aiPillRow,
+                                {
+                                  backgroundColor:
+                                    entry.aiStatus === 'failed' && !isRetrying
+                                      ? colors.rosySoft
+                                      : colors.pacificSoft,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.aiPillText,
+                                  {
+                                    color:
+                                      entry.aiStatus === 'failed' && !isRetrying
+                                        ? colors.rosyDark
+                                        : colors.pacificDark,
+                                  },
+                                ]}
+                                numberOfLines={1}
+                              >
+                                Klasifikasi AI: {aiLabel}
+                              </Text>
+                              {canRetryAi ? (
+                                <Pressable
+                                  accessibilityRole="button"
+                                  onPress={() =>
+                                    void handleRetryClassification(
+                                      entry.leaveRequestId!,
+                                      entry.reason,
+                                    )
+                                  }
+                                  style={({ pressed }) => [
+                                    styles.aiRetryBtn,
+                                    { borderColor: colors.rosyDark },
+                                    pressed && styles.pressed,
+                                  ]}
+                                >
+                                  <Text style={[styles.aiRetryText, { color: colors.rosyDark }]}>
+                                    Coba lagi
+                                  </Text>
+                                </Pressable>
+                              ) : null}
+                            </View>
+
+                            {entry.reviewNote ? (
+                              <View
+                                style={[
+                                  styles.reviewNoteBox,
+                                  {
+                                    backgroundColor: colors.surface,
+                                    borderColor: colors.border,
+                                  },
+                                ]}
+                              >
+                                <Text
+                                  style={[styles.reviewNoteText, { color: colors.textSecondary }]}
+                                >
+                                  Catatan Asisten: {entry.reviewNote}
+                                </Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        ) : null}
                       </View>
                     );
                   })}
@@ -385,10 +506,51 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 13,
     paddingVertical: 11,
+    gap: 8,
+  },
+  entryMainRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
+  },
+  izinMetaGroup: {
+    gap: 6,
+  },
+  aiPillRow: {
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  aiPillText: {
+    flex: 1,
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 11.5,
+  },
+  aiRetryBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 9,
+    paddingVertical: 2,
+  },
+  aiRetryText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 11,
+  },
+  reviewNoteBox: {
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  reviewNoteText: {
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 12,
+    lineHeight: 17,
   },
   entryInfo: {
     flex: 1,

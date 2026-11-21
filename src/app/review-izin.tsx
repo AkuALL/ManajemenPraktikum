@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
@@ -67,6 +68,7 @@ export default function LeaveReviewScreen() {
   const [doneExpanded, setDoneExpanded] = useState(false);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [classifyingId, setClassifyingId] = useState<string | null>(null);
+  const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const attemptedAiIdsRef = useRef<Set<string>>(new Set());
   const isMountedRef = useRef(true);
 
@@ -189,6 +191,7 @@ export default function LeaveReviewScreen() {
 
   const decide = (request: LeaveRequest, decision: 'approved' | 'rejected') => {
     const verb = decision === 'approved' ? 'menyetujui' : 'menolak';
+    const trimmedNote = reviewNotes[request.id]?.trim() || undefined;
     confirmAction({
       title: 'Konfirmasi Keputusan',
       message: `Anda akan ${verb} pengajuan izin ini.`,
@@ -199,11 +202,16 @@ export default function LeaveReviewScreen() {
           setSubmittingId(request.id);
           try {
             const session = sessionById.get(request.sessionId);
-            await reviewLeave(request.id, decision, undefined, {
+            await reviewLeave(request.id, decision, trimmedNote, {
               studentId: request.studentId,
               sessionId: request.sessionId,
               classId: request.classId,
               sessionTitle: session?.courseName ?? session?.title,
+            });
+            setReviewNotes((prev) => {
+              if (!(request.id in prev)) return prev;
+              const { [request.id]: _cleared, ...rest } = prev;
+              return rest;
             });
           } catch (decisionError) {
             showAlert(
@@ -344,36 +352,76 @@ export default function LeaveReviewScreen() {
         </View>
 
         {request.status === 'pending' ? (
-          <View style={styles.decisionRow}>
-            <Pressable
-              accessibilityRole="button"
-              disabled={busy}
-              onPress={() => decide(request, 'rejected')}
-              style={({ pressed }) => [
-                styles.rejectBtn,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={[styles.rejectText, { color: colors.textPrimary }]}>Tolak</Text>
-            </Pressable>
+          <>
+            <View style={styles.noteFieldGroup}>
+              <Text style={[styles.noteFieldLabel, { color: colors.textSecondary }]}>
+                Catatan Asisten (opsional)
+              </Text>
+              <TextInput
+                value={reviewNotes[request.id] ?? ''}
+                onChangeText={(value) =>
+                  setReviewNotes((prev) => ({ ...prev, [request.id]: value }))
+                }
+                editable={!busy}
+                multiline
+                maxLength={300}
+                placeholder="Tambahkan catatan keputusan untuk praktikan..."
+                placeholderTextColor={colors.textSubtle}
+                style={[
+                  styles.noteInput,
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: colors.border,
+                    color: colors.textPrimary,
+                  },
+                ]}
+              />
+            </View>
+            <View style={styles.decisionRow}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => decide(request, 'rejected')}
+                style={({ pressed }) => [
+                  styles.rejectBtn,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={[styles.rejectText, { color: colors.textPrimary }]}>Tolak</Text>
+              </Pressable>
 
-            <Pressable
-              accessibilityRole="button"
-              disabled={busy}
-              onPress={() => decide(request, 'approved')}
-              style={({ pressed }) => [
-                styles.approveBtn,
-                { backgroundColor: colors.rosy },
-                pressed && styles.pressed,
-              ]}
-            >
-              {busy ? (
-                <ActivityIndicator size="small" color="#FCFCFA" />
-              ) : (
-                <Text style={styles.approveText}>Setujui</Text>
-              )}
-            </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => decide(request, 'approved')}
+                style={({ pressed }) => [
+                  styles.approveBtn,
+                  { backgroundColor: colors.rosy },
+                  pressed && styles.pressed,
+                ]}
+              >
+                {busy ? (
+                  <ActivityIndicator size="small" color="#FCFCFA" />
+                ) : (
+                  <Text style={styles.approveText}>Setujui</Text>
+                )}
+              </Pressable>
+            </View>
+          </>
+        ) : request.reviewNote ? (
+          <View
+            style={[
+              styles.reviewedNoteBox,
+              { backgroundColor: colors.background, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.reviewedNoteLabel, { color: colors.textSubtle }]}>
+              Catatan Asisten
+            </Text>
+            <Text style={[styles.reviewedNoteText, { color: colors.textPrimary }]}>
+              {request.reviewNote}
+            </Text>
           </View>
         ) : null}
       </View>
@@ -655,6 +703,40 @@ const styles = StyleSheet.create({
   attachChipText: {
     fontFamily: FontFamily.sansSemiBold,
     fontSize: 11.5,
+  },
+  noteFieldGroup: {
+    gap: 6,
+  },
+  noteFieldLabel: {
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 12,
+  },
+  noteInput: {
+    minHeight: 72,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    textAlignVertical: 'top',
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  reviewedNoteBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    gap: 3,
+  },
+  reviewedNoteLabel: {
+    fontFamily: FontFamily.sansSemiBold,
+    fontSize: 11,
+  },
+  reviewedNoteText: {
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   decisionRow: {
     flexDirection: 'row',

@@ -1,27 +1,27 @@
-import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { Upload } from 'lucide-react-native';
+import { useState } from 'react';
+import {
+    ActivityIndicator,
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from 'react-native';
 
 import { FlyAwayBottomSheet } from '@/components/ui/fly-away-bottom-sheet';
 import { Colors, FontFamily } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { showAlert } from '@/lib/cross-platform-alert';
+import { confirmAction, showAlert } from '@/lib/cross-platform-alert';
 import type { SessionSummary } from '@/types';
 
 import {
-  formatAttachmentSize,
-  MAX_ATTACHMENT_SIZE_BYTES,
-  saveLeaveAttachment,
-  type LeaveAttachmentMeta,
+    formatAttachmentSize,
+    MAX_ATTACHMENT_SIZE_BYTES,
+    saveLeaveAttachment,
+    type LeaveAttachmentMeta,
 } from './attachment-store';
 import { useLeave } from './context';
 import { validateLeaveReason } from './port';
@@ -85,13 +85,8 @@ export function LeaveRequestBottomSheet({
     }
   };
 
-  const handleSubmit = async () => {
+  const executeSubmit = async () => {
     if (submitting) return;
-    const validationError = validateLeaveReason(reason);
-    if (validationError) {
-      setErrorMessage(validationError);
-      return;
-    }
 
     setSubmitting(true);
     setErrorMessage(null);
@@ -112,6 +107,24 @@ export function LeaveRequestBottomSheet({
     } else {
       setErrorMessage(result.message);
     }
+  };
+
+  const handleSubmit = () => {
+    if (submitting) return;
+    const validationError = validateLeaveReason(reason);
+    if (validationError) {
+      setErrorMessage(validationError);
+      return;
+    }
+
+    confirmAction({
+      title: 'Kirim Pengajuan Izin?',
+      message:
+        'Pengajuan izin yang sudah dikirim tidak dapat diubah atau dibatalkan. Pastikan alasan sudah sesuai.',
+      confirmText: 'Kirim Izin',
+      destructive: false,
+      onConfirm: () => void executeSubmit(),
+    });
   };
 
   return (
@@ -203,7 +216,7 @@ export function LeaveRequestBottomSheet({
           accessibilityRole="button"
           accessibilityLabel="Kirim Pengajuan"
           disabled={submitting}
-          onPress={() => void handleSubmit()}
+          onPress={handleSubmit}
           style={({ pressed }) => [
             styles.submitBtn,
             { backgroundColor: submitting ? colors.disabledSurface : colors.rosy },

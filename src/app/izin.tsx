@@ -1,32 +1,32 @@
-import React, { useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Upload } from 'lucide-react-native';
+import { useMemo, useState } from 'react';
+import {
+    ActivityIndicator,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from 'react-native';
 
 import { SubScreenHeader } from '@/components/ui/app-header';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
 import {
-  formatAttachmentSize,
-  MAX_ATTACHMENT_SIZE_BYTES,
-  saveLeaveAttachment,
-  useLeave,
-  type LeaveAttachmentMeta,
+    formatAttachmentSize,
+    MAX_ATTACHMENT_SIZE_BYTES,
+    saveLeaveAttachment,
+    useLeave,
+    type LeaveAttachmentMeta,
 } from '@/features/leave';
 import { validateLeaveReason } from '@/features/leave/port';
 import { APP_ROUTES } from '@/features/navigation';
 import { formatSessionTime, usePracticum } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { showAlert } from '@/lib/cross-platform-alert';
+import { confirmAction, showAlert } from '@/lib/cross-platform-alert';
 
 export default function LeaveRequestScreen() {
   const router = useRouter();
@@ -89,13 +89,8 @@ export default function LeaveRequestScreen() {
     }
   };
 
-  const handleSubmit = async () => {
+  const executeSubmit = async () => {
     if (!targetSession || submitting) return;
-    const validationError = validateLeaveReason(reason);
-    if (validationError) {
-      setErrorMessage(validationError);
-      return;
-    }
 
     setSubmitting(true);
     setErrorMessage(null);
@@ -120,6 +115,24 @@ export default function LeaveRequestScreen() {
     } else {
       setErrorMessage(result.message);
     }
+  };
+
+  const handleSubmit = () => {
+    if (!targetSession || submitting) return;
+    const validationError = validateLeaveReason(reason);
+    if (validationError) {
+      setErrorMessage(validationError);
+      return;
+    }
+
+    confirmAction({
+      title: 'Kirim Pengajuan Izin?',
+      message:
+        'Pengajuan izin yang sudah dikirim tidak dapat diubah atau dibatalkan. Pastikan alasan sudah sesuai.',
+      confirmText: 'Kirim Izin',
+      destructive: false,
+      onConfirm: () => void executeSubmit(),
+    });
   };
 
   const subtitle = targetSession
@@ -285,7 +298,7 @@ export default function LeaveRequestScreen() {
               <Pressable
                 accessibilityRole="button"
                 disabled={submitting}
-                onPress={() => void handleSubmit()}
+                onPress={handleSubmit}
                 style={({ pressed }) => [
                   styles.submitBtn,
                   { backgroundColor: submitting ? colors.disabledSurface : colors.rosy },

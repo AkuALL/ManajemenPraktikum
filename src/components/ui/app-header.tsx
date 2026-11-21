@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Bell, ChevronLeft, LogOut } from 'lucide-react-native';
+import { usePathname, useRouter } from 'expo-router';
+import { Bell, ChevronLeft } from 'lucide-react-native';
 
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
 import { APP_ROUTES } from '@/features/navigation';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-import { FlyAwayBottomSheet } from './fly-away-bottom-sheet';
 import {
   NotificationsBottomSheet,
   useUnreadNotificationsCount,
@@ -43,9 +42,9 @@ export function AppHeader({
   hasUnreadNotification = false,
 }: AppHeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
-  const { user, logout } = useAuth();
-  const [accountVisible, setAccountVisible] = useState(false);
+  const { user } = useAuth();
   const [notificationsVisible, setNotificationsVisible] = useState(false);
   const unreadCount = useUnreadNotificationsCount();
   const showUnread = hasUnreadNotification || unreadCount > 0;
@@ -84,11 +83,10 @@ export function AppHeader({
   const initials = getInitials(user?.displayName);
 
   const handleAvatarPress = () => {
-    if (user?.role === 'student') {
-      router.push(APP_ROUTES.PROFIL as never);
+    if (pathname === APP_ROUTES.PROFIL) {
       return;
     }
-    setAccountVisible(true);
+    router.push(APP_ROUTES.PROFIL as never);
   };
 
   return (
@@ -158,53 +156,6 @@ export function AppHeader({
         visible={notificationsVisible}
         onClose={() => setNotificationsVisible(false)}
       />
-
-      <FlyAwayBottomSheet
-        visible={accountVisible}
-        onClose={() => setAccountVisible(false)}
-        title={user?.displayName ?? 'Asisten Lab'}
-        subtitle={user?.identifier ? `Kode Asisten · ${user.identifier}` : 'Akun Asisten Aktif'}
-        maxHeight="52%"
-      >
-        <View style={styles.accountSheetBody}>
-          <View
-            style={[
-              styles.accountInfoCard,
-              { backgroundColor: colors.background, borderColor: colors.border },
-            ]}
-          >
-            <View style={styles.accountInfoRow}>
-              <Text style={[styles.accountLabel, { color: colors.textSecondary }]}>Peran</Text>
-              <Text style={[styles.accountValue, { color: colors.textPrimary }]}>
-                Asisten Lab
-              </Text>
-            </View>
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-            <View style={styles.accountInfoRow}>
-              <Text style={[styles.accountLabel, { color: colors.textSecondary }]}>Kode Asisten</Text>
-              <Text style={[styles.accountMonoValue, { color: colors.textPrimary }]}>
-                {user?.identifier ?? '-'}
-              </Text>
-            </View>
-          </View>
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              setAccountVisible(false);
-              void logout();
-            }}
-            style={({ pressed }) => [
-              styles.logoutBtn,
-              { backgroundColor: colors.rosySoft, borderColor: colors.rosyBorder },
-              pressed && styles.pressed,
-            ]}
-          >
-            <LogOut size={16} color={colors.rosy} strokeWidth={2} />
-            <Text style={[styles.logoutBtnText, { color: colors.rosy }]}>Keluar Akun</Text>
-          </Pressable>
-        </View>
-      </FlyAwayBottomSheet>
     </>
   );
 }
@@ -446,50 +397,6 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 17,
     color: 'rgba(252, 252, 250, 0.84)',
-  },
-  accountSheetBody: {
-    gap: 12,
-    paddingBottom: 6,
-  },
-  accountInfoCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-  },
-  accountInfoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  accountLabel: {
-    fontFamily: FontFamily.sansRegular,
-    fontSize: 13,
-  },
-  accountValue: {
-    fontFamily: FontFamily.sansSemiBold,
-    fontSize: 13.5,
-  },
-  accountMonoValue: {
-    fontFamily: FontFamily.monoMedium,
-    fontSize: 13,
-    fontVariant: ['tabular-nums'],
-  },
-  divider: {
-    height: 1,
-  },
-  logoutBtn: {
-    height: 46,
-    borderRadius: 16,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  logoutBtnText: {
-    fontFamily: FontFamily.sansBold,
-    fontSize: 13.5,
   },
   pressed: {
     opacity: 0.78,

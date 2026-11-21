@@ -1,16 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
 import { Colors, FontFamily } from '@/constants/theme';
-import { useAuth } from '@/features/auth';
 import {
-  buildQrPayload,
-  createSessionQrChallenge,
-  getSessionQrChallenge,
-  type SessionQrChallenge,
+    buildQrPayload,
+    createSessionQrChallenge,
+    getSessionQrChallenge,
+    type SessionQrChallenge,
 } from '@/features/attendance/qr-service';
+import { useAuth } from '@/features/auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { confirmAction } from '@/lib/cross-platform-alert';
 import { FlyAwayBottomSheet } from './fly-away-bottom-sheet';
 
 type QrSessionBottomSheetProps = {
@@ -103,7 +104,20 @@ export function QrSessionBottomSheet({
     <FlyAwayBottomSheet visible={visible} onClose={onClose} title="QR Presensi Sesi" subtitle={`${sessionTitle} · ${subtitle}`}>
       <View style={styles.content}>
         {sessionStatus === 'scheduled' ? (
-          <Pressable accessibilityRole="button" disabled={loading || !onOpenSession} onPress={() => void openSession()} style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.rosy }, pressed && styles.pressed]}>
+          <Pressable
+            accessibilityRole="button"
+            disabled={loading || !onOpenSession}
+            onPress={() =>
+              confirmAction({
+                title: 'Buka Sesi Praktikum?',
+                message: `Sesi "${sessionTitle}" akan dibuka sekarang sehingga praktikan dapat melakukan presensi.`,
+                confirmText: 'Buka Sesi',
+                destructive: false,
+                onConfirm: () => void openSession(),
+              })
+            }
+            style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.rosy }, pressed && styles.pressed]}
+          >
             {loading ? <ActivityIndicator color="#FCFCFA" /> : <Text style={styles.primaryText}>Buka Sesi & Buat QR</Text>}
           </Pressable>
         ) : sessionStatus === 'closed' ? (

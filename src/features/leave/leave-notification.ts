@@ -1,18 +1,26 @@
 import type { PushNotificationPayload } from '@/types';
-import { sendPushNotification } from '@/services/notification/push-sender';
+import {
+  dispatchLeaveSubmittedNotification,
+  sendPushNotification,
+} from '@/services/notification/push-sender';
 
 import {
   buildLeaveDecisionNotificationPayload,
+  buildLeaveSubmittedNotificationPayload,
   executeLeaveNotificationDispatch,
   type LeaveDecisionNotificationInput,
   type LeaveNotificationDispatchResult,
+  type LeaveSubmittedNotificationInput,
   type PushNotificationSender,
 } from './leave-notification-payload';
 
 export {
   buildLeaveDecisionNotificationPayload,
+  buildLeaveSubmittedNotificationPayload,
+  dispatchLeaveSubmittedNotification,
   type LeaveDecisionNotificationInput,
   type LeaveNotificationDispatchResult,
+  type LeaveSubmittedNotificationInput,
   type PushNotificationSender,
 };
 

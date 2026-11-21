@@ -1,11 +1,11 @@
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LogOut } from 'lucide-react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader, getFirstName } from '@/components/ui/app-header';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { confirmAction } from '@/lib/cross-platform-alert';
 
 export default function ProfilScreen() {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
@@ -13,13 +13,15 @@ export default function ProfilScreen() {
 
   if (!user) return null;
 
+  const isAssistant = user.role === 'assistant';
+
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <AppHeader
-          eyebrow="Profil Praktikan"
+          eyebrow={isAssistant ? 'Profil Asisten' : 'Profil Praktikan'}
           title={`Hai, ${getFirstName(user.displayName)}`}
-          monoBadge={`NIM ${user.identifier}`}
+          monoBadge={isAssistant ? user.identifier : `NIM ${user.identifier}`}
           statusBadge="Aktif"
         />
 
@@ -31,14 +33,32 @@ export default function ProfilScreen() {
             ]}
           >
             <ProfileRow label="Nama lengkap" value={user.displayName} colors={colors} />
-            <ProfileRow label="NIM" value={user.identifier} colors={colors} mono />
-            <ProfileRow label="Peran" value="Praktikan" colors={colors} />
+            <ProfileRow
+              label={isAssistant ? 'Kode Asisten' : 'NIM'}
+              value={user.identifier}
+              colors={colors}
+              mono
+            />
+            <ProfileRow
+              label="Peran"
+              value={isAssistant ? 'Asisten Lab' : 'Praktikan'}
+              colors={colors}
+            />
             <ProfileRow label="Semester" value="Semester Genap 2026/2027" colors={colors} isLast />
           </View>
 
           <Pressable
             accessibilityRole="button"
-            onPress={() => void logout()}
+            onPress={() =>
+              confirmAction({
+                title: 'Keluar dari Akun?',
+                message:
+                  'Anda akan keluar dari sesi saat ini dan perlu masuk kembali untuk mengakses aplikasi.',
+                confirmText: 'Keluar Akun',
+                destructive: true,
+                onConfirm: () => void logout(),
+              })
+            }
             style={({ pressed }) => [
               styles.logoutBtn,
               { backgroundColor: colors.rosySoft, borderColor: colors.rosyBorder },

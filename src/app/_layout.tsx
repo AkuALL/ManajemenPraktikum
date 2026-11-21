@@ -18,6 +18,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppShellSkeleton } from '@/components/ui/skeleton';
+import { ConfirmDialogHost } from '@/components/ui/confirm-dialog-host';
 import { Colors } from '@/constants/theme';
 import { AttendanceProvider } from '@/features/attendance';
 import { AuthProvider, useAuth } from '@/features/auth';
@@ -70,6 +71,7 @@ export default function RootLayout() {
           </PracticumProvider>
         </AttendanceProvider>
       </AuthProvider>
+      <ConfirmDialogHost />
     </ThemeProvider>
   );
 }
@@ -114,6 +116,8 @@ function RoleAwareApp({ backgroundColor }: { backgroundColor: string }) {
           <Stack.Protected guard={isAuthenticated} redirectTo="/login">
             <Stack.Screen name="index" />
             <Stack.Screen name="schedule" />
+            <Stack.Screen name={'maps' as never} />
+            <Stack.Screen name={'profil' as never} />
           </Stack.Protected>
           <Stack.Protected guard={isAssistant} redirectTo={isAuthenticated ? '/' : '/login'}>
             <Stack.Screen name="classes" />
@@ -127,8 +131,6 @@ function RoleAwareApp({ backgroundColor }: { backgroundColor: string }) {
             <Stack.Screen name={'presensi' as never} />
             <Stack.Screen name={'izin' as never} />
             <Stack.Screen name={'scan' as never} />
-            <Stack.Screen name={'peta' as never} />
-            <Stack.Screen name={'profil' as never} />
           </Stack.Protected>
         </Stack>
       </View>

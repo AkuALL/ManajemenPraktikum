@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { confirmAction } from '@/lib/cross-platform-alert';
 
 import { useAuth } from './context';
 
@@ -43,9 +44,15 @@ export function AccountBar() {
         accessibilityRole="button"
         accessibilityLabel={`Keluar dari akun ${user.displayName}`}
         disabled={signingOut}
-        onPress={() => {
-          void handleLogout();
-        }}
+        onPress={() =>
+          confirmAction({
+            title: 'Keluar dari Akun?',
+            message: 'Anda akan keluar dari sesi saat ini dan perlu masuk kembali.',
+            confirmText: 'Keluar Akun',
+            destructive: true,
+            onConfirm: () => void handleLogout(),
+          })
+        }
         style={({ pressed }) => [
           styles.actionBadge,
           {

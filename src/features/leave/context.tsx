@@ -13,7 +13,10 @@ import { classifyLeaveReason } from '@/services/classify-leave-reason';
 import type { LeaveRequest, SessionSummary } from '@/types';
 
 import { firestoreLeaveAdapter } from './firestore-adapter';
-import { dispatchLeaveDecisionNotification } from './leave-notification';
+import {
+  dispatchLeaveDecisionNotification,
+  dispatchLeaveSubmittedNotification,
+} from './leave-notification';
 import {
   isLeaveEligibleStatus,
   LeavePortError,
@@ -113,7 +116,7 @@ export function LeaveProvider({
 
   const requestClassification = useCallback(
     async (leaveRequestId: string, reason?: string) => {
-      if (!user || user.role !== 'assistant') return;
+      if (!user) return;
 
       setClassificationErrors((current) => {
         const { [leaveRequestId]: _discarded, ...rest } = current;
@@ -149,6 +152,14 @@ export function LeaveProvider({
 
       try {
         const request = await port.createLeaveRequest({ session, user, reason });
+        void requestClassification(request.id, reason);
+        void dispatchLeaveSubmittedNotification({
+          leaveRequestId: request.id,
+          classId: session.classId,
+          sessionId: session.id,
+          studentName: user.displayName,
+          reason,
+        }).catch(() => undefined);
         return { ok: true, request };
       } catch (error) {
         return {
@@ -160,7 +171,7 @@ export function LeaveProvider({
         };
       }
     },
-    [port, user],
+    [port, requestClassification, user],
   );
 
   const classifyLeave = useCallback(
