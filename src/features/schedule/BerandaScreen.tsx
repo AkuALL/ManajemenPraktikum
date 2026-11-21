@@ -589,6 +589,7 @@ export function BerandaScreen() {
         visible={Boolean(qrSession)}
         onClose={() => setQrSession(null)}
         sessionId={qrSession?.id ?? 'default'}
+        classId={qrSession?.classId}
         sessionTitle={qrSession?.courseName ?? qrSession?.title ?? 'Sesi Praktikum'}
         subtitle={`${qrSession?.className ?? ''} · ${qrSession?.location ?? ''}`}
         sessionStatus={qrSession?.status}

@@ -11,6 +11,8 @@ export type AttendanceErrorCode =
   | 'duplicate'
   | 'location-required'
   | 'outside-radius'
+  | 'qr-required'
+  | 'qr-invalid'
   | 'forbidden'
   | 'network'
   | 'unknown';
@@ -47,6 +49,8 @@ export type SubmitAttendanceResult =
         | 'status'
         | 'location-required'
         | 'outside-radius'
+        | 'qr-required'
+        | 'qr-invalid'
         | 'forbidden'
         | 'network'
         | 'unknown';
@@ -58,6 +62,7 @@ export interface AttendancePort {
     session: SessionSummary;
     user: AuthUser;
     location?: AttendanceLocationInput;
+    qrToken?: string;
   }): Promise<SubmitAttendanceResult>;
   subscribeStudentAttendance(
     studentId: string,

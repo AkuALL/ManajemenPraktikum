@@ -36,6 +36,9 @@ export type AttendanceEntry = {
   accuracy?: number;
   distanceMeters?: number;
   isWithinRadius?: boolean;
+  attendanceMethod?: 'qr' | 'assistant_override';
+  recordedBy?: string;
+  assistanceReason?: string;
   fromCache?: boolean;
   hasPendingWrites?: boolean;
 };

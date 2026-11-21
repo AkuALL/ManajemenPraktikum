@@ -12,10 +12,7 @@ import { ChevronDown, Plus, Trash2 } from 'lucide-react-native';
 
 import { AppHeader, getFirstName } from '@/components/ui/app-header';
 import { PickerBottomSheet, type PickerOption } from '@/components/ui/picker-bottom-sheet';
-import {
-  generateSessionQrCode,
-  QrSessionBottomSheet,
-} from '@/components/ui/qr-session-bottom-sheet';
+import { QrSessionBottomSheet } from '@/components/ui/qr-session-bottom-sheet';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
 import { FSM_UNDIP_LABS } from '@/features/labs/fsm-undip-labs';
@@ -250,7 +247,6 @@ export default function MasterLabScreen() {
     [sessions],
   );
   const qrSessionId = activeSession?.id ?? activeLab?.id ?? 'lab-qr';
-  const qrCode = generateSessionQrCode(qrSessionId);
 
   const labOptions: PickerOption[] = labs.map((l) => ({
     value: l.id,
@@ -448,13 +444,19 @@ export default function MasterLabScreen() {
                   QR Presensi Sesi Aktif
                 </Text>
                 <Text style={[styles.qrStripMeta, { color: colors.textSecondary }]}>
-                  Kode: {qrCode} · Rotasi 60 dtk
+                  Berlaku 5 menit · dibuat saat sesi dibuka
                 </Text>
               </View>
 
               <Pressable
                 accessibilityRole="button"
-                onPress={() => setQrVisible(true)}
+                onPress={() => {
+                  if (!activeSession) {
+                    showAlert('Belum ada sesi aktif', 'Buka atau pilih sesi praktikum terlebih dahulu sebelum membuat QR presensi.');
+                    return;
+                  }
+                  setQrVisible(true);
+                }}
                 style={({ pressed }) => [
                   styles.showQrPill,
                   { backgroundColor: colors.baltic },
@@ -529,6 +531,7 @@ export default function MasterLabScreen() {
         visible={qrVisible}
         onClose={() => setQrVisible(false)}
         sessionId={qrSessionId}
+        classId={activeSession?.classId}
         sessionTitle={activeSession?.courseName ?? draftName}
         subtitle={`${draftCode} · ${draftBuilding}`}
         sessionStatus={activeSession?.status ?? 'open'}

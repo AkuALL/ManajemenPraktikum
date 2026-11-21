@@ -38,8 +38,9 @@ test('firestore.rules preserves all required users and attendance rule invariant
     /allow create:\s*if hasRole\('student'\) && validAttendanceCreate\(attendanceId\);/,
   );
   assert.match(attendanceMatch, /allow update, delete:\s*if false;/);
+  assert.match(attendanceMatch, /hasRole\('assistant'\) && validAssistantAttendanceCreate\(attendanceId\)/);
 
-  const attendanceHelper = extractBlock('function validAttendanceCreate(', 2200);
+  const attendanceHelper = extractBlock('function validAttendanceCreate(', 4000);
   assert.match(
     attendanceHelper,
     /attendanceId == request\.resource\.data\.sessionId \+ '_' \+ request\.auth\.uid/,
@@ -49,6 +50,17 @@ test('firestore.rules preserves all required users and attendance rule invariant
   assert.match(attendanceHelper, /request\.resource\.data\.latitude is number/);
   assert.match(attendanceHelper, /request\.resource\.data\.longitude is number/);
   assert.match(attendanceHelper, /request\.resource\.data\.distanceMeters >= 0/);
+  assert.match(attendanceHelper, /request\.resource\.data\.attendanceMethod == 'qr'/);
+  assert.match(attendanceHelper, /data\.expiresAt > request\.time/);
+
+  const sessionQrMatch = extractBlock('match /sessionQr/{sessionId}');
+  assert.match(sessionQrMatch, /allow get, list: if hasRole\('assistant'\)/);
+  assert.match(sessionQrMatch, /get\(sessionPath\(sessionId\)\)\.data\.status == 'open'/);
+
+  const assistedAttendanceHelper = extractBlock('function validAssistantAttendanceCreate(', 2200);
+  assert.match(assistedAttendanceHelper, /attendanceMethod == 'assistant_override'/);
+  assert.match(assistedAttendanceHelper, /recordedBy == request\.auth\.uid/);
+  assert.match(assistedAttendanceHelper, /assistanceReason/);
 
   const membersGroupMatch = extractBlock('match /{path=**}/members/{memberId}');
   assert.match(

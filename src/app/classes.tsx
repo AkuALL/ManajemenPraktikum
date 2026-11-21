@@ -64,6 +64,7 @@ export default function ClassesScreen() {
   const [managingClass, setManagingClass] = useState<PracticumClass | null>(null);
   const [qrTarget, setQrTarget] = useState<{
     sessionId: string;
+    classId: string;
     title: string;
     subtitle: string;
     status: PracticumSession['status'];
@@ -117,11 +118,16 @@ export default function ClassesScreen() {
   const handleShowQr = useCallback(
     (cls: PracticumClass) => {
       const sess = sessionByClassId.get(cls.id);
+      if (!sess) {
+        showAlert('Belum ada sesi', 'Buat sesi praktikum terlebih dahulu sebelum membuat QR presensi.');
+        return;
+      }
       setQrTarget({
-        sessionId: sess?.id ?? cls.id,
+        sessionId: sess.id,
+        classId: cls.id,
         title: `${cls.courseName} · ${cls.className}`,
         subtitle: cls.lab ?? sess?.location ?? 'Ruang Lab',
-        status: sess?.status ?? 'open',
+        status: sess.status,
       });
     },
     [sessionByClassId],
@@ -310,14 +316,11 @@ export default function ClassesScreen() {
         visible={Boolean(qrTarget)}
         onClose={() => setQrTarget(null)}
         sessionId={qrTarget?.sessionId ?? 'cls'}
+        classId={qrTarget?.classId}
         sessionTitle={qrTarget?.title ?? ''}
         subtitle={qrTarget?.subtitle ?? ''}
         sessionStatus={qrTarget?.status}
-        onOpenSession={
-          qrTarget && sessionByClassId.get(qrTarget.sessionId) === undefined
-            ? () => openSession(qrTarget.sessionId)
-            : undefined
-        }
+        onOpenSession={qrTarget?.status === 'scheduled' ? () => openSession(qrTarget.sessionId) : undefined}
       />
 
       <ClassFormModal

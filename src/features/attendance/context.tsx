@@ -28,6 +28,7 @@ export type AttendanceContextValue = {
   submitAttendance: (
     session: LabSession | SessionSummary,
     location?: AttendanceLocationInput,
+    qrToken?: string,
   ) => Promise<SubmitAttendanceResult>;
 };
 
@@ -113,6 +114,7 @@ export function AttendanceProvider({
     async (
       session: LabSession | SessionSummary,
       location?: AttendanceLocationInput,
+      qrToken?: string,
     ): Promise<SubmitAttendanceResult> => {
       if (!user) {
         return {
@@ -126,6 +128,7 @@ export function AttendanceProvider({
         session: toSessionSummary(session),
         user,
         location,
+        qrToken,
       });
     },
     [port, user],

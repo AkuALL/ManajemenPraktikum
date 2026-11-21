@@ -316,6 +316,7 @@ export default function SessionDetailScreen() {
           visible={qrVisible}
           onClose={() => setQrVisible(false)}
           sessionId={practicumSession.id}
+          classId={practicumSession.classId}
           sessionTitle={practicumSession.courseName ?? practicumSession.title}
           subtitle={`${practicumSession.className ?? ''} · ${practicumSession.location}`}
           sessionStatus={practicumSession.status}

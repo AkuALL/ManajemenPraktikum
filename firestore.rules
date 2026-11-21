@@ -32,6 +32,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/sessions/$(sessionId);
     }
 
+    function sessionQrPath(sessionId) {
+      return /databases/$(database)/documents/sessionQr/$(sessionId);
+    }
+
     function isClassAssistant(classId) {
       return signedIn()
         && exists(classPath(classId))
@@ -310,7 +314,9 @@ service cloud.firestore {
           'longitude',
           'accuracy',
           'distanceMeters',
-          'isWithinRadius'
+          'isWithinRadius',
+          'attendanceMethod',
+          'qrToken'
         ])
         && request.resource.data.keys().hasAll([
           'sessionId',
@@ -323,7 +329,9 @@ service cloud.firestore {
           'longitude',
           'accuracy',
           'distanceMeters',
-          'isWithinRadius'
+          'isWithinRadius',
+          'attendanceMethod',
+          'qrToken'
         ])
         && request.resource.data.studentId == request.auth.uid
         && attendanceId == request.resource.data.sessionId + '_' + request.auth.uid
@@ -345,7 +353,46 @@ service cloud.firestore {
         && isOpenStudentSession(
           request.resource.data.sessionId,
           request.resource.data.classId
-        );
+        )
+        && request.resource.data.attendanceMethod == 'qr'
+        && validText(request.resource.data.qrToken, 12, 160)
+        && exists(sessionQrPath(request.resource.data.sessionId))
+        && get(sessionQrPath(request.resource.data.sessionId)).data.classId == request.resource.data.classId
+        && get(sessionQrPath(request.resource.data.sessionId)).data.token == request.resource.data.qrToken
+        && get(sessionQrPath(request.resource.data.sessionId)).data.expiresAt > request.time;
+    }
+
+    function validAssistantAttendanceCreate(attendanceId) {
+      return request.resource.data.keys().hasOnly([
+          'sessionId', 'classId', 'studentId', 'studentName', 'studentIdentifier', 'attendedAt',
+          'latitude', 'longitude', 'accuracy', 'distanceMeters', 'isWithinRadius',
+          'attendanceMethod', 'recordedBy', 'assistanceReason'
+        ])
+        && request.resource.data.keys().hasAll([
+          'sessionId', 'classId', 'studentId', 'studentName', 'studentIdentifier', 'attendedAt',
+          'latitude', 'longitude', 'accuracy', 'distanceMeters', 'isWithinRadius',
+          'attendanceMethod', 'recordedBy', 'assistanceReason'
+        ])
+        && attendanceId == request.resource.data.sessionId + '_' + request.resource.data.studentId
+        && request.resource.data.attendanceMethod == 'assistant_override'
+        && request.resource.data.recordedBy == request.auth.uid
+        && validText(request.resource.data.assistanceReason, 5, 300)
+        && request.resource.data.attendedAt == request.time
+        && request.resource.data.latitude is number
+        && request.resource.data.longitude is number
+        && request.resource.data.accuracy == 0
+        && request.resource.data.distanceMeters == 0
+        && request.resource.data.isWithinRadius == false
+        && exists(userProfilePath(request.resource.data.studentId))
+        && get(userProfilePath(request.resource.data.studentId)).data.role == 'student'
+        && request.resource.data.studentName == get(userProfilePath(request.resource.data.studentId)).data.displayName
+        && request.resource.data.studentIdentifier == get(userProfilePath(request.resource.data.studentId)).data.identifier
+        && exists(memberPath(request.resource.data.classId, request.resource.data.studentIdentifier))
+        && get(memberPath(request.resource.data.classId, request.resource.data.studentIdentifier)).data.userId == request.resource.data.studentIdentifier
+        && isClassAssistant(request.resource.data.classId)
+        && exists(sessionPath(request.resource.data.sessionId))
+        && get(sessionPath(request.resource.data.sessionId)).data.classId == request.resource.data.classId
+        && get(sessionPath(request.resource.data.sessionId)).data.status == 'open';
     }
 
     function validLeaveCreate(leaveId) {
@@ -491,6 +538,25 @@ service cloud.firestore {
         && resource.data.status == 'scheduled';
     }
 
+    match /sessionQr/{sessionId} {
+      allow get, list: if hasRole('assistant')
+        && isClassAssistant(resource.data.classId);
+      allow create, update: if hasRole('assistant')
+        && request.resource.data.keys().hasOnly([
+          'sessionId', 'classId', 'token', 'expiresAt', 'createdBy', 'createdAt', 'expiresAtMs'
+        ])
+        && request.resource.data.sessionId == sessionId
+        && request.resource.data.createdBy == request.auth.uid
+        && validText(request.resource.data.token, 12, 160)
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && isClassAssistant(request.resource.data.classId)
+        && exists(sessionPath(sessionId))
+        && get(sessionPath(sessionId)).data.classId == request.resource.data.classId
+        && get(sessionPath(sessionId)).data.status == 'open';
+      allow delete: if hasRole('assistant') && isClassAssistant(resource.data.classId);
+    }
+
     match /labs/{labId} {
       allow get, list: if signedIn();
       allow create, update: if hasRole('assistant')
@@ -518,6 +584,7 @@ service cloud.firestore {
         && (request.auth.uid == resource.data.studentId
           || isClassAssistant(resource.data.classId));
       allow create: if hasRole('student') && validAttendanceCreate(attendanceId);
+      allow create: if hasRole('assistant') && validAssistantAttendanceCreate(attendanceId);
       allow update, delete: if false;
     }
 
