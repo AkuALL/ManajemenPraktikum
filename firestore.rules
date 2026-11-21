@@ -539,7 +539,14 @@ service cloud.firestore {
     }
 
     match /sessionQr/{sessionId} {
-      allow get, list: if hasRole('assistant')
+      allow get: if hasRole('assistant')
+        && (
+          (resource == null
+            && exists(sessionPath(sessionId))
+            && isClassAssistant(get(sessionPath(sessionId)).data.classId))
+          || (resource != null && isClassAssistant(resource.data.classId))
+        );
+      allow list: if hasRole('assistant')
         && isClassAssistant(resource.data.classId);
       allow create, update: if hasRole('assistant')
         && request.resource.data.keys().hasOnly([

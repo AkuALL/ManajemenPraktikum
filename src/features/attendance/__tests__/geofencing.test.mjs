@@ -121,7 +121,35 @@ test('formatDistanceMeters formats meters, kilometers, and non-finite inputs', (
   assert.equal(formatDistanceMeters(-5), '-');
 });
 
-test('resolveSessionLocationSummary uses Firestore coordinates when present and falls back cleanly otherwise', () => {
+test('resolveSessionLocationSummary prefers live labs, then session coords, then FSM fallback', () => {
+  const liveLabs = [
+    {
+      id: 'lab-informatika-b',
+      name: 'Lab Informatika B',
+      building: 'Gedung E FSM UNDIP',
+      latitude: -7.0485,
+      longitude: 110.4409,
+      radiusMeters: 25,
+      isActive: true,
+    },
+  ];
+
+  const withLiveLab = resolveSessionLocationSummary(
+    {
+      id: 'sess-live',
+      classId: 'cls-1',
+      title: 'Modul 1',
+      location: 'Lab Informatika B',
+      status: 'open',
+      startsAt: '2026-11-20T08:00:00.000Z',
+      endsAt: '2026-11-20T10:00:00.000Z',
+    },
+    liveLabs,
+  );
+  assert.equal(withLiveLab.isFallbackCoords, false);
+  assert.equal(withLiveLab.summary.latitude, -7.0485);
+  assert.equal(withLiveLab.summary.radiusMeters, 25);
+
   const withRealCoords = resolveSessionLocationSummary({
     id: 'sess-1',
     classId: 'cls-1',
@@ -146,14 +174,14 @@ test('resolveSessionLocationSummary uses Firestore coordinates when present and 
     id: 'sess-2',
     classId: 'cls-2',
     title: 'Modul 1',
-    location: 'Lab Mobile & IoT',
+    location: 'Lab Informatika C',
     status: 'open',
     startsAt: '2026-11-20T08:00:00.000Z',
     endsAt: '2026-11-20T10:00:00.000Z',
   });
   assert.equal(withNamedFallback.isFallbackCoords, true);
-  assert.equal(withNamedFallback.summary.labId, 'lab_mobile_iot');
-  assert.equal(withNamedFallback.summary.radiusMeters, 50);
+  assert.equal(withNamedFallback.summary.labId, 'lab-informatika-c');
+  assert.equal(withNamedFallback.summary.radiusMeters, 10);
 
   const withDefaultFallback = resolveSessionLocationSummary({
     id: 'sess-3',

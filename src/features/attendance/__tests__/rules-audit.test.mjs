@@ -54,7 +54,8 @@ test('firestore.rules preserves all required users and attendance rule invariant
   assert.match(attendanceHelper, /data\.expiresAt > request\.time/);
 
   const sessionQrMatch = extractBlock('match /sessionQr/{sessionId}');
-  assert.match(sessionQrMatch, /allow get, list: if hasRole\('assistant'\)/);
+  assert.match(sessionQrMatch, /allow get: if hasRole\('assistant'\)/);
+  assert.match(sessionQrMatch, /allow list: if hasRole\('assistant'\)/);
   assert.match(sessionQrMatch, /get\(sessionPath\(sessionId\)\)\.data\.status == 'open'/);
 
   const assistedAttendanceHelper = extractBlock('function validAssistantAttendanceCreate(', 2200);

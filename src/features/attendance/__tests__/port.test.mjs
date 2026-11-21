@@ -18,7 +18,7 @@ test('toSessionSummary maps both Sprint 1 LabSession and Sprint 2 SessionSummary
   const legacySession = {
     id: 'sesi-1',
     practicumName: 'Basis Data',
-    courseClass: 'Kelas B',
+    courseClass: 'B1',
     location: 'Lab 2',
     startsAt: '13.00',
     endsAt: '15.00',
@@ -26,7 +26,7 @@ test('toSessionSummary maps both Sprint 1 LabSession and Sprint 2 SessionSummary
   };
   assert.deepEqual(toSessionSummary(legacySession), {
     id: 'sesi-1',
-    classId: 'Kelas B',
+    classId: 'B1',
     status: 'scheduled',
   });
 

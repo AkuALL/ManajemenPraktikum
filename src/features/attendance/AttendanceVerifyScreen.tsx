@@ -26,6 +26,7 @@ import {
 import { CardListSkeleton } from '@/components/ui/skeleton';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
+import { useLabs } from '@/features/labs/firestore-labs';
 import { APP_ROUTES } from '@/features/navigation';
 import {
   formatSessionDate,
@@ -46,6 +47,7 @@ export function AttendanceVerifyScreen() {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const { sessionId } = useLocalSearchParams<{ sessionId?: string }>();
   const { user } = useAuth();
+  const { labs } = useLabs();
   const { sessions, loadingSessions, sessionsError, retryData } = usePracticum();
   const { records, submitAttendance } = useAttendance();
 
@@ -88,8 +90,8 @@ export function AttendanceVerifyScreen() {
   );
 
   const resolvedLocation = useMemo(
-    () => (activeSession ? resolveSessionLocationSummary(activeSession) : null),
-    [activeSession],
+    () => (activeSession ? resolveSessionLocationSummary(activeSession, labs) : null),
+    [activeSession, labs],
   );
 
   const geofence = useMemo(() => {

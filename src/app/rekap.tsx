@@ -6,7 +6,6 @@ import {
   Share,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { ChevronDown, Download } from 'lucide-react-native';
@@ -18,7 +17,6 @@ import { SearchFilterBar } from '@/components/ui/search-filter-bar';
 import { CardListSkeleton, RowListSkeleton } from '@/components/ui/skeleton';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useSessionAttendance } from '@/features/attendance';
-import { recordAssistantAttendance } from '@/features/attendance/firestore-adapter';
 import { useAuth } from '@/features/auth';
 import { useAssistantLeaveRequests } from '@/features/leave';
 import {
@@ -30,7 +28,7 @@ import {
   usePracticum,
 } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { confirmAction, showAlert } from '@/lib/cross-platform-alert';
+import { showAlert } from '@/lib/cross-platform-alert';
 import type { LeaveStatus } from '@/types';
 
 type RecapFilterMode = 'all' | 'hadir' | 'izin' | 'belum';
@@ -81,9 +79,6 @@ export default function RecapScreen() {
   const [presentExpanded, setPresentExpanded] = useState(true);
   const [leaveExpanded, setLeaveExpanded] = useState(true);
   const [absentExpanded, setAbsentExpanded] = useState(true);
-  const [manualTarget, setManualTarget] = useState<ClassMember | null>(null);
-  const [manualReason, setManualReason] = useState('');
-  const [manualSaving, setManualSaving] = useState(false);
   const [memberSnapshot, setMemberSnapshot] = useState<{
     classId: string;
     members: ClassMember[];
@@ -309,43 +304,6 @@ export default function RecapScreen() {
     } catch {
       showAlert('Ekspor CSV', 'Tidak dapat membagikan berkas CSV saat ini.');
     }
-  };
-
-  const handleManualAttendance = (member: ClassMember) => {
-    if (!activeSession || !user) return;
-    const registered =
-      studentByKey.get(member.userId) ??
-      studentByKey.get(member.identifier.trim().toLowerCase());
-    const studentUid = registered?.authUid;
-    if (!studentUid) {
-      showAlert('Akun praktikan belum siap', 'Praktikan ini belum memiliki akun terdaftar yang dapat diberi presensi bantuan.');
-      return;
-    }
-    if (manualReason.trim().length < 5) {
-      showAlert('Alasan diperlukan', 'Tuliskan kendala presensi minimal 5 karakter sebelum menandai hadir.');
-      return;
-    }
-    confirmAction({
-      title: 'Konfirmasi presensi bantuan',
-      message: `Tandai ${member.displayName} hadir secara manual? Catatan ini akan diaudit sebagai override Asisten.`,
-      confirmText: 'Tandai Hadir',
-      onConfirm: () => {
-        void (async () => {
-          setManualSaving(true);
-          const result = await recordAssistantAttendance({
-            session: activeSession,
-            assistant: user,
-            student: { uid: studentUid, displayName: registered?.displayName ?? member.displayName, identifier: member.identifier },
-            reason: manualReason,
-          });
-          setManualSaving(false);
-          if (result.ok) {
-            setManualTarget(null); setManualReason('');
-            showAlert('Presensi bantuan tercatat', `${member.displayName} ditandai hadir oleh Asisten.`);
-          } else showAlert('Presensi bantuan gagal', result.message);
-        })();
-      },
-    });
   };
 
   if (user?.role !== 'assistant') {
@@ -584,8 +542,10 @@ export default function RecapScreen() {
                         </Text>
                       ) : (
                         filteredNotAttended.map((member) => (
-                          <View key={member.userId} style={styles.manualWrap}>
-                          <View style={[styles.recapRow, { backgroundColor: colors.background }]}>
+                          <View
+                            key={member.userId}
+                            style={[styles.recapRow, { backgroundColor: colors.background }]}
+                          >
                             <View style={styles.recapLeft}>
                               <Text
                                 style={[styles.studentName, { color: colors.textPrimary }]}
@@ -607,23 +567,6 @@ export default function RecapScreen() {
                                 Belum Presensi
                               </Text>
                             </View>
-                          </View>
-                          <Pressable
-                            accessibilityRole="button"
-                            onPress={() => { setManualTarget(member); setManualReason(''); }}
-                            style={({ pressed }) => [styles.manualButton, { backgroundColor: colors.balticSoft }, pressed && styles.pressed]}
-                          >
-                            <Text style={[styles.manualButtonText, { color: colors.baltic }]}>Bantu Presensi</Text>
-                          </Pressable>
-                          {manualTarget?.userId === member.userId ? (
-                            <View style={[styles.manualPanel, { backgroundColor: colors.surfaceMuted }]}>
-                              <Text style={[styles.manualNote, { color: colors.textSecondary }]}>Catat kendala perangkat atau presensi praktikan.</Text>
-                              <TextInput value={manualReason} onChangeText={setManualReason} placeholder="Contoh: Kamera perangkat bermasalah" placeholderTextColor={colors.textSubtle} multiline style={[styles.manualInput, { color: colors.textPrimary, borderColor: colors.border, backgroundColor: colors.surface }]} />
-                              <Pressable disabled={manualSaving || activeSession?.status !== 'open'} onPress={() => handleManualAttendance(member)} style={({ pressed }) => [styles.manualConfirm, { backgroundColor: colors.rosy }, (manualSaving || activeSession?.status !== 'open') && styles.disabled, pressed && styles.pressed]}>
-                                <Text style={styles.manualConfirmText}>{manualSaving ? 'Menyimpan…' : 'Konfirmasi Hadir Manual'}</Text>
-                              </Pressable>
-                            </View>
-                          ) : null}
                           </View>
                         ))
                       )}

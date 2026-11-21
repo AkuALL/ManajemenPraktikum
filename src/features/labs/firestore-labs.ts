@@ -24,6 +24,9 @@ export type StoredLab = {
   longitude: number;
   radiusMeters: number;
   isActive: boolean;
+  plusCode?: string;
+  pointType?: string;
+  roomCenterVerified?: boolean;
 };
 
 function readLab(id: string, value: Record<string, unknown>): StoredLab | null {
@@ -39,6 +42,10 @@ function readLab(id: string, value: Record<string, unknown>): StoredLab | null {
     longitude: value.longitude,
     radiusMeters: typeof value.radiusMeters === 'number' ? value.radiusMeters : 10,
     isActive: value.isActive !== false,
+    plusCode: typeof value.plusCode === 'string' ? value.plusCode : undefined,
+    pointType: typeof value.pointType === 'string' ? value.pointType : undefined,
+    roomCenterVerified:
+      typeof value.roomCenterVerified === 'boolean' ? value.roomCenterVerified : undefined,
   };
 }
 
@@ -94,6 +101,9 @@ export function useLabs() {
             longitude: lab.longitude,
             radiusMeters: lab.radiusMeters,
             isActive: lab.isActive,
+            plusCode: lab.plusCode,
+            pointType: lab.pointType,
+            roomCenterVerified: lab.roomCenterVerified,
             createdBy: userId,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),

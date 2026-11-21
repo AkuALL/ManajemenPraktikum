@@ -30,18 +30,10 @@ type MasterLabItem = {
   linkedClassId?: string;
 };
 
-const DEFAULT_MASTER_LABS: MasterLabItem[] = FSM_UNDIP_LABS.map((lab) => ({
-  id: lab.id,
-  name: lab.name,
-  buildingFloor: `${lab.building}${lab.floor ? ` Lt. ${lab.floor}` : ''}`,
-  roomCode: lab.id.toUpperCase(),
-  capacity: '32 kursi',
-}));
-
 export default function MasterLabScreen() {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const { user } = useAuth();
-  const { classes, sessions, updateClass, openSession } = usePracticum();
+  const { sessions, updateClass, openSession } = usePracticum();
   const {
     labs: storedLabs,
     loading: labsLoading,
@@ -59,44 +51,14 @@ export default function MasterLabScreen() {
   const seedStarted = useRef(false);
 
   const labs = useMemo<MasterLabItem[]>(() => {
-    const map = new Map<string, MasterLabItem>();
-    if (storedLabs.length === 0) {
-      DEFAULT_MASTER_LABS.forEach((item) => map.set(item.name.toLowerCase(), item));
-    }
-
-    classes.forEach((cls) => {
-      const labName = cls.lab?.trim();
-      if (!labName) return;
-      const key = labName.toLowerCase();
-      if (!map.has(key)) {
-        map.set(key, {
-          id: `cls-${cls.id}`,
-          name: labName,
-          buildingFloor: 'Gedung Informatika Lt. 2',
-          roomCode: `LAB-${cls.id.slice(0, 6).toUpperCase()}`,
-          capacity: '32 kursi',
-          linkedClassId: cls.id,
-        });
-      } else {
-        const existing = map.get(key)!;
-        if (!existing.linkedClassId) {
-          map.set(key, { ...existing, linkedClassId: cls.id });
-        }
-      }
-    });
-
-    storedLabs.forEach((lab) => {
-      map.set(lab.name.toLowerCase(), {
-        id: lab.id,
-        name: lab.name,
-        buildingFloor: `${lab.building}${lab.floor ? ` Lt. ${lab.floor}` : ''}`,
-        roomCode: lab.id.toUpperCase(),
-        capacity: `${lab.capacity} kursi`,
-      });
-    });
-
-    return Array.from(map.values());
-  }, [classes, storedLabs]);
+    return storedLabs.map((lab) => ({
+      id: lab.id,
+      name: lab.name,
+      buildingFloor: `${lab.building}${lab.floor ? ` Lt. ${lab.floor}` : ''}`,
+      roomCode: lab.id.toUpperCase(),
+      capacity: `${lab.capacity} kursi`,
+    }));
+  }, [storedLabs]);
 
   useEffect(() => {
     if (!labsLoading && user?.role === 'assistant' && !seedStarted.current) {

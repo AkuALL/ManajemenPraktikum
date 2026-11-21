@@ -16,14 +16,14 @@ type Listener<T> = (data: T) => void;
 let mockIdSeq = 1000;
 
 export const SEED_PRACTICUM_COURSES = [
-  { courseName: 'Sistem Operasi', className: 'Kelas A', lab: 'Lab Sistem & Jaringan' },
-  { courseName: 'Pengembangan Platform Khusus', className: 'Kelas A', lab: 'Lab Mobile & IoT' },
-  { courseName: 'Pembelajaran Mesin', className: 'Kelas A', lab: 'Lab Kecerdasan Buatan' },
-  { courseName: 'Struktur Data', className: 'Kelas A', lab: 'Lab Pemrograman 1' },
-  { courseName: 'Basis Data', className: 'Kelas A', lab: 'Lab Basis Data' },
-  { courseName: 'Algoritma Pemrograman', className: 'Kelas A', lab: 'Lab Pemrograman 2' },
-  { courseName: 'Dasar Sistem', className: 'Kelas A', lab: 'Lab Arsitektur Komputer' },
-  { courseName: 'Dasar Pemrograman', className: 'Kelas A', lab: 'Lab Dasar Komputasi' },
+  { courseName: 'Sistem Operasi', className: 'A1', lab: 'Lab Sistem & Jaringan' },
+  { courseName: 'Pengembangan Platform Khusus', className: 'A2', lab: 'Lab Mobile & IoT' },
+  { courseName: 'Pembelajaran Mesin', className: 'B1', lab: 'Lab Kecerdasan Buatan' },
+  { courseName: 'Struktur Data', className: 'B2', lab: 'Lab Pemrograman 1' },
+  { courseName: 'Basis Data', className: 'A1', lab: 'Lab Basis Data' },
+  { courseName: 'Algoritma Pemrograman', className: 'A2', lab: 'Lab Pemrograman 2' },
+  { courseName: 'Dasar Sistem', className: 'B1', lab: 'Lab Arsitektur Komputer' },
+  { courseName: 'Dasar Pemrograman', className: 'B2', lab: 'Lab Dasar Komputasi' },
 ] as const;
 
 const SEED_STUDENT_ACCOUNTS: StudentCandidate[] = [
@@ -70,7 +70,7 @@ export class MockPracticumAdapter implements PracticumPort {
     {
       id: 'sess-1',
       classId: 'class-1',
-      className: 'Kelas A',
+      className: 'A1',
       courseName: 'Pemrograman Perangkat Bergerak',
       title: 'Modul 4: State Management & Offline Cache',
       location: 'Lab Komputer 3',
@@ -86,7 +86,7 @@ export class MockPracticumAdapter implements PracticumPort {
     {
       id: 'sess-2',
       classId: 'class-1',
-      className: 'Kelas A',
+      className: 'A1',
       courseName: 'Pemrograman Perangkat Bergerak',
       title: 'Modul 5: Firebase Integration & Realtime Sync',
       location: 'Lab Komputer 3',
@@ -104,7 +104,7 @@ export class MockPracticumAdapter implements PracticumPort {
     {
       id: 'sess-3',
       classId: 'class-2',
-      className: 'Kelas B',
+      className: 'B1',
       courseName: 'Basis Data Lanjut',
       title: 'Modul 3: Indeks & Query Optimization',
       location: 'Lab Software 1',

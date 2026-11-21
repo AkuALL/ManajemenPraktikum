@@ -7,7 +7,7 @@ import { SubScreenHeader } from '@/components/ui/app-header';
 import { QrSessionBottomSheet } from '@/components/ui/qr-session-bottom-sheet';
 import { CardListSkeleton } from '@/components/ui/skeleton';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
-import { useAttendance } from '@/features/attendance';
+import { AssistantSessionRosterPanel, useAttendance } from '@/features/attendance';
 import { useIdentity } from '@/features/identity';
 import { LeaveRequestAction } from '@/features/leave';
 import { APP_ROUTES } from '@/features/navigation';
@@ -231,6 +231,7 @@ export default function SessionDetailScreen() {
                     <QrCode size={16} color="#FCFCFA" strokeWidth={2} />
                     <Text style={styles.qrBtnText}>Tampilkan QR Sesi</Text>
                   </Pressable>
+                  <AssistantSessionRosterPanel session={practicumSession} />
                 </View>
               ) : (
                 <View style={styles.studentActionsWrap}>
