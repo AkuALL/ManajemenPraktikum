@@ -25,9 +25,29 @@ const VALID_CATEGORIES: readonly LeaveReasonCategory[] = [
 ];
 
 const GEMINI_MODELS = ['gemini-flash-lite-latest', 'gemini-3.8-flash'] as const;
+const AI_REQUEST_TIMEOUT_MS = 15_000;
 
 const classifierUrl = process.env.EXPO_PUBLIC_AI_CLASSIFIER_URL?.trim();
 const geminiApiKey = process.env.EXPO_PUBLIC_AI_API_KEY?.trim();
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = AI_REQUEST_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Klasifikasi AI melebihi batas waktu (timeout).');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 function readErrorMessage(payload: unknown): string | null {
   if (!payload || typeof payload !== 'object') {
@@ -80,7 +100,7 @@ async function classifyViaProxy(
   }
 
   const idToken = await auth.currentUser.getIdToken();
-  const response = await fetch(classifierUrl, {
+  const response = await fetchWithTimeout(classifierUrl, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${idToken}`,
@@ -163,7 +183,7 @@ async function classifyDirectWithGemini(
   let lastError = 'Klasifikasi Gemini tidak dapat diproses.';
 
   for (const model of GEMINI_MODELS) {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(geminiApiKey)}`,
       {
         method: 'POST',

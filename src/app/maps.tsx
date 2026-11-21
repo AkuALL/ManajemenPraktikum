@@ -1,5 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { AppHeader } from '@/components/ui/app-header';
 import { FlyAwayBottomSheet } from '@/components/ui/fly-away-bottom-sheet';
@@ -8,7 +16,12 @@ import { SearchFilterBar } from '@/components/ui/search-filter-bar';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useLabs } from '@/features/labs/firestore-labs';
 import { LabNativeMap } from '@/features/maps/lab-native-map';
-import { formatSessionTime, usePracticum } from '@/features/practicum';
+import {
+  type LabActivitySession,
+  useLabDetailSessions,
+  useOpenLabSessions,
+} from '@/features/maps/use-lab-sessions';
+import { formatSessionDate, formatSessionTime, usePracticum } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { showAlert } from '@/lib/cross-platform-alert';
 
@@ -30,9 +43,10 @@ type LabRoomItem = {
   radiusMeters: number;
 };
 
-export default function PetaLabScreen() {
+export default function MapsLabScreen() {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
-  const { sessions } = usePracticum();
+  const { sessions: userSessions } = usePracticum({ classes: false, sessions: true });
+  const { openSessions } = useOpenLabSessions();
   const { labs: storedLabs } = useLabs();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -41,12 +55,48 @@ export default function PetaLabScreen() {
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [detailSheetRoom, setDetailSheetRoom] = useState<LabRoomItem | null>(null);
 
+  const userSessionById = useMemo(
+    () => new Map(userSessions.map((item) => [item.id, item])),
+    [userSessions],
+  );
+
+  const {
+    activeSessions: detailActiveRaw,
+    upcomingSessions: detailUpcomingRaw,
+    loading: detailLoading,
+  } = useLabDetailSessions(detailSheetRoom?.id ?? null);
+
+  const enrichSession = useMemo(
+    () =>
+      (item: LabActivitySession): LabActivitySession => {
+        const own = userSessionById.get(item.id);
+        return own
+          ? {
+              ...item,
+              courseName: own.courseName,
+              className: own.className,
+              assistantName: own.assistantName,
+            }
+          : item;
+      },
+    [userSessionById],
+  );
+
+  const detailActiveSessions = useMemo(
+    () => detailActiveRaw.map(enrichSession),
+    [detailActiveRaw, enrichSession],
+  );
+  const detailUpcomingSessions = useMemo(
+    () => detailUpcomingRaw.map(enrichSession),
+    [detailUpcomingRaw, enrichSession],
+  );
+
   const rooms = useMemo<LabRoomItem[]>(() => {
     const map = new Map<string, Omit<LabRoomItem, 'isActiveNow'>>();
     storedLabs
       .filter((lab) => lab.isActive)
       .forEach((lab) =>
-        map.set(lab.name.toLowerCase(), {
+        map.set(lab.id, {
           id: lab.id,
           name: lab.name,
           building: lab.building,
@@ -59,32 +109,35 @@ export default function PetaLabScreen() {
       );
 
     return Array.from(map.values()).map((room) => {
-      const activeSession = sessions.find(
-        (s) =>
-          s.location.trim().toLowerCase() === room.name.toLowerCase() &&
-          s.status === 'open',
+      const matchesRoom = (s: { labId?: string; location: string }) =>
+        (s.labId && s.labId === room.id) ||
+        s.location.trim().toLowerCase() === room.name.toLowerCase();
+
+      const activeFromOpen = openSessions.find(matchesRoom);
+      const activeFromOwn = userSessions.find((s) => matchesRoom(s) && s.status === 'open');
+      const activeSession = activeFromOpen
+        ? enrichSession(activeFromOpen)
+        : activeFromOwn;
+      const nextSession = userSessions.find(
+        (s) => matchesRoom(s) && s.status === 'scheduled',
       );
-      const nextSession = sessions.find(
-        (s) =>
-          s.location.trim().toLowerCase() === room.name.toLowerCase() &&
-          s.status === 'scheduled',
-      );
+
       return {
         ...room,
         isActiveNow: Boolean(activeSession),
-        activeCourse: activeSession?.courseName ?? activeSession?.className,
+        activeCourse: activeSession?.courseName ?? activeSession?.className ?? activeSession?.title,
         activeSessionTitle: activeSession?.title,
         activeTime: activeSession
           ? `${formatSessionTime(activeSession.startsAt)}–${formatSessionTime(activeSession.endsAt)}`
           : undefined,
         assistantName: activeSession?.assistantName ?? 'Asisten Jaga',
-        nextSessionTitle: nextSession?.courseName ?? nextSession?.className,
+        nextSessionTitle: nextSession?.courseName ?? nextSession?.className ?? nextSession?.title,
         nextSessionTime: nextSession
           ? `${formatSessionTime(nextSession.startsAt)}–${formatSessionTime(nextSession.endsAt)}`
           : undefined,
       };
     });
-  }, [sessions, storedLabs]);
+  }, [enrichSession, openSessions, storedLabs, userSessions]);
 
   const floorOptions = useMemo<PickerOption[]>(() => {
     const floors = Array.from(new Set(rooms.map((r) => r.floor))).sort();
@@ -114,12 +167,15 @@ export default function PetaLabScreen() {
   const topPair = filteredRooms.slice(0, 2);
   const bottomPair = filteredRooms.slice(2, 6);
 
+  const isSheetLabActive =
+    detailActiveSessions.length > 0 || Boolean(detailSheetRoom?.isActiveNow);
+
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <AppHeader
-          eyebrow="Denah Ruangan · Gedung Lab"
-          title="Lokasi Lab"
+          eyebrow="Peta Interaktif · Gedung Lab"
+          title="Peta Laboratorium"
           monoBadge={`${rooms.length} RUANG LAB`}
           statusBadge={`${activeNowCount} Aktif Sekarang`}
         />
@@ -152,46 +208,46 @@ export default function PetaLabScreen() {
                 { backgroundColor: colors.surface, borderColor: colors.border },
               ]}
             >
-            {filteredRooms.length === 0 ? (
-              <Text style={[styles.emptyRoomText, { color: colors.textSecondary }]}>
-                Tidak ada ruang laboratorium yang cocok.
-              </Text>
-            ) : (
-              <>
-                <View style={styles.roomGrid}>
-                  {topPair.map((room) => (
-                    <RoomTile
-                      key={room.id}
-                      room={room}
-                      selected={focusedRoom?.id === room.id}
-                      onPress={() => {
-                        setSelectedRoomId(room.id);
-                        setDetailSheetRoom(room);
-                      }}
-                    />
-                  ))}
-                </View>
+              {filteredRooms.length === 0 ? (
+                <Text style={[styles.emptyRoomText, { color: colors.textSecondary }]}>
+                  Tidak ada ruang laboratorium yang cocok.
+                </Text>
+              ) : (
+                <>
+                  <View style={styles.roomGrid}>
+                    {topPair.map((room) => (
+                      <RoomTile
+                        key={room.id}
+                        room={room}
+                        selected={focusedRoom?.id === room.id}
+                        onPress={() => {
+                          setSelectedRoomId(room.id);
+                          setDetailSheetRoom(room);
+                        }}
+                      />
+                    ))}
+                  </View>
 
-                {bottomPair.length > 0 ? (
-                  <>
-                    <View style={[styles.corridorBand, { backgroundColor: colors.background }]} />
-                    <View style={styles.roomGrid}>
-                      {bottomPair.map((room) => (
-                        <RoomTile
-                          key={room.id}
-                          room={room}
-                          selected={focusedRoom?.id === room.id}
-                          onPress={() => {
-                            setSelectedRoomId(room.id);
-                            setDetailSheetRoom(room);
-                          }}
-                        />
-                      ))}
-                    </View>
-                  </>
-                ) : null}
-              </>
-            )}
+                  {bottomPair.length > 0 ? (
+                    <>
+                      <View style={[styles.corridorBand, { backgroundColor: colors.background }]} />
+                      <View style={styles.roomGrid}>
+                        {bottomPair.map((room) => (
+                          <RoomTile
+                            key={room.id}
+                            room={room}
+                            selected={focusedRoom?.id === room.id}
+                            onPress={() => {
+                              setSelectedRoomId(room.id);
+                              setDetailSheetRoom(room);
+                            }}
+                          />
+                        ))}
+                      </View>
+                    </>
+                  ) : null}
+                </>
+              )}
             </View>
           )}
 
@@ -211,7 +267,7 @@ export default function PetaLabScreen() {
                     {focusedRoom.name}
                   </Text>
                   <Text style={[styles.selectedSub, { color: colors.textSecondary }]}>
-                    {focusedRoom.building}
+                    {focusedRoom.building} · Radius {focusedRoom.radiusMeters} m
                   </Text>
                 </View>
 
@@ -256,7 +312,7 @@ export default function PetaLabScreen() {
                     ? `${focusedRoom.activeCourse} · ${focusedRoom.activeTime}`
                     : focusedRoom.nextSessionTitle
                       ? `Berikutnya: ${focusedRoom.nextSessionTitle} · ${focusedRoom.nextSessionTime}`
-                      : `Kapasitas ${focusedRoom.capacity} kursi · Siap digunakan`}
+                      : `Kapasitas ${focusedRoom.capacity} kursi · Ketuk untuk detail jadwal`}
                 </Text>
                 <Text style={[styles.selectedStripFloor, { color: colors.baltic }]}>
                   {focusedRoom.floor}
@@ -282,8 +338,12 @@ export default function PetaLabScreen() {
         visible={Boolean(detailSheetRoom)}
         onClose={() => setDetailSheetRoom(null)}
         title={detailSheetRoom?.name ?? 'Detail Ruang'}
-        subtitle={detailSheetRoom?.building}
-        maxHeight="62%"
+        subtitle={
+          detailSheetRoom
+            ? `${detailSheetRoom.building} · ${detailSheetRoom.floor}`
+            : undefined
+        }
+        maxHeight="76%"
       >
         {detailSheetRoom ? (
           <View style={styles.bsContent}>
@@ -292,7 +352,7 @@ export default function PetaLabScreen() {
                 style={[
                   styles.statusBadge,
                   {
-                    backgroundColor: detailSheetRoom.isActiveNow
+                    backgroundColor: isSheetLabActive
                       ? colors.rosySoft
                       : colors.pacificSoft,
                   },
@@ -302,7 +362,7 @@ export default function PetaLabScreen() {
                   style={[
                     styles.statusDot,
                     {
-                      backgroundColor: detailSheetRoom.isActiveNow
+                      backgroundColor: isSheetLabActive
                         ? colors.rosy
                         : colors.pacific,
                     },
@@ -312,13 +372,13 @@ export default function PetaLabScreen() {
                   style={[
                     styles.statusText,
                     {
-                      color: detailSheetRoom.isActiveNow
+                      color: isSheetLabActive
                         ? colors.rosyDark
                         : colors.pacificDark,
                     },
                   ]}
                 >
-                  {detailSheetRoom.isActiveNow ? 'Sedang Dipakai' : 'Tersedia'}
+                  {isSheetLabActive ? 'Sedang Dipakai' : 'Tersedia'}
                 </Text>
               </View>
 
@@ -327,28 +387,99 @@ export default function PetaLabScreen() {
                   {detailSheetRoom.capacity} Kursi
                 </Text>
               </View>
+
+              <View style={[styles.capBadge, { backgroundColor: colors.pacificSoft }]}>
+                <Text style={[styles.capText, { color: colors.pacificDark }]}>
+                  Radius {detailSheetRoom.radiusMeters} m
+                </Text>
+              </View>
             </View>
 
+            {detailLoading ? (
+              <View style={styles.detailLoadingRow}>
+                <ActivityIndicator size="small" color={colors.baltic} />
+                <Text style={[styles.detailLoadingText, { color: colors.textSecondary }]}>
+                  Memuat aktivitas laboratorium...
+                </Text>
+              </View>
+            ) : null}
+
+            {/* Seksi 1: Sedang Berlangsung */}
             <View
               style={[
                 styles.bsDetailBox,
                 { backgroundColor: colors.background, borderColor: colors.border },
               ]}
             >
-              <Text style={[styles.bsDetailTitle, { color: colors.textPrimary }]}>
-                {detailSheetRoom.activeCourse
-                  ? `Praktikum ${detailSheetRoom.activeCourse}`
-                  : detailSheetRoom.nextSessionTitle
-                    ? `Berikutnya: ${detailSheetRoom.nextSessionTitle}`
-                    : 'Ruang Praktikum Tersedia'}
+              <View style={styles.sectionHeaderRow}>
+                <Text style={[styles.sectionEyebrow, { color: colors.textSubtle }]}>
+                  SEDANG BERLANGSUNG
+                </Text>
+                {detailActiveSessions.length > 0 ? (
+                  <View style={[styles.liveChip, { backgroundColor: colors.rosySoft }]}>
+                    <View style={[styles.statusDot, { backgroundColor: colors.rosy }]} />
+                    <Text style={[styles.liveChipText, { color: colors.rosyDark }]}>Live</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              {detailActiveSessions.length === 0 ? (
+                <Text style={[styles.sectionEmptyText, { color: colors.textSecondary }]}>
+                  Tidak ada praktikum yang sedang berlangsung di lab ini.
+                </Text>
+              ) : (
+                <View style={styles.sessionList}>
+                  {detailActiveSessions.map((sessionItem) => (
+                    <View key={sessionItem.id} style={styles.sessionItemRow}>
+                      <Text style={[styles.bsDetailTitle, { color: colors.textPrimary }]}>
+                        {sessionItem.courseName
+                          ? `${sessionItem.courseName}${sessionItem.className ? ` · ${sessionItem.className}` : ''}`
+                          : sessionItem.title}
+                      </Text>
+                      <Text style={[styles.bsDetailMeta, { color: colors.textSecondary }]}>
+                        {sessionItem.courseName ? `${sessionItem.title} · ` : ''}
+                        {formatSessionTime(sessionItem.startsAt)}–
+                        {formatSessionTime(sessionItem.endsAt)} WIB
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            {/* Seksi 2: Sesi Berikutnya */}
+            <View
+              style={[
+                styles.bsDetailBox,
+                { backgroundColor: colors.background, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[styles.sectionEyebrow, { color: colors.textSubtle }]}>
+                SESI BERIKUTNYA
               </Text>
-              <Text style={[styles.bsDetailMeta, { color: colors.textSecondary }]}>
-                {detailSheetRoom.activeTime
-                  ? `${detailSheetRoom.activeTime} · ${detailSheetRoom.assistantName}`
-                  : detailSheetRoom.nextSessionTime
-                    ? detailSheetRoom.nextSessionTime
-                    : `Lantai ${detailSheetRoom.floor} · Koridor utama Gedung Laboratorium`}
-              </Text>
+
+              {detailUpcomingSessions.length === 0 ? (
+                <Text style={[styles.sectionEmptyText, { color: colors.textSecondary }]}>
+                  Belum ada jadwal sesi berikutnya untuk lab ini.
+                </Text>
+              ) : (
+                <View style={styles.sessionList}>
+                  {detailUpcomingSessions.slice(0, 2).map((sessionItem) => (
+                    <View key={sessionItem.id} style={styles.sessionItemRow}>
+                      <Text style={[styles.bsDetailTitle, { color: colors.textPrimary }]}>
+                        {sessionItem.courseName
+                          ? `${sessionItem.courseName}${sessionItem.className ? ` · ${sessionItem.className}` : ''}`
+                          : sessionItem.title}
+                      </Text>
+                      <Text style={[styles.bsDetailMeta, { color: colors.textSecondary }]}>
+                        {formatSessionDate(undefined, sessionItem.startsAt)} ·{' '}
+                        {formatSessionTime(sessionItem.startsAt)}–
+                        {formatSessionTime(sessionItem.endsAt)} WIB
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
 
             <Pressable
@@ -356,7 +487,7 @@ export default function PetaLabScreen() {
               onPress={() => {
                 showAlert(
                   `Arah ke ${detailSheetRoom.name}`,
-                  `Masuk lobby utama Gedung Lab, naik ke ${detailSheetRoom.floor}, lalu ikuti papan penunjuk menuju ${detailSheetRoom.name}.`,
+                  `Masuk lobby utama ${detailSheetRoom.building}, naik ke ${detailSheetRoom.floor}, lalu ikuti papan penunjuk menuju ${detailSheetRoom.name}.`,
                 );
               }}
               style={({ pressed }) => [
@@ -566,6 +697,7 @@ const styles = StyleSheet.create({
   },
   bsBadgeRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 8,
   },
@@ -577,12 +709,56 @@ const styles = StyleSheet.create({
   capText: {
     fontFamily: FontFamily.sansSemiBold,
     fontSize: 11.5,
+    fontVariant: ['tabular-nums'],
+  },
+  detailLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  detailLoadingText: {
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 12,
   },
   bsDetailBox: {
     borderRadius: 16,
     borderWidth: 1,
     padding: 13,
-    gap: 4,
+    gap: 8,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  sectionEyebrow: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 10.5,
+    letterSpacing: 0.7,
+  },
+  liveChip: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  liveChipText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 10.5,
+  },
+  sessionList: {
+    gap: 8,
+  },
+  sessionItemRow: {
+    gap: 2,
+  },
+  sectionEmptyText: {
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   bsDetailTitle: {
     fontFamily: FontFamily.displayBold,
@@ -592,6 +768,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.sansRegular,
     fontSize: 12.5,
     lineHeight: 18,
+    fontVariant: ['tabular-nums'],
   },
   directionsBtn: {
     height: 46,
@@ -608,4 +785,3 @@ const styles = StyleSheet.create({
     opacity: 0.78,
   },
 });
-

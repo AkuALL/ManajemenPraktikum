@@ -34,7 +34,7 @@ test('leave requests sort newest first and AI labels remain informational', () =
   assert.equal(aiStatusLabel('success'), 'Klasifikasi AI tersedia');
 });
 
-test('leave rules restrict both decisions and AI classification updates to class assistants', () => {
+test('leave rules restrict decisions to class assistants and limit student updates to AI classification', () => {
   const rules = fs.readFileSync(path.resolve(process.cwd(), 'firestore.rules'), 'utf8');
   const leaveMatch = rules.slice(rules.indexOf('match /leaveRequests/{leaveId}'), rules.indexOf('match /{document=**}'));
   const failureHelper = rules.slice(rules.indexOf('function validLeaveClassificationFailure()'), rules.indexOf('match /users/{userId}'));
@@ -47,9 +47,16 @@ test('leave rules restrict both decisions and AI classification updates to class
   assert.match(leaveMatch, /allow create:\s*if hasRole\('student'\) && validLeaveCreate\(leaveId\);/);
   assert.match(
     updateRule,
-    /allow update:\s*if isClassAssistant\(resource\.data\.classId\)[\s\S]*validLeaveDecision\(\)[\s\S]*validLeaveClassificationFailure\(\)[\s\S]*validLeaveClassificationSuccess\(\)/,
+    /isClassAssistant\(resource\.data\.classId\)[\s\S]*validLeaveDecision\(\)[\s\S]*validLeaveClassificationFailure\(\)[\s\S]*validLeaveClassificationSuccess\(\)/,
   );
-  assert.doesNotMatch(updateRule, /request\.auth\.uid == resource\.data\.studentId/);
+  assert.match(
+    updateRule,
+    /hasRole\('student'\)[\s\S]*request\.auth\.uid == resource\.data\.studentId[\s\S]*validLeaveClassificationFailure\(\)[\s\S]*validLeaveClassificationSuccess\(\)/,
+  );
+  assert.doesNotMatch(
+    updateRule,
+    /request\.auth\.uid == resource\.data\.studentId[\s\S]*validLeaveDecision\(\)/,
+  );
   assert.match(failureHelper, /resource\.data\.aiStatus == 'pending'/);
   assert.match(failureHelper, /request\.resource\.data\.aiStatus == 'failed'/);
   assert.match(failureHelper, /function validLeaveClassificationSuccess\(\)/);

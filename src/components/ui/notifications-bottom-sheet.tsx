@@ -1,19 +1,22 @@
+import { useRouter } from 'expo-router';
 import { useMemo, useState, useSyncExternalStore } from 'react';
 import {
-  Animated,
-  PanResponder,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    Animated,
+    PanResponder,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from 'react-native';
 
 import { Colors, FontFamily } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
-import { useLeave } from '@/features/leave';
+import { useAssistantLeaveRequests, useLeave } from '@/features/leave';
+import { APP_ROUTES } from '@/features/navigation';
 import { formatSessionTime, usePracticum } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { confirmAction } from '@/lib/cross-platform-alert';
 
 import { FlyAwayBottomSheet } from './fly-away-bottom-sheet';
 
@@ -27,6 +30,8 @@ type NotificationItem = {
   title: string;
   meta: string;
   unread: boolean;
+  targetRoute?: string;
+  timestampMs: number;
 };
 
 type NotificationCenterState = {
@@ -76,9 +81,33 @@ function dismissNotificationIds(ids: string[]) {
   emitChange();
 }
 
+function formatReasonPreview(reason: string): string {
+  const normalized = reason.trim().replace(/\s+/g, ' ');
+  if (!normalized) return 'Menunggu konfirmasi asisten';
+  if (normalized.length <= 68) return normalized;
+  return `${normalized.slice(0, 67)}…`;
+}
+
+function parseIsoMs(value?: string): number {
+  if (!value) return 0;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? ms : 0;
+}
+
 function useNotificationItems(enabled: boolean): NotificationItem[] {
   const { user } = useAuth();
-  const { sessions } = usePracticum({ classes: false, sessions: enabled });
+  const isAssistant = user?.role === 'assistant';
+  const { classes, sessions } = usePracticum({
+    classes: enabled && isAssistant,
+    sessions: enabled,
+  });
+  const classIds = useMemo(() => classes.map((c) => c.id), [classes]);
+  const classById = useMemo(() => new Map(classes.map((c) => [c.id, c])), [classes]);
+  const { requests: assistantRequests } = useAssistantLeaveRequests(
+    classIds,
+    undefined,
+    enabled && isAssistant,
+  );
   const { requests } = useLeave();
   const { markedReadAll, readIds, dismissedIds } = useSyncExternalStore(
     subscribe,
@@ -89,52 +118,106 @@ function useNotificationItems(enabled: boolean): NotificationItem[] {
   return useMemo<NotificationItem[]>(() => {
     const result: NotificationItem[] = [];
 
+    if (isAssistant) {
+      assistantRequests
+        .filter((req) => req.status === 'pending')
+        .map((req) => {
+          const session = sessions.find((s) => s.id === req.sessionId);
+          const cls = classById.get(req.classId);
+          const id = `assistant-leave-${req.id}`;
+          return {
+            id,
+            title: `Pengajuan izin baru · ${session?.courseName ?? session?.title ?? cls?.courseName ?? 'Praktikum'}`,
+            meta: formatReasonPreview(req.reason),
+            unread: !markedReadAll && !readIds.includes(id),
+            targetRoute: APP_ROUTES.ASSISTANT_LEAVE_REVIEW,
+            timestampMs: req.hasPendingWrites
+              ? Number.MAX_SAFE_INTEGER
+              : (req.createdAtMs ?? req.updatedAtMs ?? 0),
+          };
+        })
+        .sort((a, b) => b.timestampMs - a.timestampMs)
+        .slice(0, 5)
+        .forEach((item) => result.push(item));
+    }
+
     if (user?.role === 'student') {
-      requests.slice(0, 3).forEach((req) => {
-        const session = sessions.find((s) => s.id === req.sessionId);
-        const statusText =
-          req.status === 'approved'
-            ? 'disetujui'
-            : req.status === 'rejected'
-              ? 'ditolak'
-              : 'menunggu konfirmasi';
-        const id = `leave-${req.id}`;
-        result.push({
-          id,
-          title: `Izin ${session?.courseName ?? session?.title ?? 'Praktikum'} ${statusText}`,
-          meta: req.reviewedBy ? 'Diperbarui asisten' : 'Pengajuan aktif',
-          unread: !markedReadAll && !readIds.includes(id) && req.status !== 'pending',
-        });
-      });
+      requests
+        .map((req) => {
+          const session = sessions.find((s) => s.id === req.sessionId);
+          const statusText =
+            req.status === 'approved'
+              ? 'disetujui'
+              : req.status === 'rejected'
+                ? 'ditolak'
+                : 'menunggu konfirmasi';
+          const id = `leave-${req.id}`;
+          return {
+            id,
+            title: `Izin ${session?.courseName ?? session?.title ?? 'Praktikum'} ${statusText}`,
+            meta: req.reviewedBy ? 'Diperbarui asisten' : 'Pengajuan aktif',
+            unread: !markedReadAll && !readIds.includes(id) && req.status !== 'pending',
+            timestampMs: req.hasPendingWrites
+              ? Number.MAX_SAFE_INTEGER
+              : (req.reviewedAtMs ?? req.updatedAtMs ?? req.createdAtMs ?? 0),
+          };
+        })
+        .sort((a, b) => b.timestampMs - a.timestampMs)
+        .slice(0, 3)
+        .forEach((item) => result.push(item));
     }
 
     sessions
       .filter((s) => s.status === 'open')
+      .map((s) => ({
+        session: s,
+        timestampMs: parseIsoMs(s.openedAt ?? s.updatedAt ?? s.startsAt),
+      }))
+      .sort((a, b) => b.timestampMs - a.timestampMs)
       .slice(0, 2)
-      .forEach((s) => {
+      .forEach(({ session: s, timestampMs }) => {
         const id = `session-${s.id}`;
         result.push({
           id,
           title: `${s.courseName ?? s.title} sedang dibuka`,
           meta: `${formatSessionTime(s.startsAt)} · ${s.location}`,
           unread: !markedReadAll && !readIds.includes(id),
+          timestampMs,
         });
       });
 
     sessions
       .filter((s) => s.status === 'scheduled')
+      .map((s) => ({
+        session: s,
+        timestampMs: parseIsoMs(s.updatedAt ?? s.createdAt ?? s.startsAt),
+      }))
+      .sort((a, b) => b.timestampMs - a.timestampMs)
       .slice(0, 2)
-      .forEach((s) => {
+      .forEach(({ session: s, timestampMs }) => {
         result.push({
           id: `upcoming-${s.id}`,
           title: `Pengingat sesi ${s.title}`,
           meta: `${formatSessionTime(s.startsAt)} · ${s.location}`,
           unread: false,
+          timestampMs,
         });
       });
 
-    return result.filter((item) => !dismissedIds.includes(item.id));
-  }, [dismissedIds, markedReadAll, readIds, requests, sessions, user?.role]);
+    return result
+      .filter((item) => !dismissedIds.includes(item.id))
+      .sort((a, b) => b.timestampMs - a.timestampMs);
+  }, [
+    assistantRequests,
+    classById,
+    dismissedIds,
+    isAssistant,
+    markedReadAll,
+    readIds,
+    requests,
+    sessions,
+    user?.role,
+  ]);
 }
 
 export function useUnreadNotificationsCount(): number {
@@ -145,7 +228,7 @@ export function useUnreadNotificationsCount(): number {
 type SwipeableNotificationRowProps = {
   item: NotificationItem;
   colors: typeof Colors.light | typeof Colors.dark;
-  onPress: (id: string) => void;
+  onPress: (item: NotificationItem) => void;
   onDismiss: (id: string) => void;
 };
 
@@ -215,7 +298,7 @@ function SwipeableNotificationRow({
     >
       <Pressable
         accessibilityRole="button"
-        onPress={() => onPress(item.id)}
+        onPress={() => onPress(item)}
         style={({ pressed }) => [
           styles.rowPressable,
           !item.unread && styles.rowRead,
@@ -251,11 +334,20 @@ export function NotificationsBottomSheet({
   visible,
   onClose,
 }: NotificationsBottomSheetProps) {
+  const router = useRouter();
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const items = useNotificationItems(visible);
 
   const unreadCount = items.filter((item) => item.unread).length;
   const readCount = items.length - unreadCount;
+
+  const handlePressItem = (item: NotificationItem) => {
+    markNotificationRead(item.id);
+    if (item.targetRoute) {
+      onClose();
+      router.push(item.targetRoute as never);
+    }
+  };
 
   const handleDismiss = (id: string) => {
     dismissNotificationIds([id]);
@@ -264,7 +356,13 @@ export function NotificationsBottomSheet({
   const handleClearRead = () => {
     const readIds = items.filter((item) => !item.unread).map((item) => item.id);
     if (readIds.length === 0) return;
-    dismissNotificationIds(readIds);
+    confirmAction({
+      title: 'Hapus Notifikasi Terbaca?',
+      message: `${readIds.length} notifikasi yang sudah dibaca akan dihapus dari daftar ini.`,
+      confirmText: 'Hapus Semua',
+      destructive: true,
+      onConfirm: () => dismissNotificationIds(readIds),
+    });
   };
 
   return (
@@ -326,7 +424,7 @@ export function NotificationsBottomSheet({
             key={item.id}
             item={item}
             colors={colors}
-            onPress={markNotificationRead}
+            onPress={handlePressItem}
             onDismiss={handleDismiss}
           />
         ))}

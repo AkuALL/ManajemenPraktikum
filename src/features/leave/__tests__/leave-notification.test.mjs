@@ -4,8 +4,62 @@ import test from 'node:test';
 import { resolveNotificationTargetRoute } from '../../../services/notification/deep-linking-resolver.ts';
 import {
   buildLeaveDecisionNotificationPayload,
+  buildLeaveSubmittedNotificationPayload,
   executeLeaveNotificationDispatch,
+  executeLeaveSubmittedNotificationDispatch,
 } from '../leave-notification-payload.ts';
+
+test('FR-14: buildLeaveSubmittedNotificationPayload targets assistants and deep-links to /review-izin', () => {
+  const payload = buildLeaveSubmittedNotificationPayload({
+    leaveRequestId: 'sesi-1_stu-1',
+    studentName: 'Budi Santoso',
+    sessionId: 'sesi-1',
+    classId: 'cls-1',
+    assistantIds: ['ast-1', 'ast-2', 'ast-1'],
+    sessionTitle: 'Sistem Operasi',
+    reason: 'Demam tinggi sejak semalam',
+  });
+
+  assert.equal(payload.type, 'LEAVE_SUBMITTED');
+  assert.deepEqual(payload.recipientUids, ['ast-1', 'ast-2']);
+  assert.equal(payload.title, 'Pengajuan Izin Baru');
+  assert.match(payload.body, /Budi Santoso/);
+  assert.match(payload.body, /Sistem Operasi/);
+  assert.match(payload.body, /Demam tinggi/);
+  assert.equal(payload.data.route, '/review-izin');
+  assert.equal(payload.data.leaveRequestId, 'sesi-1_stu-1');
+});
+
+test('NFR-05: executeLeaveSubmittedNotificationDispatch absorbs delivery errors', async () => {
+  const okResult = await executeLeaveSubmittedNotificationDispatch(
+    {
+      leaveRequestId: 'sesi-1_stu-1',
+      studentName: 'Budi Santoso',
+      sessionId: 'sesi-1',
+      classId: 'cls-1',
+      assistantIds: ['ast-1'],
+    },
+    async () => ({ ok: true, sentCount: 1 }),
+  );
+  assert.equal(okResult.ok, true);
+  assert.equal(okResult.sentCount, 1);
+
+  const failedResult = await executeLeaveSubmittedNotificationDispatch(
+    {
+      leaveRequestId: 'sesi-1_stu-1',
+      studentName: 'Budi Santoso',
+      sessionId: 'sesi-1',
+      classId: 'cls-1',
+      assistantIds: ['ast-1'],
+    },
+    async () => {
+      throw new Error('Permission denied');
+    },
+  );
+  assert.equal(failedResult.ok, false);
+  assert.equal(failedResult.sentCount, 0);
+  assert.equal(failedResult.skippedReason, 'Permission denied');
+});
 
 test('FR-14: buildLeaveDecisionNotificationPayload creates approved and rejected payloads', () => {
   const approved = buildLeaveDecisionNotificationPayload({
@@ -82,6 +136,27 @@ test('FR-15: resolveNotificationTargetRoute maps notification types and roles ac
       'student',
     ),
     { pathname: '/presensi', params: { sessionId: 'sesi-42' } },
+  );
+
+  assert.deepEqual(
+    resolveNotificationTargetRoute(
+      { type: 'LEAVE_SUBMITTED', leaveRequestId: 'sesi-42_stu-1' },
+      'assistant',
+    ),
+    { pathname: '/review-izin' },
+  );
+
+  assert.deepEqual(
+    resolveNotificationTargetRoute(
+      { type: 'LEAVE_SUBMITTED', leaveRequestId: 'sesi-42_stu-1' },
+      'student',
+    ),
+    { pathname: '/kehadiran' },
+  );
+
+  assert.deepEqual(
+    resolveNotificationTargetRoute({ type: 'LEAVE_SUBMITTED', leaveRequestId: 'sesi-42_stu-1' }),
+    { pathname: '/review-izin' },
   );
 
   assert.deepEqual(

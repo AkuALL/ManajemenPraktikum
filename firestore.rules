@@ -89,12 +89,14 @@ service cloud.firestore {
 
     function validProfileUpdate() {
       return request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['displayName', 'identifier', 'updatedAt', 'pushTokens'])
+          .hasOnly(['displayName', 'identifier', 'updatedAt', 'pushTokens', 'lastTokenUpdatedAt'])
         && validText(request.resource.data.displayName, 2, 100)
         && validText(request.resource.data.identifier, 3, 40)
         && (!request.resource.data.keys().hasAll(['pushTokens'])
           || (request.resource.data.pushTokens is list
             && request.resource.data.pushTokens.size() <= 5))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastTokenUpdatedAt'])
+          || request.resource.data.lastTokenUpdatedAt == request.time)
         && request.resource.data.updatedAt == request.time;
     }
 
@@ -612,6 +614,42 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
     }
 
+    function validNotificationCreate() {
+      return request.resource.data.keys().hasOnly([
+          'recipientUid',
+          'senderUid',
+          'title',
+          'body',
+          'type',
+          'data',
+          'status',
+          'sentAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'recipientUid',
+          'senderUid',
+          'title',
+          'body',
+          'type',
+          'data',
+          'status',
+          'sentAt'
+        ])
+        && request.resource.data.senderUid == request.auth.uid
+        && validText(request.resource.data.recipientUid, 1, 160)
+        && validText(request.resource.data.title, 1, 160)
+        && validText(request.resource.data.body, 1, 600)
+        && request.resource.data.data is map
+        && ['sent', 'skipped', 'failed'].hasAny([request.resource.data.status])
+        && request.resource.data.sentAt == request.time
+        && (
+          (hasRole('assistant')
+            && ['SESSION_OPENED', 'SCHEDULE_CHANGED', 'LEAVE_APPROVED', 'LEAVE_REJECTED']
+              .hasAny([request.resource.data.type]))
+          || (hasRole('student') && request.resource.data.type == 'LEAVE_SUBMITTED')
+        );
+    }
+
     match /users/{userId} {
       allow get: if signedIn()
         && (request.auth.uid == userId
@@ -668,7 +706,8 @@ service cloud.firestore {
       allow get, list: if isClassAssistant(resource.data.classId)
         || (signedIn()
           && (exists(memberPath(resource.data.classId, currentUserIdentifier()))
-            || exists(memberPath(resource.data.classId, request.auth.uid))));
+            || exists(memberPath(resource.data.classId, request.auth.uid))))
+        || (signedIn() && (resource.data.status == 'open' || resource.data.status == 'scheduled'));
       allow create: if hasRole('assistant')
         && isClassAssistant(request.resource.data.classId)
         && !get(classPath(request.resource.data.classId)).data.get('archived', false)
@@ -740,13 +779,29 @@ service cloud.firestore {
         && (request.auth.uid == resource.data.studentId
           || isClassAssistant(resource.data.classId));
       allow create: if hasRole('student') && validLeaveCreate(leaveId);
-      allow update: if isClassAssistant(resource.data.classId)
-        && (
-          validLeaveDecision()
-          || validLeaveClassificationFailure()
-          || validLeaveClassificationSuccess()
+      allow update: if (
+          isClassAssistant(resource.data.classId)
+          && (
+            validLeaveDecision()
+            || validLeaveClassificationFailure()
+            || validLeaveClassificationSuccess()
+          )
+        )
+        || (
+          hasRole('student')
+          && request.auth.uid == resource.data.studentId
+          && (
+            validLeaveClassificationFailure()
+            || validLeaveClassificationSuccess()
+          )
         );
       allow delete: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow get, list: if signedIn() && resource.data.recipientUid == request.auth.uid;
+      allow create: if signedIn() && validNotificationCreate();
+      allow update, delete: if false;
     }
 
     match /{document=**} {

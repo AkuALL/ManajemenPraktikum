@@ -15,7 +15,7 @@ export interface RouteDefinition {
 export const APP_ROUTES = {
   HOME: '/',
   SCHEDULE: '/schedule',
-  PETA: '/peta',
+  MAPS: '/maps',
   PRESENSI: '/presensi',
   SCAN: '/scan',
   PROFIL: '/profil',

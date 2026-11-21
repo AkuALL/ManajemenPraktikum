@@ -10,6 +10,16 @@ export type LeaveDecisionNotificationInput = {
   reviewNote?: string;
 };
 
+export type LeaveSubmittedNotificationInput = {
+  leaveRequestId: string;
+  studentName: string;
+  sessionId: string;
+  classId: string;
+  assistantIds: string[];
+  sessionTitle?: string;
+  reason?: string;
+};
+
 export type LeaveNotificationDispatchResult = {
   ok: boolean;
   sentCount: number;
@@ -19,6 +29,36 @@ export type LeaveNotificationDispatchResult = {
 export type PushNotificationSender = (
   payload: PushNotificationPayload,
 ) => Promise<LeaveNotificationDispatchResult | void>;
+
+/**
+ * Membentuk payload Push Notification standar Sprint 3 untuk pengajuan izin baru ke Asisten.
+ */
+export function buildLeaveSubmittedNotificationPayload(
+  input: LeaveSubmittedNotificationInput,
+): PushNotificationPayload {
+  const recipientUids = Array.from(new Set(input.assistantIds.filter(Boolean)));
+  const studentName = input.studentName.trim() || 'Praktikan';
+  const sessionLabel = input.sessionTitle?.trim()
+    ? ` untuk ${input.sessionTitle.trim()}`
+    : '';
+  const trimmedReason = input.reason?.trim();
+  const reasonSuffix = trimmedReason
+    ? ` Alasan: ${trimmedReason.length > 80 ? `${trimmedReason.slice(0, 77)}…` : trimmedReason}`
+    : '';
+
+  return {
+    recipientUids,
+    type: 'LEAVE_SUBMITTED',
+    title: 'Pengajuan Izin Baru',
+    body: `${studentName} mengajukan izin${sessionLabel}.${reasonSuffix}`,
+    data: {
+      sessionId: input.sessionId,
+      classId: input.classId,
+      leaveRequestId: input.leaveRequestId,
+      route: '/review-izin',
+    },
+  };
+}
 
 /**
  * Membentuk payload Push Notification standar Sprint 3 untuk keputusan izin praktikan (FR-14).
@@ -57,15 +97,11 @@ export function buildLeaveDecisionNotificationPayload(
   };
 }
 
-/**
- * Menjalankan pengirim notifikasi secara fault-tolerant (NFR-05).
- */
-export async function executeLeaveNotificationDispatch(
-  input: LeaveDecisionNotificationInput,
+async function dispatchPayloadFaultTolerant(
+  payload: PushNotificationPayload,
   sender: PushNotificationSender,
 ): Promise<LeaveNotificationDispatchResult> {
   try {
-    const payload = buildLeaveDecisionNotificationPayload(input);
     const result = await sender(payload);
     if (result) {
       return result;
@@ -81,4 +117,24 @@ export async function executeLeaveNotificationDispatch(
           : 'notification-dispatch-error',
     };
   }
+}
+
+/**
+ * Menjalankan pengirim notifikasi secara fault-tolerant (NFR-05).
+ */
+export async function executeLeaveNotificationDispatch(
+  input: LeaveDecisionNotificationInput,
+  sender: PushNotificationSender,
+): Promise<LeaveNotificationDispatchResult> {
+  return dispatchPayloadFaultTolerant(buildLeaveDecisionNotificationPayload(input), sender);
+}
+
+/**
+ * Menjalankan pengirim notifikasi pengajuan izin baru ke Asisten secara fault-tolerant (NFR-05).
+ */
+export async function executeLeaveSubmittedNotificationDispatch(
+  input: LeaveSubmittedNotificationInput,
+  sender: PushNotificationSender,
+): Promise<LeaveNotificationDispatchResult> {
+  return dispatchPayloadFaultTolerant(buildLeaveSubmittedNotificationPayload(input), sender);
 }

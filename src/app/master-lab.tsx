@@ -8,14 +8,16 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { ChevronDown, Plus, Trash2 } from 'lucide-react-native';
+import { ChevronDown, MapPin, Plus, Trash2 } from 'lucide-react-native';
 
 import { AppHeader, getFirstName } from '@/components/ui/app-header';
+import { FlyAwayBottomSheet } from '@/components/ui/fly-away-bottom-sheet';
 import { PickerBottomSheet, type PickerOption } from '@/components/ui/picker-bottom-sheet';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
 import { FSM_UNDIP_LABS } from '@/features/labs/fsm-undip-labs';
 import { type StoredLab, useLabs } from '@/features/labs/firestore-labs';
+import { LabCoordinatePicker } from '@/features/maps/lab-coordinate-picker';
 import { usePracticum } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { confirmAction, showAlert } from '@/lib/cross-platform-alert';
@@ -44,6 +46,11 @@ export default function MasterLabScreen() {
 
   const [selectedLabId, setSelectedLabId] = useState<string>('');
   const [labPickerVisible, setLabPickerVisible] = useState(false);
+  const [mapPickerVisible, setMapPickerVisible] = useState(false);
+  const [pickerCoords, setPickerCoords] = useState<{ latitude: number; longitude: number }>({
+    latitude: FSM_UNDIP_LABS[0].latitude,
+    longitude: FSM_UNDIP_LABS[0].longitude,
+  });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const seedStarted = useRef(false);
@@ -354,6 +361,40 @@ export default function MasterLabScreen() {
               </View>
             </View>
 
+            <View style={styles.coordActionRow}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>
+                Koordinat Pusat Lab
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  const parsedLat = Number(draftLatitude.trim().replace(',', '.'));
+                  const parsedLng = Number(draftLongitude.trim().replace(',', '.'));
+                  setPickerCoords({
+                    latitude:
+                      Number.isFinite(parsedLat) && parsedLat >= -90 && parsedLat <= 90
+                        ? parsedLat
+                        : FSM_UNDIP_LABS[0].latitude,
+                    longitude:
+                      Number.isFinite(parsedLng) && parsedLng >= -180 && parsedLng <= 180
+                        ? parsedLng
+                        : FSM_UNDIP_LABS[0].longitude,
+                  });
+                  setMapPickerVisible(true);
+                }}
+                style={({ pressed }) => [
+                  styles.pickMapBtn,
+                  { backgroundColor: colors.pacificSoft, borderColor: colors.pacificLight },
+                  pressed && styles.pressed,
+                ]}
+              >
+                <MapPin size={14} color={colors.pacificDark} strokeWidth={2.2} />
+                <Text style={[styles.pickMapText, { color: colors.pacificDark }]}>
+                  Pilih Titik dari Peta
+                </Text>
+              </Pressable>
+            </View>
+
             <View style={styles.twoCol}>
               <View style={[styles.fieldGroup, { flex: 1 }]}>
                 <Text style={[styles.label, { color: colors.textSecondary }]}>Latitude</Text>
@@ -451,6 +492,56 @@ export default function MasterLabScreen() {
           if (picked) syncFormToLab(picked);
         }}
       />
+
+      <FlyAwayBottomSheet
+        visible={mapPickerVisible}
+        onClose={() => setMapPickerVisible(false)}
+        title="Pilih Titik Laboratorium"
+        subtitle="Ketuk peta untuk menetapkan koordinat pusat lab"
+        maxHeight="84%"
+      >
+        <View style={styles.pickerSheetBody}>
+          <LabCoordinatePicker
+            latitude={pickerCoords.latitude}
+            longitude={pickerCoords.longitude}
+            radiusMeters={(() => {
+              const val = Number(draftRadius.trim().replace(',', '.'));
+              return Number.isFinite(val) && val >= 10 && val <= 500 ? val : 10;
+            })()}
+            onSelectCoordinate={setPickerCoords}
+          />
+
+          <View
+            style={[
+              styles.pickerCoordsSummary,
+              { backgroundColor: colors.background, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.pickerCoordsLabel, { color: colors.textSecondary }]}>
+              Koordinat terpilih
+            </Text>
+            <Text style={[styles.pickerCoordsMono, { color: colors.textPrimary }]}>
+              {pickerCoords.latitude.toFixed(6)}, {pickerCoords.longitude.toFixed(6)}
+            </Text>
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setDraftLatitude(String(pickerCoords.latitude));
+              setDraftLongitude(String(pickerCoords.longitude));
+              setMapPickerVisible(false);
+            }}
+            style={({ pressed }) => [
+              styles.saveBtn,
+              { backgroundColor: colors.baltic },
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.saveBtnText}>Gunakan Titik Ini</Text>
+          </Pressable>
+        </View>
+      </FlyAwayBottomSheet>
     </View>
   );
 }
@@ -557,6 +648,49 @@ const styles = StyleSheet.create({
   twoCol: {
     flexDirection: 'row',
     gap: 10,
+  },
+  coordActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 2,
+  },
+  pickMapBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  pickMapText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 11.5,
+  },
+  pickerSheetBody: {
+    gap: 12,
+    paddingBottom: 6,
+  },
+  pickerCoordsSummary: {
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  pickerCoordsLabel: {
+    fontFamily: FontFamily.sansRegular,
+    fontSize: 12.5,
+  },
+  pickerCoordsMono: {
+    fontFamily: FontFamily.monoMedium,
+    fontSize: 12,
+    fontVariant: ['tabular-nums'],
   },
   qrStrip: {
     borderRadius: 16,

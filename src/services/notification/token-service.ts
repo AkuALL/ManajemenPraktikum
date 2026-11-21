@@ -50,6 +50,7 @@ export async function registerDevicePushToken(userId: string): Promise<PushRegis
 
     await updateDoc(doc(db, 'users', userId), {
       pushTokens: arrayUnion(token),
+      lastTokenUpdatedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
 

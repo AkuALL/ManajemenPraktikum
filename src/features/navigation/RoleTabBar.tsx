@@ -52,13 +52,14 @@ export function RoleTabBar() {
     role === 'assistant'
       ? [
           { key: 'beranda', label: 'Beranda', route: APP_ROUTES.HOME },
+          { key: 'maps', label: 'Maps', route: APP_ROUTES.MAPS },
           { key: 'kelas', label: 'Kelas', route: APP_ROUTES.CLASSES },
           { key: 'rekap', label: 'Rekap', route: APP_ROUTES.ASSISTANT_REKAP },
           { key: 'izin', label: 'Izin', route: APP_ROUTES.ASSISTANT_LEAVE_REVIEW },
         ]
       : [
           { key: 'beranda', label: 'Beranda', route: APP_ROUTES.HOME },
-          { key: 'peta', label: 'Peta', route: APP_ROUTES.PETA },
+          { key: 'maps', label: 'Maps', route: APP_ROUTES.MAPS },
           { key: 'scan', label: 'Scan', route: APP_ROUTES.SCAN, isScan: true },
           { key: 'riwayat', label: 'Riwayat', route: APP_ROUTES.STUDENT_ATTENDANCE },
           { key: 'profil', label: 'Profil', route: APP_ROUTES.PROFIL },
@@ -80,7 +81,7 @@ export function RoleTabBar() {
     switch (key) {
       case 'beranda':
         return <Home size={size} color={color} strokeWidth={strokeWidth} />;
-      case 'peta':
+      case 'maps':
         return <MapPin size={size} color={color} strokeWidth={strokeWidth} />;
       case 'riwayat':
         return <Clock size={size} color={color} strokeWidth={strokeWidth} />;

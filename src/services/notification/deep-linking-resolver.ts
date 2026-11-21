@@ -11,7 +11,7 @@ const ALLOWED_STATIC_ROUTES = new Set([
   '/kehadiran',
   '/schedule',
   '/izin',
-  '/peta',
+  '/maps',
   '/review-izin',
   '/classes',
   '/rekap',
@@ -27,6 +27,7 @@ function isNotificationType(value: unknown): value is NotificationType {
   return (
     value === 'SESSION_OPENED' ||
     value === 'SCHEDULE_CHANGED' ||
+    value === 'LEAVE_SUBMITTED' ||
     value === 'LEAVE_APPROVED' ||
     value === 'LEAVE_REJECTED'
   );
@@ -56,6 +57,13 @@ export function resolveNotificationTargetRoute(
     return sessionId
       ? { pathname: '/presensi', params: { sessionId } }
       : { pathname: '/presensi' };
+  }
+
+  if (type === 'LEAVE_SUBMITTED') {
+    if (role === 'student') {
+      return { pathname: '/kehadiran' };
+    }
+    return { pathname: '/review-izin' };
   }
 
   if (type === 'LEAVE_APPROVED' || type === 'LEAVE_REJECTED') {

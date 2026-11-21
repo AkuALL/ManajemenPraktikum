@@ -1069,3 +1069,29 @@ test('firebase.json and firestore.indexes.json configure members.userId COLLECTI
     'Missing ASCENDING COLLECTION_GROUP index on members.userId',
   );
 });
+
+test('firestore.rules supports lastTokenUpdatedAt, open/scheduled session read for maps, and notifications audit logs', () => {
+  const profileUpdateHelper = extractBlock('function validProfileUpdate()');
+  assert.match(profileUpdateHelper, /'lastTokenUpdatedAt'/);
+  assert.match(profileUpdateHelper, /request\.resource\.data\.lastTokenUpdatedAt == request\.time/);
+
+  const sessionsMatch = extractBlock('match /sessions/{sessionId}', 1200);
+  assert.match(
+    sessionsMatch,
+    /signedIn\(\) && \(resource\.data\.status == 'open' \|\| resource\.data\.status == 'scheduled'\)/,
+  );
+
+  const notificationHelper = extractBlock('function validNotificationCreate()', 1600);
+  assert.match(notificationHelper, /request\.resource\.data\.senderUid == request\.auth\.uid/);
+  assert.match(notificationHelper, /request\.resource\.data\.sentAt == request\.time/);
+  assert.match(notificationHelper, /'LEAVE_SUBMITTED'/);
+  assert.match(notificationHelper, /'SESSION_OPENED'/);
+
+  const notificationsMatch = extractBlock('match /notifications/{notificationId}');
+  assert.match(
+    notificationsMatch,
+    /allow get, list:\s*if signedIn\(\) && resource\.data\.recipientUid == request\.auth\.uid;/,
+  );
+  assert.match(notificationsMatch, /allow create:\s*if signedIn\(\) && validNotificationCreate\(\);/);
+  assert.match(notificationsMatch, /allow update, delete:\s*if false;/);
+});

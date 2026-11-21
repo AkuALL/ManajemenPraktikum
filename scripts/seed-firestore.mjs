@@ -14,7 +14,6 @@ import {
   getDoc,
   getDocs,
   getFirestore,
-  limit,
   query,
   serverTimestamp,
   setDoc,
@@ -227,7 +226,9 @@ async function main() {
       query(collection(db, 'classes'), where('assistantIds', 'array-contains', primaryAssistant.uid)),
     );
     const existingByName = new Map(
-      existingClassesSnap.docs.map((d) => [d.data().practicumName, { id: d.id, ...d.data() }]),
+      existingClassesSnap.docs
+        .filter((d) => d.data().archived !== true)
+        .map((d) => [d.data().practicumName, { id: d.id, ...d.data() }]),
     );
 
     const seededClasses = [];
@@ -293,12 +294,13 @@ async function main() {
         }
       }
 
-      // Buat 1 sesi awal jika kelas belum punya sesi
+      // Buat 1 sesi awal jika kelas belum punya sesi aktif (non-cancelled)
       const existingSessions = await getDocs(
-        query(collection(db, 'sessions'), where('classId', '==', classId), limit(1)),
+        query(collection(db, 'sessions'), where('classId', '==', classId)),
       );
+      const hasActiveSession = existingSessions.docs.some((d) => d.data().status !== 'cancelled');
       let sessionCreated = false;
-      if (existingSessions.empty) {
+      if (!hasActiveSession) {
         const start = new Date();
         start.setDate(start.getDate() + index + 1);
         start.setHours(8, 0, 0, 0);

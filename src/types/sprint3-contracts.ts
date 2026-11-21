@@ -50,6 +50,7 @@ export type AttendanceAudit = {
 export type NotificationType =
   | 'SESSION_OPENED'
   | 'SCHEDULE_CHANGED'
+  | 'LEAVE_SUBMITTED'
   | 'LEAVE_APPROVED'
   | 'LEAVE_REJECTED';
 
