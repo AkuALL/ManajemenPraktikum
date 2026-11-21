@@ -110,7 +110,7 @@ const SEED_LABS = [
   },
   {
     id: 'dekanat-fsm',
-    name: 'Dekanat FSM UNDIP',
+    name: 'Lab AP (Dekanat FSM UNDIP)',
     building: 'Gedung Dekanat FSM UNDIP',
     floor: null,
     capacity: 32,

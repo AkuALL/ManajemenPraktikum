@@ -1,7 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -164,9 +163,6 @@ export default function MapsLabScreen() {
     filteredRooms[0] ??
     null;
 
-  const topPair = filteredRooms.slice(0, 2);
-  const bottomPair = filteredRooms.slice(2, 6);
-
   const isSheetLabActive =
     detailActiveSessions.length > 0 || Boolean(detailSheetRoom?.isActiveNow);
 
@@ -191,65 +187,15 @@ export default function MapsLabScreen() {
             onResetFilter={() => setFloorFilter('Semua')}
           />
 
-          {Platform.OS !== 'web' ? (
-            <LabNativeMap
-              labs={filteredRooms}
-              selectedLabId={selectedRoomId}
-              onSelectLab={(labId) => {
-                const selected = rooms.find((room) => room.id === labId);
-                setSelectedRoomId(labId);
-                if (selected) setDetailSheetRoom(selected);
-              }}
-            />
-          ) : (
-            <View
-              style={[
-                styles.floorplanCard,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-              ]}
-            >
-              {filteredRooms.length === 0 ? (
-                <Text style={[styles.emptyRoomText, { color: colors.textSecondary }]}>
-                  Tidak ada ruang laboratorium yang cocok.
-                </Text>
-              ) : (
-                <>
-                  <View style={styles.roomGrid}>
-                    {topPair.map((room) => (
-                      <RoomTile
-                        key={room.id}
-                        room={room}
-                        selected={focusedRoom?.id === room.id}
-                        onPress={() => {
-                          setSelectedRoomId(room.id);
-                          setDetailSheetRoom(room);
-                        }}
-                      />
-                    ))}
-                  </View>
-
-                  {bottomPair.length > 0 ? (
-                    <>
-                      <View style={[styles.corridorBand, { backgroundColor: colors.background }]} />
-                      <View style={styles.roomGrid}>
-                        {bottomPair.map((room) => (
-                          <RoomTile
-                            key={room.id}
-                            room={room}
-                            selected={focusedRoom?.id === room.id}
-                            onPress={() => {
-                              setSelectedRoomId(room.id);
-                              setDetailSheetRoom(room);
-                            }}
-                          />
-                        ))}
-                      </View>
-                    </>
-                  ) : null}
-                </>
-              )}
-            </View>
-          )}
+          <LabNativeMap
+            labs={filteredRooms}
+            selectedLabId={selectedRoomId}
+            onSelectLab={(labId) => {
+              const selected = rooms.find((room) => room.id === labId);
+              setSelectedRoomId(labId);
+              if (selected) setDetailSheetRoom(selected);
+            }}
+          />
 
           {focusedRoom ? (
             <Pressable
@@ -505,67 +451,6 @@ export default function MapsLabScreen() {
   );
 }
 
-function RoomTile({
-  room,
-  selected,
-  onPress,
-}: {
-  room: LabRoomItem;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
-  const active = room.isActiveNow;
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.roomTile,
-        {
-          backgroundColor: active ? colors.rosySoft : colors.balticSoft,
-          borderColor: active
-            ? colors.rosy
-            : selected
-              ? colors.pacific
-              : colors.border,
-          borderWidth: active || selected ? 1.5 : 1,
-        },
-        pressed && styles.pressed,
-      ]}
-    >
-      <View style={styles.roomTileTop}>
-        <Text
-          style={[
-            styles.roomTileTitle,
-            { color: active ? colors.rosyDark : colors.baltic },
-          ]}
-          numberOfLines={1}
-        >
-          {room.name}
-        </Text>
-        <View
-          style={[
-            styles.roomDot,
-            { backgroundColor: active ? colors.rosy : colors.pacific },
-          ]}
-        />
-      </View>
-
-      <Text
-        style={[
-          styles.roomTileSub,
-          { color: active ? colors.rosy : colors.textSecondary },
-        ]}
-        numberOfLines={1}
-      >
-        {active ? `Dipakai · ${room.activeTime?.split('–')[0] ?? 'Live'}` : 'Tersedia'}
-      </Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -580,56 +465,6 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: 14,
     gap: 12,
-  },
-  floorplanCard: {
-    borderRadius: 22,
-    borderWidth: 1,
-    padding: 14,
-    gap: 10,
-  },
-  roomGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  corridorBand: {
-    height: 16,
-    borderRadius: 8,
-  },
-  roomTile: {
-    width: '48%',
-    flexGrow: 1,
-    borderRadius: 16,
-    padding: 12,
-    minHeight: 74,
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  roomTileTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 6,
-  },
-  roomTileTitle: {
-    flex: 1,
-    fontFamily: FontFamily.displayBold,
-    fontSize: 13.5,
-  },
-  roomDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  roomTileSub: {
-    fontFamily: FontFamily.sansSemiBold,
-    fontSize: 11.5,
-  },
-  emptyRoomText: {
-    fontFamily: FontFamily.sansRegular,
-    fontSize: 13,
-    textAlign: 'center',
-    paddingVertical: 16,
   },
   selectedCard: {
     borderRadius: 20,
