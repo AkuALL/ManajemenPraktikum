@@ -64,33 +64,86 @@ const INITIAL_STATE: MapLocationState = {
   message: 'Menyiapkan lokasi perangkat…',
 };
 
-const WEB_STATE: MapLocationState = {
-  status: 'unsupported',
-  coordinates: null,
-  message: 'Peta interaktif tersedia saat aplikasi dibuka di Android atau iPhone.',
-};
-
 /**
  * Memantau lokasi hanya selama layar peta terbuka. Subscription selalu dihentikan
  * saat layar dilepas agar tidak membebani baterai atau meninggalkan listener.
  */
 export function useMapLocation() {
-  const [state, setState] = useState<MapLocationState>(() =>
-    Platform.OS === 'web' ? WEB_STATE : INITIAL_STATE,
-  );
+  const [state, setState] = useState<MapLocationState>(INITIAL_STATE);
   const [retryVersion, setRetryVersion] = useState(0);
 
   useEffect(() => {
-    if (Platform.OS === 'web') {
-      return;
-    }
-
     let active = true;
-    let subscription: Location.LocationSubscription | null = null;
-
     const update = (next: MapLocationState) => {
       if (active) setState(next);
     };
+
+    if (Platform.OS === 'web') {
+      if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+        update({
+          status: 'unsupported',
+          coordinates: null,
+          message: 'Browser ini tidak mendukung layanan lokasi.',
+        });
+        return;
+      }
+
+      update(INITIAL_STATE);
+      let watchId: number | null = null;
+
+      const handleWebSuccess = (pos: GeolocationPosition) => {
+        update({
+          status: 'ready',
+          coordinates: {
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+          },
+          message: 'Lokasi browser diperbarui saat peta terbuka.',
+        });
+      };
+
+      const handleWebError = (error: GeolocationPositionError) => {
+        if (error.code === 1) {
+          update({
+            status: 'denied',
+            coordinates: null,
+            message: 'Izin lokasi browser ditolak. Izinkan akses lokasi di browser lalu coba lagi.',
+          });
+          return;
+        }
+        if (error.code === 3) {
+          update({
+            status: 'timeout',
+            coordinates: null,
+            message: 'Pembacaan lokasi melewati batas waktu 15 detik. Coba lagi.',
+          });
+          return;
+        }
+        update({
+          status: 'error',
+          coordinates: null,
+          message: 'Lokasi browser tidak tersedia saat ini. Coba lagi.',
+        });
+      };
+
+      const geoOptions: PositionOptions = {
+        enableHighAccuracy: false,
+        timeout: MAP_LOCATION_TIMEOUT_MS,
+        maximumAge: 10_000,
+      };
+
+      navigator.geolocation.getCurrentPosition(handleWebSuccess, handleWebError, geoOptions);
+      watchId = navigator.geolocation.watchPosition(handleWebSuccess, handleWebError, geoOptions);
+
+      return () => {
+        active = false;
+        if (watchId !== null) {
+          navigator.geolocation.clearWatch(watchId);
+        }
+      };
+    }
+
+    let subscription: Location.LocationSubscription | null = null;
 
     const startWatching = async () => {
       update(INITIAL_STATE);
