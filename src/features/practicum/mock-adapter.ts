@@ -1,3 +1,4 @@
+import { assertPreviousSessionsClosed } from './sequence';
 import type {
   AddMemberInput,
   ClassMember,
@@ -535,6 +536,8 @@ export class MockPracticumAdapter implements PracticumPort {
     if (session.status !== 'scheduled') {
       throw new Error(`Sesi tidak dapat dibuka dari status "${session.status}". Hanya sesi "scheduled" yang dapat dibuka.`);
     }
+
+    assertPreviousSessionsClosed(await this.getSessions(session.classId), sessionId);
 
     session.status = 'open';
     session.openedBy = assistantId;
