@@ -52,6 +52,12 @@ function formatNim(angkatan, jalurMasuk, nomorAbsen) {
   return nim;
 }
 
+const JALUR_RANGES = {
+  '120': { min: 1, max: 55 },
+  '130': { min: 56, max: 122 },
+  '140': { min: 123, max: 202 },
+};
+
 const SEED_ASPRAK = [
   {
     key: 'al',
@@ -60,9 +66,9 @@ const SEED_ASPRAK = [
     displayName: 'Al Rivaldi',
     role: 'assistant',
     angkatan: 22,
-    jalurMasuk: '130',
-    nomorAbsen: 101,
-    identifier: formatNim(22, '130', 101), // 24060122130101
+    jalurMasuk: '120',
+    nomorAbsen: 1,
+    identifier: formatNim(22, '120', 1), // 24060122120001
   },
   {
     key: 'qila',
@@ -71,9 +77,9 @@ const SEED_ASPRAK = [
     displayName: 'Qila Azzahra',
     role: 'assistant',
     angkatan: 22,
-    jalurMasuk: '120',
-    nomorAbsen: 102,
-    identifier: formatNim(22, '120', 102), // 24060122120102
+    jalurMasuk: '130',
+    nomorAbsen: 56,
+    identifier: formatNim(22, '130', 56), // 24060122130056
   },
   {
     key: 'galang',
@@ -83,8 +89,8 @@ const SEED_ASPRAK = [
     role: 'assistant',
     angkatan: 22,
     jalurMasuk: '140',
-    nomorAbsen: 103,
-    identifier: formatNim(22, '140', 103), // 24060122140103
+    nomorAbsen: 123,
+    identifier: formatNim(22, '140', 123), // 24060122140123
   },
   {
     key: 'abhi',
@@ -105,8 +111,8 @@ const SEED_ASPRAK = [
     role: 'assistant',
     angkatan: 23,
     jalurMasuk: '120',
-    nomorAbsen: 102,
-    identifier: formatNim(23, '120', 102), // 24060123120102
+    nomorAbsen: 12,
+    identifier: formatNim(23, '120', 12), // 24060123120012
   },
   {
     key: 'nadia',
@@ -116,14 +122,14 @@ const SEED_ASPRAK = [
     role: 'assistant',
     angkatan: 23,
     jalurMasuk: '140',
-    nomorAbsen: 103,
-    identifier: formatNim(23, '140', 103), // 24060123140103
+    nomorAbsen: 145,
+    identifier: formatNim(23, '140', 145), // 24060123140145
   },
 ];
 
 // 90 Praktikan konkret (tanpa gabungan angkatan dalam satu lab):
-// - 54 praktikan angkatan 24 (absen 101..154) -> mengisi 3 lab @ 18 praktikan
-// - 36 praktikan angkatan 25 (absen 101..136) -> mengisi 2 lab @ 18 praktikan
+// - 54 praktikan angkatan 24 (jalur 120: 001..018, jalur 130: 056..073, jalur 140: 123..140) -> 3 lab @ 18 praktikan
+// - 36 praktikan angkatan 25 (jalur 120: 001..012, jalur 130: 056..067, jalur 140: 123..134) -> 2 lab @ 18 praktikan
 // Total pengguna: 6 Asprak + 90 Praktikan = 96 data pengguna (rentang 50 - 100)
 const STUDENT_PROFILES_24 = [
   ['Wawan Sumanto', '130'],
@@ -221,35 +227,37 @@ const STUDENT_PROFILES_25 = [
   ['Mutiara Sani', '140'],
 ];
 
+function buildStudentsForAngkatan(angkatan, profiles) {
+  const nextAbsenByJalur = {
+    '120': JALUR_RANGES['120'].min,
+    '130': JALUR_RANGES['130'].min,
+    '140': JALUR_RANGES['140'].min,
+  };
+
+  return profiles.map(([displayName, jalurMasuk]) => {
+    const nomorAbsen = nextAbsenByJalur[jalurMasuk];
+    if (nomorAbsen === undefined) {
+      throw new Error(`Jalur masuk tidak dikenal: ${jalurMasuk}`);
+    }
+    nextAbsenByJalur[jalurMasuk] += 1;
+    const absenStr = String(nomorAbsen).padStart(3, '0');
+    const nim = formatNim(angkatan, jalurMasuk, nomorAbsen);
+    return {
+      email: `praktikan${angkatan}.${absenStr}@praktikum.ac.id`,
+      password: SEED_PASSWORD,
+      displayName,
+      role: 'student',
+      angkatan,
+      jalurMasuk,
+      nomorAbsen,
+      identifier: nim,
+    };
+  });
+}
+
 const SEED_STUDENTS = [
-  ...STUDENT_PROFILES_24.map(([displayName, jalurMasuk], idx) => {
-    const nomorAbsen = 101 + idx;
-    const nim = formatNim(24, jalurMasuk, nomorAbsen);
-    return {
-      email: `praktikan24.${nomorAbsen}@praktikum.ac.id`,
-      password: SEED_PASSWORD,
-      displayName,
-      role: 'student',
-      angkatan: 24,
-      jalurMasuk,
-      nomorAbsen,
-      identifier: nim,
-    };
-  }),
-  ...STUDENT_PROFILES_25.map(([displayName, jalurMasuk], idx) => {
-    const nomorAbsen = 101 + idx;
-    const nim = formatNim(25, jalurMasuk, nomorAbsen);
-    return {
-      email: `praktikan25.${nomorAbsen}@praktikum.ac.id`,
-      password: SEED_PASSWORD,
-      displayName,
-      role: 'student',
-      angkatan: 25,
-      jalurMasuk,
-      nomorAbsen,
-      identifier: nim,
-    };
-  }),
+  ...buildStudentsForAngkatan(24, STUDENT_PROFILES_24),
+  ...buildStudentsForAngkatan(25, STUDENT_PROFILES_25),
 ];
 
 const SEED_ACCOUNTS = [...SEED_ASPRAK, ...SEED_STUDENTS];
@@ -325,20 +333,18 @@ const SEED_LABS = [
   },
 ];
 
-// Distribusi 5 lab praktikum (tanpa gabungan angkatan dalam satu lab):
-// - Setiap lab memiliki tepat 2 asprak & 18 praktikan dari 1 angkatan yang sama
-// - Al memegang 2 lab beda matkul (Daspro A1 & Struktur Data B1) dengan pasangan beda (Qila, Raka)
-// - Qila memegang 2 lab beda matkul (Daspro A1 & Basis Data B2) dengan pasangan beda (Al, Nadia)
-// - Galang memegang 2 lab beda matkul (Daspro A2 & Sistem Operasi A1) dengan pasangan beda (Abhi, Nadia)
-// - Nadia memegang 2 lab beda matkul (Basis Data B2 & Sistem Operasi A1) dengan pasangan beda (Qila, Galang)
-// - Daspro A1 (Al, Qila) dan Daspro A2 (Galang, Abhi) tidak memiliki asprak yang sama
+// Distribusi 5 lab praktikum (tanpa gabungan angkatan praktikan & pasangan asprak seangkatan):
+// - Setiap lab memiliki tepat 2 asprak dengan angkatan SAMA & 18 praktikan dari 1 angkatan yang sama
+// - Pasangan Asprak Angkatan 22: (Al & Qila), (Al & Galang), (Qila & Galang)
+// - Pasangan Asprak Angkatan 23: (Abhi & Raka), (Abhi & Nadia)
+// - Daspro A1 (Al, Qila) dan Daspro A2 (Abhi, Raka) tidak memiliki asprak yang sama
 const SEED_PRACTICUM_COURSES = [
   {
     courseName: 'Dasar Pemrograman',
     className: 'A1',
     labId: 'lab-informatika-b',
     lab: 'Lab Informatika B',
-    asprakKeys: ['al', 'qila'],
+    asprakKeys: ['al', 'qila'], // keduanya angkatan 22
     studentRange: [0, 18], // 18 praktikan murni angkatan 24
   },
   {
@@ -346,7 +352,7 @@ const SEED_PRACTICUM_COURSES = [
     className: 'A2',
     labId: 'lab-informatika-c',
     lab: 'Lab Informatika C',
-    asprakKeys: ['galang', 'abhi'],
+    asprakKeys: ['abhi', 'raka'], // keduanya angkatan 23
     studentRange: [18, 36], // 18 praktikan murni angkatan 24
   },
   {
@@ -354,7 +360,7 @@ const SEED_PRACTICUM_COURSES = [
     className: 'B1',
     labId: 'lab-informatika-d',
     lab: 'Lab Informatika D',
-    asprakKeys: ['al', 'raka'],
+    asprakKeys: ['al', 'galang'], // keduanya angkatan 22
     studentRange: [36, 54], // 18 praktikan murni angkatan 24
   },
   {
@@ -362,7 +368,7 @@ const SEED_PRACTICUM_COURSES = [
     className: 'B2',
     labId: 'dekanat-fsm',
     lab: 'Lab AP (Dekanat FSM UNDIP)',
-    asprakKeys: ['qila', 'nadia'],
+    asprakKeys: ['qila', 'galang'], // keduanya angkatan 22
     studentRange: [54, 72], // 18 praktikan murni angkatan 25
   },
   {
@@ -370,13 +376,15 @@ const SEED_PRACTICUM_COURSES = [
     className: 'A1',
     labId: 'lab-informatika-a',
     lab: 'Lab Informatika A',
-    asprakKeys: ['galang', 'nadia'],
+    asprakKeys: ['abhi', 'nadia'], // keduanya angkatan 23
     studentRange: [72, 90], // 18 praktikan murni angkatan 25
   },
 ];
 
 function assertSeedDatasetIntegrity() {
   const nimSet = new Set();
+  const absenPerAngkatan = new Map();
+
   for (const acc of SEED_ACCOUNTS) {
     if (typeof acc.identifier !== 'string' || acc.identifier.length !== 14) {
       throw new Error(`NIM invalid untuk ${acc.displayName}: ${acc.identifier}`);
@@ -388,6 +396,22 @@ function assertSeedDatasetIntegrity() {
       throw new Error(`NIM duplikat ditemukan di seeder: ${acc.identifier}`);
     }
     nimSet.add(acc.identifier);
+
+    const range = JALUR_RANGES[acc.jalurMasuk];
+    if (!range || acc.nomorAbsen < range.min || acc.nomorAbsen > range.max) {
+      throw new Error(
+        `Nomor absen ${acc.nomorAbsen} di luar rentang jalur ${acc.jalurMasuk} untuk ${acc.displayName} (${acc.identifier}).`,
+      );
+    }
+
+    if (!absenPerAngkatan.has(acc.angkatan)) {
+      absenPerAngkatan.set(acc.angkatan, new Set());
+    }
+    const angkatanAbsenSet = absenPerAngkatan.get(acc.angkatan);
+    if (angkatanAbsenSet.has(acc.nomorAbsen)) {
+      throw new Error(`Nomor absen duplikat (${acc.nomorAbsen}) pada angkatan ${acc.angkatan}.`);
+    }
+    angkatanAbsenSet.add(acc.nomorAbsen);
   }
 
   const asprakByKey = new Map(SEED_ASPRAK.map((a) => [a.key, a]));
@@ -403,6 +427,13 @@ function assertSeedDatasetIntegrity() {
       throw new Error(`Pasangan asprak berulang di seeder: ${pairKey}`);
     }
     pairSet.add(pairKey);
+
+    const asprakAngkatanSet = new Set(cls.asprakKeys.map((k) => asprakByKey.get(k).angkatan));
+    if (asprakAngkatanSet.size !== 1) {
+      throw new Error(
+        `Pasangan asprak di kelas ${cls.courseName} ${cls.className} harus berada pada angkatan yang sama (${[...asprakAngkatanSet].join(', ')}).`,
+      );
+    }
 
     if (!courseAsprakMap.has(cls.courseName)) {
       courseAsprakMap.set(cls.courseName, new Set());
@@ -493,6 +524,7 @@ function buildDryRunSummary() {
       mataKuliah: cls.courseName,
       kelas: cls.className,
       lab: cls.lab,
+      angkatanAsprak: asprakByKey.get(cls.asprakKeys[0])?.angkatan,
       angkatanPraktikan: students[0]?.angkatan,
       jumlahPraktikan: students.length,
       asprak: aspraks.join(' & '),
