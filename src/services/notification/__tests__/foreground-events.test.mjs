@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { getLeaveEvents, getSessionEvents } from '../foreground-events.ts';
+
+const session = { id: 's1', title: 'Pertemuan 1', location: 'Lab B', status: 'scheduled' };
+const leave = { id: 'l1', status: 'pending' };
+
+test('sesi baru dan sesi dibuka menghasilkan notifikasi satu kali per perubahan', () => {
+  assert.equal(getSessionEvents([], [session])[0].title, 'Sesi Praktikum Baru');
+  assert.equal(getSessionEvents([session], [{ ...session, status: 'open' }])[0].title, 'Sesi Praktikum Dibuka');
+  assert.deepEqual(getSessionEvents([session], [session]), []);
+});
+
+test('izin baru untuk asisten dan keputusan untuk praktikan', () => {
+  assert.equal(getLeaveEvents([], [leave], 'assistant')[0].route, '/review-izin');
+  assert.deepEqual(getLeaveEvents([], [leave], 'student'), []);
+  assert.match(getLeaveEvents([leave], [{ ...leave, status: 'approved' }], 'student')[0].title, /Disetujui/);
+  assert.match(getLeaveEvents([leave], [{ ...leave, status: 'rejected' }], 'student')[0].title, /Ditolak/);
+  assert.deepEqual(getLeaveEvents([leave], [leave], 'assistant'), []);
+});

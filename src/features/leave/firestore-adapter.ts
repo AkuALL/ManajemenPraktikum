@@ -232,6 +232,7 @@ export const firestoreLeaveAdapter: LeavePort = {
     const snapshots = new Map<number, { requests: LeaveRequest[]; fromCache: boolean }>();
 
     const publish = () => {
+      if (snapshots.size < chunks.length) return;
       const requests = Array.from(snapshots.values()).flatMap((snapshot) => snapshot.requests);
       onData(sortLeaveRequests(requests), {
         fromCache: Array.from(snapshots.values()).some((snapshot) => snapshot.fromCache),

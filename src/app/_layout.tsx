@@ -30,7 +30,7 @@ import {
   configureForegroundNotificationHandler,
   useNotificationDeepLinking,
 } from '@/services/notification/deep-linking';
-import { registerDevicePushToken } from '@/services/notification/token-service';
+import { ForegroundNotificationHost } from '@/services/notification/foreground-notification-host';
 
 void SplashScreen.preventAutoHideAsync();
 configureForegroundNotificationHandler();
@@ -88,11 +88,6 @@ function RoleAwareApp({ backgroundColor }: { backgroundColor: string }) {
     role: user?.role,
   });
 
-  useEffect(() => {
-    if (!isAuthenticated || !user?.uid) return;
-    void registerDevicePushToken(user.uid);
-  }, [isAuthenticated, user?.uid]);
-
   if (status === 'loading') {
     return (
       <SafeAreaView style={[styles.safeArea, { backgroundColor }]} edges={['top', 'bottom']}>
@@ -135,6 +130,7 @@ function RoleAwareApp({ backgroundColor }: { backgroundColor: string }) {
         </Stack>
       </View>
       {isAuthenticated ? <RoleTabBar /> : null}
+      {isAuthenticated ? <ForegroundNotificationHost key={`${user.uid}:${user.role}`} role={user.role} /> : null}
     </SafeAreaView>
   );
 }
