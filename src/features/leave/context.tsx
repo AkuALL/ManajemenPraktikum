@@ -14,10 +14,6 @@ import type { LeaveRequest, SessionSummary } from '@/types';
 
 import { firestoreLeaveAdapter } from './firestore-adapter';
 import {
-  dispatchLeaveDecisionNotification,
-  dispatchLeaveSubmittedNotification,
-} from './leave-notification';
-import {
   isLeaveEligibleStatus,
   LeavePortError,
   type LeavePort,
@@ -153,13 +149,6 @@ export function LeaveProvider({
       try {
         const request = await port.createLeaveRequest({ session, user, reason });
         void requestClassification(request.id, reason);
-        void dispatchLeaveSubmittedNotification({
-          leaveRequestId: request.id,
-          classId: session.classId,
-          sessionId: session.id,
-          studentName: user.displayName,
-          reason,
-        }).catch(() => undefined);
         return { ok: true, request };
       } catch (error) {
         return {
@@ -194,28 +183,14 @@ export function LeaveProvider({
       leaveRequestId: string,
       decision: 'approved' | 'rejected',
       reviewNote?: string,
-      notificationMeta?: LeaveReviewNotificationMeta,
+      _notificationMeta?: LeaveReviewNotificationMeta,
     ) => {
       if (!user || user.role !== 'assistant') {
         throw new LeavePortError('forbidden', 'Hanya Asisten yang dapat memutuskan izin.');
       }
       await port.reviewLeaveRequest(leaveRequestId, user.uid, decision, reviewNote);
 
-      if (
-        notificationMeta?.studentId &&
-        notificationMeta?.sessionId &&
-        notificationMeta?.classId
-      ) {
-        void dispatchLeaveDecisionNotification({
-          leaveRequestId,
-          studentId: notificationMeta.studentId,
-          sessionId: notificationMeta.sessionId,
-          classId: notificationMeta.classId,
-          decision,
-          sessionTitle: notificationMeta.sessionTitle,
-          reviewNote,
-        }).catch(() => undefined);
-      }
+
     },
     [port, user],
   );
