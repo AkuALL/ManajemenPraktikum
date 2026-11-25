@@ -35,13 +35,11 @@ type NotificationItem = {
 };
 
 type NotificationCenterState = {
-  markedReadAll: boolean;
   readIds: string[];
   dismissedIds: string[];
 };
 
 let centerState: NotificationCenterState = {
-  markedReadAll: false,
   readIds: [],
   dismissedIds: [],
 };
@@ -62,14 +60,13 @@ function getSnapshot() {
   return centerState;
 }
 
-function markAllNotificationsRead() {
-  if (centerState.markedReadAll) return;
-  centerState = { ...centerState, markedReadAll: true };
+function markAllNotificationsRead(ids: string[]) {
+  centerState = { ...centerState, readIds: Array.from(new Set([...centerState.readIds, ...ids])) };
   emitChange();
 }
 
 function markNotificationRead(id: string) {
-  if (centerState.markedReadAll || centerState.readIds.includes(id)) return;
+  if (centerState.readIds.includes(id)) return;
   centerState = { ...centerState, readIds: [...centerState.readIds, id] };
   emitChange();
 }
@@ -109,7 +106,7 @@ function useNotificationItems(enabled: boolean): NotificationItem[] {
     enabled && isAssistant,
   );
   const { requests } = useLeave();
-  const { markedReadAll, readIds, dismissedIds } = useSyncExternalStore(
+  const { readIds, dismissedIds } = useSyncExternalStore(
     subscribe,
     getSnapshot,
     getSnapshot,
@@ -124,12 +121,12 @@ function useNotificationItems(enabled: boolean): NotificationItem[] {
         .map((req) => {
           const session = sessions.find((s) => s.id === req.sessionId);
           const cls = classById.get(req.classId);
-          const id = `assistant-leave-${req.id}`;
+          const id = `${user?.uid}-assistant-leave-${req.id}`;
           return {
             id,
             title: `Pengajuan izin baru · ${session?.courseName ?? session?.title ?? cls?.courseName ?? 'Praktikum'}`,
             meta: formatReasonPreview(req.reason),
-            unread: !markedReadAll && !readIds.includes(id),
+            unread: !readIds.includes(id),
             targetRoute: APP_ROUTES.ASSISTANT_LEAVE_REVIEW,
             timestampMs: req.hasPendingWrites
               ? Number.MAX_SAFE_INTEGER
@@ -151,12 +148,12 @@ function useNotificationItems(enabled: boolean): NotificationItem[] {
               : req.status === 'rejected'
                 ? 'ditolak'
                 : 'menunggu konfirmasi';
-          const id = `leave-${req.id}`;
+          const id = `${user?.uid}-leave-${req.id}-${req.status}`;
           return {
             id,
             title: `Izin ${session?.courseName ?? session?.title ?? 'Praktikum'} ${statusText}`,
             meta: req.reviewedBy ? 'Diperbarui asisten' : 'Pengajuan aktif',
-            unread: !markedReadAll && !readIds.includes(id) && req.status !== 'pending',
+            unread: !readIds.includes(id) && req.status !== 'pending',
             timestampMs: req.hasPendingWrites
               ? Number.MAX_SAFE_INTEGER
               : (req.reviewedAtMs ?? req.updatedAtMs ?? req.createdAtMs ?? 0),
@@ -176,12 +173,12 @@ function useNotificationItems(enabled: boolean): NotificationItem[] {
       .sort((a, b) => b.timestampMs - a.timestampMs)
       .slice(0, 2)
       .forEach(({ session: s, timestampMs }) => {
-        const id = `session-${s.id}`;
+        const id = `${user?.uid}-session-${s.id}`;
         result.push({
           id,
           title: `${s.courseName ?? s.title} sedang dibuka`,
           meta: `${formatSessionTime(s.startsAt)} · ${s.location}`,
-          unread: !markedReadAll && !readIds.includes(id),
+          unread: !readIds.includes(id),
           timestampMs,
         });
       });
@@ -196,10 +193,11 @@ function useNotificationItems(enabled: boolean): NotificationItem[] {
       .slice(0, 2)
       .forEach(({ session: s, timestampMs }) => {
         result.push({
-          id: `upcoming-${s.id}`,
-          title: `Pengingat sesi ${s.title}`,
+          id: `${user?.uid}-upcoming-${s.id}`,
+          title: `Sesi baru ? ${s.title}`,
           meta: `${formatSessionTime(s.startsAt)} · ${s.location}`,
-          unread: false,
+          unread: user?.role === 'student' && !readIds.includes(`${user.uid}-upcoming-${s.id}`),
+          targetRoute: APP_ROUTES.SCHEDULE,
           timestampMs,
         });
       });
@@ -212,11 +210,10 @@ function useNotificationItems(enabled: boolean): NotificationItem[] {
     classById,
     dismissedIds,
     isAssistant,
-    markedReadAll,
     readIds,
     requests,
     sessions,
-    user?.role,
+    user,
   ]);
 }
 
@@ -383,7 +380,7 @@ export function NotificationsBottomSheet({
           <Pressable
             accessibilityRole="button"
             disabled={unreadCount === 0}
-            onPress={markAllNotificationsRead}
+            onPress={() => markAllNotificationsRead(items.filter((item) => item.unread).map((item) => item.id))}
             style={({ pressed }) => [
               styles.markBtn,
               { backgroundColor: colors.surfaceMuted },

@@ -12,10 +12,6 @@ import {
 } from './types';
 import { PracticumPort } from './port';
 import type { Firestore } from 'firebase/firestore';
-import {
-  dispatchScheduleChangedNotification,
-  dispatchSessionOpenedNotification,
-} from '@/services/notification/push-sender';
 
 function formatTimestamp(ts: any): string {
   if (!ts) return new Date().toISOString();
@@ -712,20 +708,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
     await updateDoc(sessionRef, updatePayload);
 
-    const sessionScheduleChanged =
-      (input.location !== undefined && input.location !== current.location) ||
-      (input.labId !== undefined && input.labId !== current.labId) ||
-      (input.startsAt !== undefined && new Date(input.startsAt).getTime() !== parseSessionDate(current.startsAt).getTime()) ||
-      (input.endsAt !== undefined && new Date(input.endsAt).getTime() !== parseSessionDate(current.endsAt).getTime());
 
-    if (sessionScheduleChanged) {
-      void dispatchScheduleChangedNotification({
-        sessionId,
-        classId: current.classId,
-        title: input.title ?? current.title ?? 'Sesi praktikum',
-        location: input.location ?? current.location ?? input.locationName ?? 'Laboratorium',
-      });
-    }
   }
 
   async deleteSession(sessionId: string, assistantId?: string): Promise<void> {
@@ -792,12 +775,7 @@ export class FirestorePracticumAdapter implements PracticumPort {
       updatedAt: serverTimestamp(),
     });
 
-    void dispatchSessionOpenedNotification({
-      sessionId,
-      classId: data.classId,
-      title: data.title ?? 'Sesi praktikum',
-      location: data.location ?? data.locationName ?? 'Laboratorium',
-    });
+
   }
 
   async closeSession(sessionId: string, assistantId: string): Promise<void> {

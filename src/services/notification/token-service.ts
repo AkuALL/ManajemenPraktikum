@@ -21,9 +21,9 @@ export async function registerDevicePushToken(userId: string): Promise<PushRegis
 
   try {
     if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('default', {
+      await Notifications.setNotificationChannelAsync('practicum-alerts', {
         name: 'Notifikasi praktikum',
-        importance: AndroidImportance.DEFAULT,
+        importance: AndroidImportance.HIGH,
       });
     }
 
