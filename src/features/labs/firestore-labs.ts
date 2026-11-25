@@ -12,7 +12,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase';
-import { FSM_UNDIP_LABS } from './fsm-undip-labs';
+import { DEFAULT_LAB_RADIUS_METERS, FSM_UNDIP_LABS } from './fsm-undip-labs';
 
 export type StoredLab = {
   id: string;
@@ -40,7 +40,8 @@ function readLab(id: string, value: Record<string, unknown>): StoredLab | null {
     capacity: typeof value.capacity === 'number' ? value.capacity : 32,
     latitude: value.latitude,
     longitude: value.longitude,
-    radiusMeters: typeof value.radiusMeters === 'number' ? value.radiusMeters : 10,
+    radiusMeters:
+      typeof value.radiusMeters === 'number' ? value.radiusMeters : DEFAULT_LAB_RADIUS_METERS,
     isActive: value.isActive !== false,
     plusCode: typeof value.plusCode === 'string' ? value.plusCode : undefined,
     pointType: typeof value.pointType === 'string' ? value.pointType : undefined,
@@ -114,15 +115,19 @@ export function useLabs() {
     );
   };
 
-  /** Memigrasikan radius data referensi lama (65 m) ke kebijakan 10 m tanpa menyentuh lab kustom. */
+  /** Memigrasikan radius data referensi lama (10 m / 65 m) ke kebijakan 50 m tanpa menyentuh lab kustom. */
   const syncDefaultLabRadius = async () => {
+    const legacyDefaultRadii = new Set([10, 65]);
+    const seededLabIds = Array.from(
+      new Set(['lab-informatika-a', ...FSM_UNDIP_LABS.map((lab) => lab.id)]),
+    );
     await Promise.all(
-      FSM_UNDIP_LABS.map(async (lab) => {
-        const reference = doc(db, 'labs', lab.id);
+      seededLabIds.map(async (labId) => {
+        const reference = doc(db, 'labs', labId);
         const snapshot = await getDoc(reference);
-        if (snapshot.exists() && snapshot.data().radiusMeters === 65) {
+        if (snapshot.exists() && legacyDefaultRadii.has(snapshot.data().radiusMeters)) {
           await updateDoc(reference, {
-            radiusMeters: lab.radiusMeters,
+            radiusMeters: DEFAULT_LAB_RADIUS_METERS,
             updatedAt: serverTimestamp(),
           });
         }

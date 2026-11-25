@@ -271,7 +271,7 @@ const SEED_LABS = [
     capacity: 32,
     latitude: -7.0482375,
     longitude: 110.440765625,
-    radiusMeters: 10,
+    radiusMeters: 50,
     isActive: true,
     plusCode: '6P4GXC2R+P82',
     pointType: 'building_map_reference',
@@ -285,7 +285,7 @@ const SEED_LABS = [
     capacity: 32,
     latitude: -7.0482375,
     longitude: 110.440765625,
-    radiusMeters: 10,
+    radiusMeters: 50,
     isActive: true,
     plusCode: '6P4GXC2R+P82',
     pointType: 'building_map_reference',
@@ -298,7 +298,7 @@ const SEED_LABS = [
     floor: 2,
     latitude: -7.0482375,
     longitude: 110.440765625,
-    radiusMeters: 10,
+    radiusMeters: 50,
     isActive: true,
     plusCode: '6P4GXC2R+P82',
     pointType: 'building_map_reference',
@@ -311,7 +311,7 @@ const SEED_LABS = [
     floor: 2,
     latitude: -7.0482375,
     longitude: 110.440765625,
-    radiusMeters: 10,
+    radiusMeters: 50,
     isActive: true,
     plusCode: '6P4GXC2R+P82',
     pointType: 'building_map_reference',
@@ -325,7 +325,7 @@ const SEED_LABS = [
     capacity: 32,
     latitude: -7.0490375,
     longitude: 110.441484375,
-    radiusMeters: 10,
+    radiusMeters: 50,
     isActive: true,
     plusCode: '6P4GXC2R+9HQ',
     pointType: 'building_map_reference',
@@ -720,6 +720,9 @@ async function main() {
       if (!hasActiveSession) {
         const start = new Date();
         start.setDate(start.getDate() + index + 1);
+        while (start.getDay() === 0 || start.getDay() === 6) {
+          start.setDate(start.getDate() + 1);
+        }
         start.setHours(8, 0, 0, 0);
         const end = new Date(start);
         end.setHours(10, 0, 0, 0);

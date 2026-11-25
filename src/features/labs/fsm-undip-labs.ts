@@ -7,6 +7,8 @@ export type FsmUndipLab = LabLocation & {
   plusCode: string;
 };
 
+export const DEFAULT_LAB_RADIUS_METERS = 50;
+
 /**
  * Titik referensi gedung dari data koordinat FSM UNDIP yang diberikan tim.
  * Ini bukan titik ruang hasil survei; Lab B/C/D berbagi titik Gedung E.
@@ -19,7 +21,7 @@ export const FSM_UNDIP_LABS: readonly FsmUndipLab[] = [
     floor: 2,
     latitude: -7.0482375,
     longitude: 110.440765625,
-    radiusMeters: 10,
+    radiusMeters: DEFAULT_LAB_RADIUS_METERS,
     isActive: true,
     plusCode: '6P4GXC2R+P82',
     pointType: 'building_map_reference',
@@ -32,7 +34,7 @@ export const FSM_UNDIP_LABS: readonly FsmUndipLab[] = [
     floor: 2,
     latitude: -7.0482375,
     longitude: 110.440765625,
-    radiusMeters: 10,
+    radiusMeters: DEFAULT_LAB_RADIUS_METERS,
     isActive: true,
     plusCode: '6P4GXC2R+P82',
     pointType: 'building_map_reference',
@@ -45,7 +47,7 @@ export const FSM_UNDIP_LABS: readonly FsmUndipLab[] = [
     floor: 2,
     latitude: -7.0482375,
     longitude: 110.440765625,
-    radiusMeters: 10,
+    radiusMeters: DEFAULT_LAB_RADIUS_METERS,
     isActive: true,
     plusCode: '6P4GXC2R+P82',
     pointType: 'building_map_reference',
@@ -58,7 +60,7 @@ export const FSM_UNDIP_LABS: readonly FsmUndipLab[] = [
     floor: null,
     latitude: -7.0490375,
     longitude: 110.441484375,
-    radiusMeters: 10,
+    radiusMeters: DEFAULT_LAB_RADIUS_METERS,
     isActive: true,
     plusCode: '6P4GXC2R+9HQ',
     pointType: 'building_map_reference',

@@ -426,7 +426,7 @@ export default function MasterLabScreen() {
                 value={draftRadius}
                 onChangeText={setDraftRadius}
                 keyboardType="number-pad"
-                placeholder="10"
+                placeholder="50"
                 placeholderTextColor={colors.textSubtle}
                 style={[styles.input, styles.coordinateInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
               />
@@ -506,7 +506,7 @@ export default function MasterLabScreen() {
             longitude={pickerCoords.longitude}
             radiusMeters={(() => {
               const val = Number(draftRadius.trim().replace(',', '.'));
-              return Number.isFinite(val) && val >= 10 && val <= 500 ? val : 10;
+              return Number.isFinite(val) && val >= 10 && val <= 500 ? val : 50;
             })()}
             onSelectCoordinate={setPickerCoords}
           />

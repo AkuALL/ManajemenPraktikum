@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
 import {
+  CalendarClock,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -85,7 +86,7 @@ function buildWeekStrip(sessions: PracticumSession[], anchorDateStr: string): Da
   );
 
   const days: DayChip[] = [];
-  for (let i = 0; i < 7; i += 1) {
+  for (let i = 0; i < 5; i += 1) {
     const current = new Date(monday);
     current.setDate(monday.getDate() + i);
     const iso = toIsoDateLocal(current);
@@ -221,6 +222,11 @@ export function BerandaScreen() {
       return;
     }
     setEditingSession(null);
+    setFormVisible(true);
+  };
+
+  const handleOpenRescheduleSession = (session: PracticumSession) => {
+    setEditingSession(session);
     setFormVisible(true);
   };
 
@@ -645,10 +651,32 @@ export function BerandaScreen() {
                             </Text>
                           </View>
 
-                          <View style={[styles.compactBadge, { backgroundColor: colors.pacificSoft }]}>
-                            <Text style={[styles.compactBadgeText, { color: colors.pacificDark }]}>
-                              {extractModuleTag(item.title, idx)}
-                            </Text>
+                          <View style={styles.compactRightActions}>
+                            <View style={[styles.compactBadge, { backgroundColor: colors.pacificSoft }]}>
+                              <Text style={[styles.compactBadgeText, { color: colors.pacificDark }]}>
+                                {extractModuleTag(item.title, idx)}
+                              </Text>
+                            </View>
+                            {isAssistant ? (
+                              <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel={`Reschedule ${item.title}`}
+                                onPress={() => handleOpenRescheduleSession(item)}
+                                style={({ pressed }) => [
+                                  styles.compactRescheduleBtn,
+                                  {
+                                    backgroundColor: colors.balticSoft,
+                                    borderColor: colors.border,
+                                  },
+                                  pressed && styles.pressed,
+                                ]}
+                              >
+                                <CalendarClock size={13} color={colors.baltic} strokeWidth={2.2} />
+                                <Text style={[styles.compactRescheduleText, { color: colors.baltic }]}>
+                                  Reschedule
+                                </Text>
+                              </Pressable>
+                            ) : null}
                           </View>
                         </Pressable>
                       ))}
@@ -762,7 +790,10 @@ export function BerandaScreen() {
         visible={formVisible}
         classes={classes}
         initialSession={editingSession}
-        onClose={() => setFormVisible(false)}
+        onClose={() => {
+          setFormVisible(false);
+          setEditingSession(null);
+        }}
         onSubmit={handleSessionFormSubmit}
       />
     </View>
@@ -1063,6 +1094,10 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     lineHeight: 19,
   },
+  compactRightActions: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
   compactBadge: {
     borderRadius: 999,
     paddingHorizontal: 10,
@@ -1071,6 +1106,19 @@ const styles = StyleSheet.create({
   compactBadgeText: {
     fontFamily: FontFamily.sansSemiBold,
     fontSize: 11,
+  },
+  compactRescheduleBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  compactRescheduleText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 10.5,
   },
   emptyCard: {
     borderRadius: 20,

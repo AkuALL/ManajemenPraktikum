@@ -634,6 +634,9 @@ export class FirestorePracticumAdapter implements PracticumPort {
     if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
       throw new Error('Format timestamp waktu mulai atau selesai tidak valid');
     }
+    if (startDate.getDay() === 0 || startDate.getDay() === 6) {
+      throw new Error('Jadwal praktikum tidak dapat dijadwalkan pada hari Sabtu atau Minggu');
+    }
     if (startDate >= endDate) {
       throw new Error('Waktu selesai harus lebih lambat dari waktu mulai');
     }
@@ -697,6 +700,9 @@ export class FirestorePracticumAdapter implements PracticumPort {
 
       if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
         throw new Error('Format timestamp waktu mulai atau selesai tidak valid');
+      }
+      if (startDate.getDay() === 0 || startDate.getDay() === 6) {
+        throw new Error('Jadwal praktikum tidak dapat dipindahkan ke hari Sabtu atau Minggu');
       }
       if (startDate >= endDate) {
         throw new Error('Waktu selesai harus lebih lambat dari waktu mulai');

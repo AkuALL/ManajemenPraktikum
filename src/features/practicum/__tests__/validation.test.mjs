@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  defaultSessionDate,
   detectSessionSlotId,
   extractCohortYear,
   filterStudentCandidates,
+  isWeekendDate,
   SESSION_TIME_SLOTS,
   sessionDateInput,
   sessionTimeInput,
@@ -53,14 +55,17 @@ test('FR-14: session input rejects malformed dates, times, and reversed ranges',
 });
 
 test('FR-14: valid session input creates Firebase-compatible ISO timestamps', () => {
-  const result = validateSessionInput({
-    classId: ' class-1 ',
-    title: ' Modul 1 ',
-    location: ' Lab 1 ',
-    date: '2026-11-25',
-    startsAt: '08:00',
-    endsAt: '10:30',
-  });
+  const result = validateSessionInput(
+    {
+      classId: ' class-1 ',
+      title: ' Modul 1 ',
+      location: ' Lab 1 ',
+      date: '2026-11-25',
+      startsAt: '08:00',
+      endsAt: '10:30',
+    },
+    { now: new Date('2026-11-24T08:00:00') },
+  );
 
   assert.ok('value' in result);
   assert.equal(result.value.classId, 'class-1');
@@ -140,4 +145,60 @@ test('SESSION_TIME_SLOTS, detectSessionSlotId, and past timestamp validation enf
     error: 'Waktu mulai sesi baru tidak boleh berada di masa lalu',
   });
   assert.ok('value' in validateSessionInput(pastInput, { allowPast: true, now: nowRef }));
+});
+
+test('weekday-only schedule rules reject Saturday and Sunday and default weekend to Monday', () => {
+  // 2026-11-28 is Saturday, 2026-11-29 is Sunday, 2026-11-30 is Monday
+  assert.equal(isWeekendDate('2026-11-28'), true);
+  assert.equal(isWeekendDate('2026-11-29'), true);
+  assert.equal(isWeekendDate('2026-11-30'), false);
+
+  assert.equal(defaultSessionDate(new Date('2026-11-28T10:00:00')), '2026-11-30');
+  assert.equal(defaultSessionDate(new Date('2026-11-29T10:00:00')), '2026-11-30');
+  assert.equal(defaultSessionDate(new Date('2026-11-25T10:00:00')), '2026-11-25');
+
+  const nowRef = new Date('2026-11-24T08:00:00');
+  const saturdayRes = validateSessionInput(
+    {
+      classId: 'class-1',
+      title: 'Sesi Sabtu',
+      location: 'Lab Informatika B',
+      date: '2026-11-28',
+      startsAt: '08:00',
+      endsAt: '10:00',
+    },
+    { now: nowRef },
+  );
+  assert.deepEqual(saturdayRes, {
+    error: 'Jadwal praktikum tidak dapat dijadwalkan pada hari Sabtu atau Minggu',
+  });
+
+  const sundayReschedule = validateSessionInput(
+    {
+      classId: 'class-1',
+      title: 'Reschedule Minggu',
+      location: 'Lab Informatika B',
+      date: '2026-11-29',
+      startsAt: '08:00',
+      endsAt: '10:00',
+    },
+    { allowPast: true, now: nowRef },
+  );
+  assert.deepEqual(sundayReschedule, {
+    error: 'Jadwal praktikum tidak dapat dijadwalkan pada hari Sabtu atau Minggu',
+  });
+
+  const mondayReschedule = validateSessionInput(
+    {
+      classId: 'class-1',
+      title: 'Reschedule Senin',
+      location: 'Lab Informatika B',
+      date: '2026-11-30',
+      startsAt: '13:00',
+      endsAt: '15:00',
+    },
+    { allowPast: true, now: nowRef },
+  );
+  assert.ok('value' in mondayReschedule);
+  assert.equal(mondayReschedule.value.date, '2026-11-30');
 });

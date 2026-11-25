@@ -144,8 +144,19 @@ function toLocalTimeInput(value: Date) {
   return `${hours}:${minutes}`;
 }
 
-export function defaultSessionDate() {
-  return toLocalDateInput(new Date());
+export function isWeekendDate(value: string): boolean {
+  if (!isValidDate(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const dayOfWeek = new Date(year, month - 1, day).getDay();
+  return dayOfWeek === 0 || dayOfWeek === 6;
+}
+
+export function defaultSessionDate(referenceDate = new Date()) {
+  const next = new Date(referenceDate);
+  while (next.getDay() === 0 || next.getDay() === 6) {
+    next.setDate(next.getDate() + 1);
+  }
+  return toLocalDateInput(next);
 }
 
 export function sessionDateInput(value?: string, fallback?: string): string {
@@ -202,6 +213,9 @@ export function validateSessionInput(
   if (location.length < 2) return { error: 'Lokasi praktikum minimal 2 karakter' };
   if (location.length > 120) return { error: 'Lokasi praktikum maksimal 120 karakter' };
   if (!isValidDate(date)) return { error: 'Tanggal harus berformat YYYY-MM-DD dan valid' };
+  if (isWeekendDate(date)) {
+    return { error: 'Jadwal praktikum tidak dapat dijadwalkan pada hari Sabtu atau Minggu' };
+  }
   if (!TIME_PATTERN.test(startsAt) || !TIME_PATTERN.test(endsAt)) {
     return { error: 'Waktu mulai dan selesai harus berformat HH:mm' };
   }
