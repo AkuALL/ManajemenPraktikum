@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, MapPin, RefreshCw, Zap } from 'lucide-react-native';
@@ -26,6 +26,7 @@ export default function ScanQrScreen() {
   const { records, submitAttendance } = useAttendance();
   const location = useAttendanceLocation(user?.role === 'student');
   const [permission, requestPermission] = useCameraPermissions();
+  const scanLock = useRef(false);
   const [flashOn, setFlashOn] = useState(false);
   const [rawQr, setRawQr] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -52,7 +53,12 @@ export default function ScanQrScreen() {
       : null;
 
   const submitQr = async (value: string) => {
-    if (!activeSession || existing || submitting) return;
+    if (scanLock.current || existing || submitting) return;
+    scanLock.current = true;
+    if (!activeSession) {
+      setFeedback({ tone: 'error', text: 'Belum ada sesi praktikum yang dibuka.' });
+      return;
+    }
     const parsed = parseQrPayload(value);
     if (!parsed || parsed.sessionId !== activeSession.id) {
       setFeedback({ tone: 'error', text: 'QR tidak valid atau bukan untuk sesi praktikum yang sedang dibuka.' });
@@ -75,8 +81,10 @@ export default function ScanQrScreen() {
       );
       if (result.ok) {
         setFeedback({ tone: 'success', text: `Presensi QR berhasil dicatat beserta verifikasi radius ${requiredRadius} meter.` });
-        setTimeout(() => router.replace(APP_ROUTES.STUDENT_ATTENDANCE as never), 700);
+
       } else setFeedback({ tone: 'error', text: result.message });
+    } catch {
+      setFeedback({ tone: 'error', text: 'Terjadi kesalahan saat mencatat presensi. Silakan coba lagi.' });
     } finally { setSubmitting(false); }
   };
 
@@ -90,7 +98,7 @@ export default function ScanQrScreen() {
           {!permission ? <ActivityIndicator color="#FCFCFA" /> : !permission.granted ? (
             <View style={styles.permissionBox}><Text style={styles.permissionText}>Kamera diperlukan untuk memindai QR asisten.</Text><Pressable onPress={() => void requestPermission()} style={styles.cameraButton}><Text style={styles.cameraButtonText}>Izinkan Kamera</Text></Pressable></View>
           ) : (
-            <CameraView style={styles.camera} facing="back" enableTorch={flashOn} barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={submitting || existing ? undefined : ({ data }) => { setRawQr(data); void submitQr(data); }} />
+            <CameraView style={styles.camera} facing="back" enableTorch={flashOn} barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={submitting || existing || feedback ? undefined : ({ data }) => { setRawQr(data); void submitQr(data); }} />
           )}
         </View>
         <Text style={styles.prompt}>Arahkan kamera ke QR asisten. QR hanya berlaku 5 menit.</Text>
@@ -167,14 +175,35 @@ export default function ScanQrScreen() {
           </Text>
           <TextInput value={rawQr} onChangeText={setRawQr} autoCapitalize="characters" placeholder="Tempel payload QR bila kamera bermasalah" placeholderTextColor="#7A8A98" style={styles.input} editable={!submitting && !existing} />
           <Pressable disabled={!rawQr || submitting || existing} onPress={() => void submitQr(rawQr)} style={({ pressed }) => [styles.submit, (!rawQr || existing) && styles.disabled, pressed && styles.pressed]}>{submitting ? <ActivityIndicator color="#FCFCFA" /> : <Text style={styles.submitText}>{existing ? 'Sudah Hadir' : 'Validasi & Presensi'}</Text>}</Pressable>
-          {feedback ? <Text style={[styles.feedback, { color: feedback.tone === 'success' ? '#11754A' : '#B23A2B' }]}>{feedback.text}</Text> : null}
+
         </View>
       </ScrollView>
+      <Modal visible={feedback !== null} transparent animationType="fade" onRequestClose={() => {
+        if (feedback?.tone === 'success') router.replace(APP_ROUTES.STUDENT_ATTENDANCE as never);
+        else { setFeedback(null); scanLock.current = false; }
+      }}>
+        <View style={styles.overlay}>
+          <View style={styles.dialog} accessibilityRole="alert">
+            <Text style={[styles.dialogTitle, { color: feedback?.tone === 'success' ? '#11754A' : '#B23A2B' }]}>
+              {feedback?.tone === 'success' ? 'Presensi berhasil' : 'Presensi gagal'}
+            </Text>
+            <Text style={styles.dialogMessage}>{feedback?.text}</Text>
+            <Pressable style={styles.submit} onPress={() => {
+              if (feedback?.tone === 'success') router.replace(APP_ROUTES.STUDENT_ATTENDANCE as never);
+              else { setFeedback(null); scanLock.current = false; }
+            }}><Text style={styles.submitText}>{feedback?.tone === 'success' ? 'Lihat presensi' : 'Coba lagi'}</Text></Pressable>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 24 },
+  dialog: { width: '100%', maxWidth: 420, alignSelf: 'center', backgroundColor: '#FCFCFA', borderRadius: 20, padding: 20, gap: 16 },
+  dialogTitle: { fontFamily: FontFamily.displayBold, fontSize: 19 },
+  dialogMessage: { fontFamily: FontFamily.sansRegular, fontSize: 14, lineHeight: 21, color: '#4E6273' },
   screen: { flex: 1, backgroundColor: '#0D2336' }, content: { flexGrow: 1, width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', padding: 18, gap: 16 },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, topTitle: { color: '#FCFCFA', fontFamily: FontFamily.displayBold, fontSize: 17 },
   cameraWrap: { height: 260, overflow: 'hidden', borderRadius: 24, backgroundColor: '#163B55', justifyContent: 'center' }, camera: { flex: 1 },

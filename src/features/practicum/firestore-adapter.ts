@@ -1,3 +1,4 @@
+import { assertPreviousSessionsClosed } from './sequence';
 import {
   AddMemberInput,
   ClassMember,
@@ -781,6 +782,8 @@ export class FirestorePracticumAdapter implements PracticumPort {
     if (data.status !== 'scheduled') {
       throw new Error(`Sesi tidak dapat dibuka dari status "${data.status}".`);
     }
+
+    assertPreviousSessionsClosed(await this.getSessions(data.classId), sessionId);
 
     await updateDoc(sessionRef, {
       status: 'open',

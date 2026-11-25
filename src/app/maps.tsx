@@ -1,3 +1,4 @@
+import { useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -42,11 +43,26 @@ type LabRoomItem = {
   radiusMeters: number;
 };
 
+function getRoomDirections(room: Pick<LabRoomItem, 'id' | 'name'>): string {
+  const name = room.name.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (room.id === 'dekanat-fsm' || name === 'dekanat fsm undip' || name === 'lab dekanat fsm undip') {
+    return 'Dari Gedung dekanat FSM naik ke lantai 5';
+  }
+  if (room.id === 'lab-informatika-b' || room.id === 'lab-informatika-c' || /^(?:lab|laboratorium)(?: informatika)? [bc]$/.test(name)) {
+    return 'Dari Gedung E lantai 1 naik ke lantai 2 lalu belok ke kanan';
+  }
+  if (room.id === 'lab-informatika-d' || /^(?:lab|laboratorium)(?: informatika)? d$/.test(name)) {
+    return 'Dari Gedung E lantai 1 naik ke lantai 2 lalu belok ke kiri';
+  }
+  return 'Petunjuk arah ruangan belum tersedia. Silakan hubungi asisten.';
+}
+
 export default function MapsLabScreen() {
+  const { labId, location } = useLocalSearchParams<{ labId?: string; location?: string }>();
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const { sessions: userSessions } = usePracticum({ classes: false, sessions: true });
   const { openSessions } = useOpenLabSessions();
-  const { labs: storedLabs } = useLabs();
+  const { labs: storedLabs, loading: labsLoading } = useLabs();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [floorFilter, setFloorFilter] = useState<string>('Semua');
@@ -156,12 +172,18 @@ export default function MapsLabScreen() {
     });
   }, [floorFilter, rooms, searchQuery]);
 
+  const requestedRoom = rooms.find((room) =>
+    labId ? room.id === labId : location && room.name.toLowerCase() === location.trim().toLowerCase(),
+  );
+  const selectedId = selectedRoomId ?? requestedRoom?.id;
   const activeNowCount = rooms.filter((r) => r.isActiveNow).length;
-  const focusedRoom =
-    filteredRooms.find((r) => r.id === selectedRoomId) ??
+  const requestedMissing = Boolean((labId || location) && !requestedRoom && !selectedRoomId);
+  const focusedRoom = requestedMissing ? null : (
+    filteredRooms.find((r) => r.id === selectedId) ??
     filteredRooms.find((r) => r.isActiveNow) ??
     filteredRooms[0] ??
-    null;
+    null
+  );
 
   const isSheetLabActive =
     detailActiveSessions.length > 0 || Boolean(detailSheetRoom?.isActiveNow);
@@ -189,13 +211,19 @@ export default function MapsLabScreen() {
 
           <LabNativeMap
             labs={filteredRooms}
-            selectedLabId={selectedRoomId}
+            selectedLabId={selectedId ?? null}
             onSelectLab={(labId) => {
               const selected = rooms.find((room) => room.id === labId);
               setSelectedRoomId(labId);
               if (selected) setDetailSheetRoom(selected);
             }}
           />
+
+          {requestedMissing && !labsLoading ? (
+            <Text style={[styles.selectedSub, { color: colors.textSecondary }]}>
+              Lab untuk sesi ini tidak ditemukan. Pilih lab pada peta untuk melihat petunjuk arah.
+            </Text>
+          ) : null}
 
           {focusedRoom ? (
             <Pressable
@@ -430,19 +458,14 @@ export default function MapsLabScreen() {
 
             <Pressable
               accessibilityRole="button"
-              onPress={() => {
-                showAlert(
-                  `Arah ke ${detailSheetRoom.name}`,
-                  `Masuk lobby utama ${detailSheetRoom.building}, naik ke ${detailSheetRoom.floor}, lalu ikuti papan penunjuk menuju ${detailSheetRoom.name}.`,
-                );
-              }}
+              onPress={() => showAlert(`Arah ke ${detailSheetRoom.name}`, getRoomDirections(detailSheetRoom))}
               style={({ pressed }) => [
                 styles.directionsBtn,
                 { backgroundColor: colors.baltic },
                 pressed && styles.pressed,
               ]}
             >
-              <Text style={styles.directionsBtnText}>Petunjuk Arah Ruangan</Text>
+              <Text style={styles.directionsBtnText}>Petunjuk Arah ke Lab</Text>
             </Pressable>
           </View>
         ) : null}

@@ -1,7 +1,8 @@
+import { compareSessions } from '@/features/practicum/sequence';
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { CheckCircle2, FileText, QrCode } from 'lucide-react-native';
+import { CheckCircle2, QrCode } from 'lucide-react-native';
 
 import { SubScreenHeader } from '@/components/ui/app-header';
 import { QrSessionBottomSheet } from '@/components/ui/qr-session-bottom-sheet';
@@ -19,10 +20,8 @@ import {
 } from '@/features/practicum';
 import { SessionDetail } from '@/features/schedule/SessionDetail';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { showAlert } from '@/lib/cross-platform-alert';
 import type { LabSession } from '@/types';
 
-const DEFAULT_MODULES = ['M1', 'M2', 'M3', 'M4', 'M5', 'M6'] as const;
 
 export default function SessionDetailScreen() {
   const router = useRouter();
@@ -46,16 +45,11 @@ export default function SessionDetailScreen() {
 
   const classSessions = useMemo(() => {
     if (!practicumSession) return [];
-    return practicumSessions.filter((s) => s.classId === practicumSession.classId);
+    return practicumSessions.filter((s) => s.classId === practicumSession.classId).sort(compareSessions);
   }, [practicumSession, practicumSessions]);
 
   const currentModuleIndex = useMemo(() => {
     if (!practicumSession) return 0;
-    const match = /(?:modul|pertemuan)\s*0?(\d+)/i.exec(practicumSession.title);
-    if (match) {
-      const idx = Math.max(0, Number(match[1]) - 1);
-      return idx;
-    }
     const foundIdx = classSessions.findIndex((s) => s.id === practicumSession.id);
     return foundIdx >= 0 ? foundIdx : 0;
   }, [classSessions, practicumSession]);
@@ -98,16 +92,13 @@ export default function SessionDetailScreen() {
         : `TERJADWAL · ${session.startsAt}`
     : '';
 
-  const totalModules = Math.max(DEFAULT_MODULES.length, classSessions.length);
-  const moduleChips = Array.from({ length: Math.min(totalModules, 6) }, (_, idx) => {
-    const linkedSession = classSessions[idx];
-    return {
-      code: `M${idx + 1}`,
-      active: linkedSession ? linkedSession.id === practicumSession?.id : idx === currentModuleIndex % 6,
-      past: idx < currentModuleIndex % 6,
-      sessionId: linkedSession?.id,
-    };
-  });
+  const totalModules = classSessions.length;
+  const moduleChips = classSessions.map((linkedSession, idx) => ({
+    code: `P${idx + 1}`,
+    active: linkedSession.id === practicumSession?.id,
+    past: linkedSession.status === 'closed',
+    sessionId: linkedSession.id,
+  }));
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -136,11 +127,10 @@ export default function SessionDetailScreen() {
               >
                 <View style={styles.modulesHeader}>
                   <Text style={[styles.modulesTitle, { color: colors.textPrimary }]}>
-                    Daftar modul
+                    Pertemuan
                   </Text>
                   <Text style={[styles.modulesCount, { color: colors.baltic }]}>
-                    Sesi {String(currentModuleIndex + 1).padStart(2, '0')} dari{' '}
-                    {String(Math.max(totalModules, currentModuleIndex + 1)).padStart(2, '0')}
+                    Pertemuan {currentModuleIndex + 1} dari {totalModules}
                   </Text>
                 </View>
 
@@ -251,26 +241,6 @@ export default function SessionDetailScreen() {
                   ) : null}
 
                   <View style={styles.actionRow}>
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() =>
-                        showAlert(
-                          'Modul Praktikum PDF',
-                          `Materi ${session.practicumName} siap dipelajari sebelum praktikum dimulai.`,
-                        )
-                      }
-                      style={({ pressed }) => [
-                        styles.moduleBtn,
-                        { backgroundColor: colors.balticSoft, borderColor: colors.border },
-                        pressed && styles.pressed,
-                      ]}
-                    >
-                      <FileText size={16} color={colors.baltic} strokeWidth={2} />
-                      <Text style={[styles.moduleBtnText, { color: colors.baltic }]}>
-                        Unduh Modul
-                      </Text>
-                    </Pressable>
-
                     <LeaveRequestAction
                       session={{
                         id: practicumSession.id,
@@ -354,10 +324,12 @@ const styles = StyleSheet.create({
   },
   modulesRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   moduleChip: {
-    flex: 1,
+    minWidth: 48,
+    paddingHorizontal: 12,
     height: 40,
     borderRadius: 12,
     borderWidth: 1,

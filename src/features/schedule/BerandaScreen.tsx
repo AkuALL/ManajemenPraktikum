@@ -250,25 +250,6 @@ export function BerandaScreen() {
         />
 
         <View style={styles.bodyContainer}>
-          {weekOffset !== 0 || selectedDayStr !== null ? (
-            <View style={styles.weekResetTopRow}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Reset ke minggu ini"
-                onPress={handleResetToCurrentWeek}
-                style={({ pressed }) => [
-                  styles.weekResetBtn,
-                  { backgroundColor: colors.pacificSoft, borderColor: colors.pacificLight },
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text style={[styles.weekResetHint, { color: colors.pacificDark }]}>
-                  Reset
-                </Text>
-              </Pressable>
-            </View>
-          ) : null}
-
           <View style={styles.weekNavRow}>
             <Pressable
               accessibilityRole="button"
@@ -359,6 +340,25 @@ export function BerandaScreen() {
               );
             })}
           </View>
+
+          {weekOffset !== 0 || selectedDayStr !== null ? (
+            <View style={styles.weekResetTopRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Reset ke minggu ini"
+                onPress={handleResetToCurrentWeek}
+                style={({ pressed }) => [
+                  styles.weekResetBtn,
+                  { backgroundColor: colors.pacificSoft, borderColor: colors.pacificLight },
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={[styles.weekResetHint, { color: colors.pacificDark }]}>
+                  Reset
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           {isAssistant ? (
             <View style={styles.assistantBar}>
@@ -556,21 +556,24 @@ export function BerandaScreen() {
                                 >
                                   <FileText size={15} color={colors.baltic} strokeWidth={2} />
                                   <Text style={[styles.secondaryHeroBtnText, { color: colors.baltic }]}>
-                                    Modul PDF
+                                    Detail Pertemuan
                                   </Text>
                                 </Pressable>
 
                                 <Pressable
                                   accessibilityRole="button"
-                                  accessibilityState={{ disabled: true }}
-                                  disabled
-                                  style={[
+                                  onPress={() => router.push({
+                                    pathname: APP_ROUTES.MAPS,
+                                    params: { labId: sessionItem.labId ?? '', location: sessionItem.location },
+                                  } as never)}
+                                  style={({ pressed }) => [
                                     styles.secondaryHeroBtn,
-                                    { backgroundColor: colors.disabledSurface, opacity: 0.55 },
+                                    { backgroundColor: colors.balticSoft },
+                                    pressed && styles.pressed,
                                   ]}
                                 >
-                                  <MapPin size={15} color={colors.disabledText} strokeWidth={2} />
-                                  <Text style={[styles.secondaryHeroBtnText, { color: colors.disabledText }]}>
+                                  <MapPin size={15} color={colors.baltic} strokeWidth={2} />
+                                  <Text style={[styles.secondaryHeroBtnText, { color: colors.baltic }]}>
                                     Denah Lab
                                   </Text>
                                 </Pressable>
