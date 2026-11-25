@@ -130,15 +130,13 @@ export function SessionLifecycleButtons({
               onPress={() => openConfirmSheet('delete')}
               disabled={loading}
               style={({ pressed }) => [
-                styles.dangerOutlineButton,
-                { backgroundColor: colors.rosySoft, borderColor: colors.rosyBorder },
+                styles.primaryButton,
+                { backgroundColor: colors.rosy },
                 pressed && styles.pressed,
               ]}
             >
-              <Trash2 size={14} color={colors.rosyDark} strokeWidth={2.1} />
-              <Text style={[styles.dangerOutlineText, { color: colors.rosyDark }]}>
-                Hapus Sesi
-              </Text>
+              <Trash2 size={15} color="#FCFCFA" strokeWidth={2.1} />
+              <Text style={styles.primaryButtonText}>Hapus Sesi</Text>
             </Pressable>
           ) : null}
         </View>
@@ -277,20 +275,6 @@ const styles = StyleSheet.create({
     color: '#FCFCFA',
     fontFamily: FontFamily.sansBold,
     fontSize: 13.5,
-  },
-  dangerOutlineButton: {
-    height: 40,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  dangerOutlineText: {
-    fontFamily: FontFamily.sansBold,
-    fontSize: 12.5,
   },
   closedNotice: {
     height: 42,

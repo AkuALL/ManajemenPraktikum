@@ -127,6 +127,26 @@ export default function SessionDetailScreen() {
             <CardListSkeleton count={2} showActions label="Memuat detail sesi" />
           ) : session && practicumSession ? (
             <>
+              {isAssistant && practicumSession.status === 'scheduled' ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setRescheduleVisible(true)}
+                  style={({ pressed }) => [
+                    styles.rescheduleBtn,
+                    {
+                      backgroundColor: colors.balticSoft,
+                      borderColor: colors.border,
+                    },
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <CalendarClock size={16} color={colors.baltic} strokeWidth={2.1} />
+                  <Text style={[styles.rescheduleBtnText, { color: colors.baltic }]}>
+                    Reschedule / Ubah Jadwal
+                  </Text>
+                </Pressable>
+              ) : null}
+
               <SessionDetail session={session} showHeader={false} />
 
               <View
@@ -219,37 +239,20 @@ export default function SessionDetailScreen() {
                     onCloseSession={closeSession}
                     onDeleteSession={handleDeleteSession}
                   />
-                  {practicumSession.status === 'scheduled' ? (
+                  {practicumSession.status === 'open' ? (
                     <Pressable
                       accessibilityRole="button"
-                      onPress={() => setRescheduleVisible(true)}
+                      onPress={() => setQrVisible(true)}
                       style={({ pressed }) => [
-                        styles.rescheduleBtn,
-                        {
-                          backgroundColor: colors.balticSoft,
-                          borderColor: colors.border,
-                        },
+                        styles.qrBtn,
+                        { backgroundColor: colors.rosy },
                         pressed && styles.pressed,
                       ]}
                     >
-                      <CalendarClock size={16} color={colors.baltic} strokeWidth={2.1} />
-                      <Text style={[styles.rescheduleBtnText, { color: colors.baltic }]}>
-                        Reschedule / Ubah Jadwal
-                      </Text>
+                      <QrCode size={16} color="#FCFCFA" strokeWidth={2} />
+                      <Text style={styles.qrBtnText}>Tampilkan QR Sesi</Text>
                     </Pressable>
                   ) : null}
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => setQrVisible(true)}
-                    style={({ pressed }) => [
-                      styles.qrBtn,
-                      { backgroundColor: colors.rosy },
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <QrCode size={16} color="#FCFCFA" strokeWidth={2} />
-                    <Text style={styles.qrBtnText}>Tampilkan QR Sesi</Text>
-                  </Pressable>
                   <AssistantSessionRosterPanel session={practicumSession} />
                 </View>
               ) : (
