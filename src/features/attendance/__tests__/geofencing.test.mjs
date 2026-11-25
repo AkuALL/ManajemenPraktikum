@@ -181,7 +181,7 @@ test('resolveSessionLocationSummary prefers live labs, then session coords, then
   });
   assert.equal(withNamedFallback.isFallbackCoords, true);
   assert.equal(withNamedFallback.summary.labId, 'lab-informatika-c');
-  assert.equal(withNamedFallback.summary.radiusMeters, 10);
+  assert.equal(withNamedFallback.summary.radiusMeters, 50);
 
   const withDefaultFallback = resolveSessionLocationSummary({
     id: 'sess-3',

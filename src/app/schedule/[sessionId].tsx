@@ -2,7 +2,7 @@ import { compareSessions } from '@/features/practicum/sequence';
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { CheckCircle2, QrCode } from 'lucide-react-native';
+import { CalendarClock, CheckCircle2, QrCode } from 'lucide-react-native';
 
 import { SubScreenHeader } from '@/components/ui/app-header';
 import { QrSessionBottomSheet } from '@/components/ui/qr-session-bottom-sheet';
@@ -13,8 +13,10 @@ import { useIdentity } from '@/features/identity';
 import { LeaveRequestAction } from '@/features/leave';
 import { APP_ROUTES } from '@/features/navigation';
 import {
+  type CreateSessionInput,
   formatSessionDate,
   formatSessionTime,
+  SessionFormModal,
   SessionLifecycleButtons,
   usePracticum,
 } from '@/features/practicum';
@@ -31,8 +33,10 @@ export default function SessionDetailScreen() {
   const isAssistant = activeIdentity?.role === 'assistant';
 
   const {
+    classes,
     sessions: practicumSessions,
     loadingSessions,
+    updateSession,
     openSession,
     closeSession,
     deleteSession,
@@ -40,6 +44,7 @@ export default function SessionDetailScreen() {
 
   const { records } = useAttendance();
   const [qrVisible, setQrVisible] = useState(false);
+  const [rescheduleVisible, setRescheduleVisible] = useState(false);
 
   const practicumSession = practicumSessions.find((s) => s.id === sessionId);
 
@@ -82,6 +87,11 @@ export default function SessionDetailScreen() {
   const handleDeleteSession = async (id: string) => {
     await deleteSession(id);
     router.replace('/schedule');
+  };
+
+  const handleRescheduleSubmit = async (input: CreateSessionInput) => {
+    if (!practicumSession) return;
+    await updateSession(practicumSession.id, input);
   };
 
   const statusPillText = session
@@ -209,6 +219,25 @@ export default function SessionDetailScreen() {
                     onCloseSession={closeSession}
                     onDeleteSession={handleDeleteSession}
                   />
+                  {practicumSession.status === 'scheduled' ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => setRescheduleVisible(true)}
+                      style={({ pressed }) => [
+                        styles.rescheduleBtn,
+                        {
+                          backgroundColor: colors.balticSoft,
+                          borderColor: colors.border,
+                        },
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <CalendarClock size={16} color={colors.baltic} strokeWidth={2.1} />
+                      <Text style={[styles.rescheduleBtnText, { color: colors.baltic }]}>
+                        Reschedule / Ubah Jadwal
+                      </Text>
+                    </Pressable>
+                  ) : null}
                   <Pressable
                     accessibilityRole="button"
                     onPress={() => setQrVisible(true)}
@@ -272,16 +301,25 @@ export default function SessionDetailScreen() {
       </ScrollView>
 
       {practicumSession ? (
-        <QrSessionBottomSheet
-          visible={qrVisible}
-          onClose={() => setQrVisible(false)}
-          sessionId={practicumSession.id}
-          classId={practicumSession.classId}
-          sessionTitle={practicumSession.courseName ?? practicumSession.title}
-          subtitle={`${practicumSession.className ?? ''} · ${practicumSession.location}`}
-          sessionStatus={practicumSession.status}
-          onOpenSession={() => openSession(practicumSession.id)}
-        />
+        <>
+          <QrSessionBottomSheet
+            visible={qrVisible}
+            onClose={() => setQrVisible(false)}
+            sessionId={practicumSession.id}
+            classId={practicumSession.classId}
+            sessionTitle={practicumSession.courseName ?? practicumSession.title}
+            subtitle={`${practicumSession.className ?? ''} · ${practicumSession.location}`}
+            sessionStatus={practicumSession.status}
+            onOpenSession={() => openSession(practicumSession.id)}
+          />
+          <SessionFormModal
+            visible={rescheduleVisible}
+            classes={classes}
+            initialSession={practicumSession}
+            onClose={() => setRescheduleVisible(false)}
+            onSubmit={handleRescheduleSubmit}
+          />
+        </>
       ) : null}
     </View>
   );
@@ -389,7 +427,20 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
   },
   assistantControls: {
-    gap: 6,
+    gap: 8,
+  },
+  rescheduleBtn: {
+    height: 44,
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  rescheduleBtnText: {
+    fontFamily: FontFamily.sansBold,
+    fontSize: 13.5,
   },
   qrBtn: {
     height: 46,

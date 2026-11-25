@@ -109,7 +109,9 @@ export const SessionCard = React.memo(function SessionCard({
               pressed && styles.pressed,
             ]}
           >
-            <Text style={[styles.smallBtnText, { color: colors.textSecondary }]}>Ubah Sesi</Text>
+            <Text style={[styles.smallBtnText, { color: colors.textSecondary }]}>
+              Reschedule / Ubah
+            </Text>
           </Pressable>
         ) : null}
 

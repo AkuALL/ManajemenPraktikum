@@ -12,7 +12,7 @@ export const FALLBACK_LAB_LOCATIONS: LabLocation[] = [
     building: 'Gedung E FSM UNDIP',
     latitude: -7.0482375,
     longitude: 110.440765625,
-    radiusMeters: 10,
+    radiusMeters: 50,
     isActive: true,
   },
   {
@@ -21,7 +21,7 @@ export const FALLBACK_LAB_LOCATIONS: LabLocation[] = [
     building: 'Gedung E FSM UNDIP',
     latitude: -7.0482375,
     longitude: 110.440765625,
-    radiusMeters: 10,
+    radiusMeters: 50,
     isActive: true,
   },
   {
@@ -30,7 +30,7 @@ export const FALLBACK_LAB_LOCATIONS: LabLocation[] = [
     building: 'Gedung E FSM UNDIP',
     latitude: -7.0482375,
     longitude: 110.440765625,
-    radiusMeters: 10,
+    radiusMeters: 50,
     isActive: true,
   },
   {
@@ -39,7 +39,7 @@ export const FALLBACK_LAB_LOCATIONS: LabLocation[] = [
     building: 'Gedung Dekanat FSM UNDIP',
     latitude: -7.0490375,
     longitude: 110.441484375,
-    radiusMeters: 10,
+    radiusMeters: 50,
     isActive: true,
   },
 ];

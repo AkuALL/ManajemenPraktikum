@@ -41,7 +41,7 @@ export default function ScanQrScreen() {
   }, [paramSessionId, sessions]);
   const existing = activeSession ? records.some((record) => record.sessionId === activeSession.id) : false;
   const lab = useMemo(() => (activeSession ? resolveSessionLocationSummary(activeSession, labs) : null), [activeSession, labs]);
-  const requiredRadius = lab?.summary.radiusMeters ?? 10;
+  const requiredRadius = lab?.summary.radiusMeters ?? 50;
   const geofence = useMemo(() => lab ? evaluateGeofence({ userCoords: location.coords, labCoords: lab.summary, radiusMeters: requiredRadius }) : null, [lab, location.coords, requiredRadius]);
   const distanceLabel =
     geofence && Number.isFinite(geofence.distanceMeters)

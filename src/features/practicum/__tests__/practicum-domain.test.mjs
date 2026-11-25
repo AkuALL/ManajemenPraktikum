@@ -42,7 +42,7 @@ test('GA-01 & GA-02: Asisten can create class, add members, and create session',
       locationName: 'Lab Informatika B',
       latitude: -7.0482375,
       longitude: 110.440765625,
-      radiusMeters: 10,
+      radiusMeters: 50,
       startsAt: '2026-11-20T08:00:00.000Z',
       endsAt: '2026-11-20T10:00:00.000Z',
     },
@@ -55,7 +55,7 @@ test('GA-01 & GA-02: Asisten can create class, add members, and create session',
   assert.equal(session.labId, 'lab-informatika-b');
   assert.equal(session.latitude, -7.0482375);
   assert.equal(session.longitude, 110.440765625);
-  assert.equal(session.radiusMeters, 10);
+  assert.equal(session.radiusMeters, 50);
 });
 
 test('GA-03 & FR-06: Praktikan only sees sessions from classes they are enrolled in', async () => {
@@ -95,8 +95,8 @@ test('GA-03 & FR-06: Praktikan only sees sessions from classes they are enrolled
       classId: classB.id,
       title: 'Sesi Routing Jaringan B1',
       location: 'Lab 2',
-      startsAt: '2026-11-21T08:00:00.000Z',
-      endsAt: '2026-11-21T10:00:00.000Z',
+      startsAt: '2026-11-23T08:00:00.000Z',
+      endsAt: '2026-11-23T10:00:00.000Z',
     },
     'asisten-2'
   );
@@ -153,8 +153,8 @@ test('GA-04 & FR-07: Session lifecycle transition scheduled -> open -> closed an
       classId: cls.id,
       title: 'Sesi Linux Shell',
       location: 'Lab 3',
-      startsAt: '2026-11-22T08:00:00.000Z',
-      endsAt: '2026-11-22T10:00:00.000Z',
+      startsAt: '2026-11-24T08:00:00.000Z',
+      endsAt: '2026-11-24T10:00:00.000Z',
     },
     'asisten-1'
   );
@@ -332,8 +332,8 @@ test('FR-04: Kelas tidak boleh meninggalkan sesi atau member yatim', async () =>
       classId: cls.id,
       title: 'Modul Pointer & Rekursi',
       location: 'Lab 2',
-      startsAt: '2026-11-28T08:00:00.000Z',
-      endsAt: '2026-11-28T10:00:00.000Z',
+      startsAt: '2026-11-30T08:00:00.000Z',
+      endsAt: '2026-11-30T10:00:00.000Z',
     },
     'asisten-1'
   );
@@ -376,8 +376,8 @@ test('FR-04: Kelas tidak dapat dihapus jika memiliki sesi aktif, sesi dengan pre
       classId: clsActive.id,
       title: 'Sesi Blender 3D',
       location: 'Lab Grafika',
-      startsAt: '2026-11-29T08:00:00.000Z',
-      endsAt: '2026-11-29T10:00:00.000Z',
+      startsAt: '2026-12-01T08:00:00.000Z',
+      endsAt: '2026-12-01T10:00:00.000Z',
     },
     'asisten-1'
   );
@@ -498,6 +498,27 @@ test('memberUids stays synced on addMember/removeMember, getRegisteredStudents r
     },
     { message: /Waktu selesai harus lebih lambat dari waktu mulai/ },
   );
+
+  // Reschedule ke hari Sabtu harus ditolak
+  await assert.rejects(
+    async () => {
+      await adapter.updateSession(session.id, {
+        startsAt: '2026-11-28T08:00:00.000Z',
+        endsAt: '2026-11-28T10:00:00.000Z',
+      });
+    },
+    { message: /Sabtu atau Minggu/ },
+  );
+
+  // Reschedule ke hari kerja lain berhasil
+  await adapter.updateSession(session.id, {
+    date: '2026-11-30',
+    startsAt: '2026-11-30T13:00:00.000Z',
+    endsAt: '2026-11-30T15:00:00.000Z',
+  });
+  const rescheduled = await adapter.getSession(session.id);
+  assert.equal(rescheduled?.date, '2026-11-30');
+  assert.equal(rescheduled?.startsAt, '2026-11-30T13:00:00.000Z');
 });
 
 test('Seeder provides all 8 practicum courses and 2 student/assistant accounts', async () => {

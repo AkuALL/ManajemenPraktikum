@@ -20,6 +20,7 @@ import {
   defaultSessionDate,
   detectSessionSlotId,
   formatCalendarDateLabel,
+  isWeekendDate,
   SESSION_TIME_SLOTS,
   sessionDateInput,
   type SessionSlotId,
@@ -385,14 +386,23 @@ function SessionFormContent({
               </View>
 
               <View style={styles.weekRow}>
-                {WEEKDAY_HEADERS.map((dayName) => (
-                  <Text
-                    key={dayName}
-                    style={[styles.weekHeaderText, { color: colors.textSubtle }]}
-                  >
-                    {dayName}
-                  </Text>
-                ))}
+                {WEEKDAY_HEADERS.map((dayName, dayIdx) => {
+                  const isWeekendHeader = dayIdx === 0 || dayIdx === 6;
+                  return (
+                    <Text
+                      key={dayName}
+                      style={[
+                        styles.weekHeaderText,
+                        {
+                          color: isWeekendHeader ? colors.disabledText : colors.textSubtle,
+                          opacity: isWeekendHeader ? 0.6 : 1,
+                        },
+                      ]}
+                    >
+                      {dayName}
+                    </Text>
+                  );
+                })}
               </View>
 
               <View style={styles.daysGrid}>
@@ -401,21 +411,30 @@ function SessionFormContent({
                     return <View key={`empty-${idx}`} style={styles.dayCell} />;
                   }
                   const dayNum = Number(cellDate.slice(-2));
-                  const isSelected = cellDate === date;
+                  const isWeekend = isWeekendDate(cellDate);
+                  const isSelected = !isWeekend && cellDate === date;
                   const isToday = cellDate === todayDateStr;
                   return (
                     <Pressable
                       key={cellDate}
+                      disabled={isWeekend}
+                      accessibilityState={{ disabled: isWeekend, selected: isSelected }}
                       style={[
                         styles.dayCell,
                         isSelected && { backgroundColor: colors.pacific },
+                        isWeekend && {
+                          backgroundColor: colors.disabledSurface,
+                          opacity: 0.45,
+                        },
                         !isSelected &&
+                          !isWeekend &&
                           isToday && {
                             borderColor: colors.pacific,
                             borderWidth: 1,
                           },
                       ]}
                       onPress={() => {
+                        if (isWeekend) return;
                         setDate(cellDate);
                         setShowCalendar(false);
                         setErrorMessage('');
@@ -425,7 +444,11 @@ function SessionFormContent({
                         style={[
                           styles.dayCellText,
                           {
-                            color: isSelected ? '#FCFCFA' : colors.textPrimary,
+                            color: isSelected
+                              ? '#FCFCFA'
+                              : isWeekend
+                                ? colors.disabledText
+                                : colors.textPrimary,
                             fontFamily:
                               isSelected || isToday ? FontFamily.sansBold : FontFamily.sansRegular,
                           },
@@ -437,6 +460,9 @@ function SessionFormContent({
                   );
                 })}
               </View>
+              <Text style={[styles.labHintText, { color: colors.textSubtle }]}>
+                Praktikum hanya tersedia pada hari Senin–Jumat (Sabtu &amp; Minggu dinonaktifkan).
+              </Text>
             </View>
           ) : null}
         </View>
@@ -613,7 +639,7 @@ function SessionFormContent({
             <ActivityIndicator color="#FCFCFA" size="small" />
           ) : (
             <Text style={styles.submitBtnText}>
-              {initialSession ? 'Simpan Perubahan' : 'Buat Sesi'}
+              {initialSession ? 'Simpan Jadwal' : 'Buat Sesi'}
             </Text>
           )}
         </Pressable>
@@ -634,8 +660,12 @@ export function SessionFormModal({
     <FlyAwayBottomSheet
       visible={visible}
       onClose={onClose}
-      title={initialSession ? 'Ubah Sesi Praktikum' : 'Tambah Sesi Praktikum'}
-      subtitle="Atur jadwal, ruang laboratorium, dan slot waktu sesi"
+      title={initialSession ? 'Reschedule / Ubah Sesi' : 'Tambah Sesi Praktikum'}
+      subtitle={
+        initialSession
+          ? 'Pindahkan tanggal (Senin–Jumat), jam, atau ruang laboratorium sesi'
+          : 'Atur jadwal (Senin–Jumat), ruang laboratorium, dan slot waktu sesi'
+      }
       maxHeight="88%"
     >
       <SessionFormContent
