@@ -26,14 +26,18 @@ const VALID_CATEGORIES: readonly LeaveReasonCategory[] = [
   'lainnya',
 ];
 
+<<<<<<< HEAD
 const GEMINI_MODELS = ['gemini-flash-lite-latest', 'gemini-3.8-flash'] as const;
 const GEMINI_SENTIMENT_MODEL = 'gemini-3.5-flash-lite';
 const GEMINI_SENTIMENT_TIMEOUT_MS = 8_000;
 const GEMINI_SENTIMENT_LABELS = ['positif', 'netral', 'negatif', 'tidak_dapat_ditentukan'] as const;
+=======
+>>>>>>> 7d0ca340a9199a9d8820306e31229c2ad5a1e737
 const AI_REQUEST_TIMEOUT_MS = 15_000;
 
-const classifierUrl = process.env.EXPO_PUBLIC_AI_CLASSIFIER_URL?.trim();
-const geminiApiKey = process.env.EXPO_PUBLIC_AI_API_KEY?.trim();
+const classifierUrl =
+  process.env.EXPO_PUBLIC_AI_CLASSIFIER_URL?.trim() ||
+  process.env.EXPO_PUBLIC_AI_API_URL?.trim();
 
 async function fetchJsonWithTimeout(
   url: string,
@@ -99,7 +103,7 @@ async function classifyViaProxy(
   leaveRequestId: string,
 ): Promise<LeaveReasonClassification> {
   if (!classifierUrl) {
-    throw new Error('URL klasifikasi AI belum dikonfigurasi.');
+    throw new Error('URL Cloud Function klasifikasi AI (EXPO_PUBLIC_AI_API_URL) belum dikonfigurasi.');
   }
 
   const { auth } = await import('@/lib/firebase');
@@ -146,6 +150,7 @@ async function classifyViaProxy(
   };
 }
 
+<<<<<<< HEAD
 async function requestGeminiClassification<T>(
   request: object,
   parseResponse: (rawText: string) => T | null,
@@ -274,23 +279,10 @@ async function classifyDirectWithGemini(reason: string): Promise<LeaveReasonClas
   return { ...parsed, cached: false, persistedByServer: false };
 }
 
+=======
+>>>>>>> 7d0ca340a9199a9d8820306e31229c2ad5a1e737
 export async function classifyLeaveReason(
   leaveRequestId: string,
-  reason?: string,
 ): Promise<LeaveReasonClassification> {
-  if (classifierUrl) {
-    try {
-      return await classifyViaProxy(leaveRequestId);
-    } catch (proxyError) {
-      if (!geminiApiKey || !reason?.trim()) {
-        throw proxyError;
-      }
-    }
-  }
-
-  if (geminiApiKey && reason?.trim()) {
-    return classifyDirectWithGemini(reason);
-  }
-
-  throw new Error('Layanan klasifikasi AI belum dikonfigurasi.');
+  return classifyViaProxy(leaveRequestId);
 }

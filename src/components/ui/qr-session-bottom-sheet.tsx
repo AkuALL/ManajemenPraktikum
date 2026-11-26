@@ -97,7 +97,14 @@ export function QrSessionBottomSheet({
   const openSession = async () => {
     if (!onOpenSession) return;
     setLoading(true);
-    try { await onOpenSession(); } finally { setLoading(false); }
+    setError(null);
+    try {
+      await onOpenSession();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal membuka sesi praktikum.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -127,7 +134,7 @@ export function QrSessionBottomSheet({
         ) : payload ? (
           <View style={[styles.qrPanel, { backgroundColor: colors.background, borderColor: colors.border }]}>
             <View style={[styles.qrFrame, { borderColor: colors.border }]}><QRCode value={payload} size={184} backgroundColor="#FCFCFA" color="#0D2336" /></View>
-            <Text style={[styles.codeLabel, { color: colors.textPrimary }]}>QR aktif untuk presensi radius 10 m</Text>
+            <Text style={[styles.codeLabel, { color: colors.textPrimary }]}>QR aktif untuk presensi radius 50 m</Text>
             <Text style={[styles.timer, { color: colors.rosyDark }]}>Berlaku {formatRemaining(remainingMs)} menit</Text>
             <Text style={[styles.hint, { color: colors.textSecondary }]}>Token tidak dapat dipakai lagi setelah masa berlaku berakhir.</Text>
           </View>

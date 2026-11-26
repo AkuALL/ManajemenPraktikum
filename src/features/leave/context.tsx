@@ -109,6 +109,27 @@ export function LeaveProvider({
     );
   }, [consumerCount, port, retryTick, studentId]);
 
+  const requestClassification = useCallback(
+    async (leaveRequestId: string) => {
+      if (!user) return;
+
+      setClassificationErrors((current) => {
+        const { [leaveRequestId]: _discarded, ...rest } = current;
+        return rest;
+      });
+
+      try {
+        await classifyLeaveReason(leaveRequestId);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Klasifikasi AI tidak dapat diproses.';
+        setClassificationErrors((current) => ({ ...current, [leaveRequestId]: message }));
+        await port.markClassificationFailed(leaveRequestId).catch(() => undefined);
+      }
+    },
+    [port, user],
+  );
+
   const submitLeave = useCallback(
     async (session: SessionSummary, reason: string): Promise<SubmitLeaveResult> => {
       if (!user || user.role !== 'student') {
@@ -122,6 +143,7 @@ export function LeaveProvider({
 
       let sentimentAnalysis: LeaveRequest['sentimentAnalysis'];
       try {
+<<<<<<< HEAD
         sentimentAnalysis = await analyzeLeaveSentiment(reason, classifyLeaveSentimentWithGemini);
       } catch {
         // Keep leave submission available so the result can be retried during review.
@@ -129,6 +151,10 @@ export function LeaveProvider({
 
       try {
         const request = await port.createLeaveRequest({ session, user, reason, sentimentAnalysis });
+=======
+        const request = await port.createLeaveRequest({ session, user, reason });
+        void requestClassification(request.id);
+>>>>>>> 7d0ca340a9199a9d8820306e31229c2ad5a1e737
         return { ok: true, request };
       } catch (error) {
         return {
@@ -143,6 +169,7 @@ export function LeaveProvider({
     [port, user],
   );
 
+<<<<<<< HEAD
   const analyzeLeave = useCallback(
     async (leaveRequestId: string, reason: string) => {
       if (user?.role !== 'assistant') {
@@ -150,8 +177,20 @@ export function LeaveProvider({
       }
       const analysis = await analyzeLeaveSentiment(reason, classifyLeaveSentimentWithGemini);
       await port.saveSentimentAnalysis(leaveRequestId, analysis);
+=======
+  const classifyLeave = useCallback(
+    async (leaveRequestId: string, _reason: string) => {
+      await requestClassification(leaveRequestId);
+>>>>>>> 7d0ca340a9199a9d8820306e31229c2ad5a1e737
     },
-    [port, user?.role],
+    [requestClassification],
+  );
+
+  const retryClassification = useCallback(
+    async (leaveRequestId: string, _reason?: string) => {
+      await requestClassification(leaveRequestId);
+    },
+    [requestClassification],
   );
 
   const reviewLeave = useCallback(
