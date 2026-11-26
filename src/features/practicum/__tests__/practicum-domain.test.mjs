@@ -141,7 +141,7 @@ test('GA-03 & FR-06: Praktikan only sees sessions from classes they are enrolled
 });
 
 test('GA-04 & FR-07: Session lifecycle transition scheduled -> open -> closed and delete restrictions', async () => {
-  const adapter = new MockPracticumAdapter();
+  const adapter = new MockPracticumAdapter(() => new Date('2026-11-24T08:30:00.000Z'));
 
   const cls = await adapter.createClass(
     { courseName: 'Sistem Operasi', className: 'SO-1' },
@@ -160,6 +160,51 @@ test('GA-04 & FR-07: Session lifecycle transition scheduled -> open -> closed an
   );
 
   assert.equal(session.status, 'scheduled');
+
+  // Mencoba buka sesi di luar jam jadwal harus gagal
+  const earlyAdapter = new MockPracticumAdapter(() => new Date('2026-11-24T07:30:00.000Z'));
+  const earlyCls = await earlyAdapter.createClass(
+    { courseName: 'Sistem Operasi', className: 'SO-2' },
+    'asisten-1',
+  );
+  const earlySession = await earlyAdapter.createSession(
+    {
+      classId: earlyCls.id,
+      title: 'Sesi Belum Jamnya',
+      location: 'Lab 4',
+      startsAt: '2026-11-24T08:00:00.000Z',
+      endsAt: '2026-11-24T10:00:00.000Z',
+    },
+    'asisten-1',
+  );
+  await assert.rejects(
+    async () => {
+      await earlyAdapter.openSession(earlySession.id, 'asisten-1');
+    },
+    { message: /belum memasuki jamnya/ },
+  );
+
+  const lateAdapter = new MockPracticumAdapter(() => new Date('2026-11-24T10:05:00.000Z'));
+  const lateCls = await lateAdapter.createClass(
+    { courseName: 'Sistem Operasi', className: 'SO-3' },
+    'asisten-1',
+  );
+  const lateSession = await lateAdapter.createSession(
+    {
+      classId: lateCls.id,
+      title: 'Sesi Terlewat',
+      location: 'Lab 5',
+      startsAt: '2026-11-24T08:00:00.000Z',
+      endsAt: '2026-11-24T10:00:00.000Z',
+    },
+    'asisten-1',
+  );
+  await assert.rejects(
+    async () => {
+      await lateAdapter.openSession(lateSession.id, 'asisten-1');
+    },
+    { message: /telah berakhir/ },
+  );
 
   // Buka sesi
   await adapter.openSession(session.id, 'asisten-1');
@@ -364,7 +409,7 @@ test('FR-04: Kelas tidak boleh meninggalkan sesi atau member yatim', async () =>
 });
 
 test('FR-04: Kelas tidak dapat dihapus jika memiliki sesi aktif, sesi dengan presensi, atau izin', async () => {
-  const adapter = new MockPracticumAdapter();
+  const adapter = new MockPracticumAdapter(() => new Date('2026-12-01T08:30:00.000Z'));
 
   // Kasus 1: Kelas dengan sesi yang sudah 'open'
   const clsActive = await adapter.createClass(
@@ -519,6 +564,49 @@ test('memberUids stays synced on addMember/removeMember, getRegisteredStudents r
   const rescheduled = await adapter.getSession(session.id);
   assert.equal(rescheduled?.date, '2026-11-30');
   assert.equal(rescheduled?.startsAt, '2026-11-30T13:00:00.000Z');
+
+  // Bentrok jadwal pada lab dan jam yang sama saat create dan reschedule ditolak
+  const clsOther = await adapter.createClass(
+    { courseName: 'Struktur Data', className: 'SD-A' },
+    'asisten-1',
+  );
+  await adapter.createSession(
+    {
+      classId: clsOther.id,
+      title: 'Pertemuan Lab Sibuk',
+      location: 'Lab 1',
+      startsAt: '2026-12-01T08:00:00.000Z',
+      endsAt: '2026-12-01T10:00:00.000Z',
+    },
+    'asisten-1',
+  );
+
+  await assert.rejects(
+    async () => {
+      await adapter.createSession(
+        {
+          classId: cls.id,
+          title: 'Sesi Overlap Lab',
+          location: 'Lab 1',
+          startsAt: '2026-12-01T09:00:00.000Z',
+          endsAt: '2026-12-01T11:00:00.000Z',
+        },
+        'asisten-1',
+      );
+    },
+    { message: /Jadwal bentrok di Lab 1/ },
+  );
+
+  await assert.rejects(
+    async () => {
+      await adapter.updateSession(session.id, {
+        date: '2026-12-01',
+        startsAt: '2026-12-01T08:30:00.000Z',
+        endsAt: '2026-12-01T10:30:00.000Z',
+      });
+    },
+    { message: /Jadwal bentrok di Lab 1/ },
+  );
 });
 
 test('Seeder provides all 8 practicum courses and 2 student/assistant accounts', async () => {

@@ -108,6 +108,27 @@ export function LeaveProvider({
     );
   }, [consumerCount, port, retryTick, studentId]);
 
+  const requestClassification = useCallback(
+    async (leaveRequestId: string) => {
+      if (!user) return;
+
+      setClassificationErrors((current) => {
+        const { [leaveRequestId]: _discarded, ...rest } = current;
+        return rest;
+      });
+
+      try {
+        await classifyLeaveReason(leaveRequestId);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Klasifikasi AI tidak dapat diproses.';
+        setClassificationErrors((current) => ({ ...current, [leaveRequestId]: message }));
+        await port.markClassificationFailed(leaveRequestId).catch(() => undefined);
+      }
+    },
+    [port, user],
+  );
+
   const submitLeave = useCallback(
     async (session: SessionSummary, reason: string): Promise<SubmitLeaveResult> => {
       if (!user || user.role !== 'student') {
@@ -121,13 +142,8 @@ export function LeaveProvider({
 
       let sentimentAnalysis: LeaveRequest['sentimentAnalysis'];
       try {
-        sentimentAnalysis = analyzeLeaveSentiment(reason);
-      } catch {
-        // Keep leave submission available so the result can be retried during review.
-      }
-
-      try {
-        const request = await port.createLeaveRequest({ session, user, reason, sentimentAnalysis });
+        const request = await port.createLeaveRequest({ session, user, reason });
+        void requestClassification(request.id);
         return { ok: true, request };
       } catch (error) {
         return {
@@ -142,14 +158,18 @@ export function LeaveProvider({
     [port, user],
   );
 
-  const analyzeLeave = useCallback(
-    async (leaveRequestId: string, reason: string) => {
-      if (user?.role !== 'assistant') {
-        throw new LeavePortError('forbidden', 'Hanya Asisten yang dapat mengulang analisis izin.');
-      }
-      await port.saveSentimentAnalysis(leaveRequestId, analyzeLeaveSentiment(reason));
+  const classifyLeave = useCallback(
+    async (leaveRequestId: string, _reason: string) => {
+      await requestClassification(leaveRequestId);
     },
-    [port, user?.role],
+    [requestClassification],
+  );
+
+  const retryClassification = useCallback(
+    async (leaveRequestId: string, _reason?: string) => {
+      await requestClassification(leaveRequestId);
+    },
+    [requestClassification],
   );
 
   const reviewLeave = useCallback(

@@ -309,6 +309,8 @@ service cloud.firestore {
         || (
           resource.data.status == 'scheduled'
           && request.resource.data.status == 'open'
+          && request.time >= resource.data.startsAt
+          && request.time <= resource.data.endsAt
           && request.resource.data.openedBy == request.auth.uid
           && request.resource.data.openedAt == request.time
         )
