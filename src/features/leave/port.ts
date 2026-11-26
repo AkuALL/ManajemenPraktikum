@@ -1,6 +1,7 @@
 import type {
   AiStatus,
   AuthUser,
+  LeaveAttachment,
   LeaveRequest,
   LeaveSentimentAnalysis,
   LeaveStatus,
@@ -31,6 +32,7 @@ export type CreateLeaveInput = {
   user: AuthUser;
   reason: string;
   sentimentAnalysis?: LeaveSentimentAnalysis;
+  attachment?: LeaveAttachment;
 };
 
 export interface LeavePort {

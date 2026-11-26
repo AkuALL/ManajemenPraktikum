@@ -18,8 +18,8 @@ import { CardListSkeleton } from '@/components/ui/skeleton';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
 import {
-  formatAttachmentSize,
-  getLeaveAttachment,
+  LeaveAttachmentPreview,
+  resolveLeaveAttachment,
   useAssistantLeaveRequests,
   useLeave,
 } from '@/features/leave';
@@ -221,11 +221,7 @@ export default function LeaveReviewScreen() {
     const session = sessionById.get(request.sessionId);
     const cls = classById.get(request.classId);
     const student = studentById.get(request.studentId);
-    const attachment = getLeaveAttachment({
-      sessionId: request.sessionId,
-      userId: request.studentId,
-      leaveId: request.id,
-    });
+    const attachment = resolveLeaveAttachment(request);
     const busy = submittingId === request.id;
 
     const studentHeading = student
@@ -331,11 +327,7 @@ export default function LeaveReviewScreen() {
             &ldquo;{request.reason}&rdquo;
           </Text>
           {attachment ? (
-            <View style={[styles.attachChip, { backgroundColor: colors.balticSoft }]}>
-              <Text style={[styles.attachChipText, { color: colors.baltic }]} numberOfLines={1}>
-                {attachment.name} · {formatAttachmentSize(attachment.sizeBytes)}
-              </Text>
-            </View>
+            <LeaveAttachmentPreview attachment={attachment} />
           ) : null}
         </View>
 
@@ -483,6 +475,7 @@ export default function LeaveReviewScreen() {
               {remainingPending.map((item) => {
                 const student = studentById.get(item.studentId);
                 const name = student?.displayName ?? item.studentId;
+                const hasAttachment = Boolean(resolveLeaveAttachment(item));
 
                 return (
                   <Pressable
@@ -501,6 +494,7 @@ export default function LeaveReviewScreen() {
                       </Text>
                       <Text style={[styles.spotlightMeta, { color: colors.textSecondary }]}>
                         Sentimen AI: {formatLeaveSentiment(item.sentimentAnalysis)}
+                        {hasAttachment ? ' · Lampiran' : ''}
                       </Text>
                       <View style={[styles.pendingPill, { backgroundColor: colors.rosySoft }]}>
                         <Text style={[styles.pendingPillText, { color: colors.rosyDark }]}>
@@ -675,16 +669,6 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.sansRegular,
     fontSize: 13,
     lineHeight: 19,
-  },
-  attachChip: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  attachChipText: {
-    fontFamily: FontFamily.sansSemiBold,
-    fontSize: 11.5,
   },
   noteFieldGroup: {
     gap: 6,

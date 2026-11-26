@@ -10,7 +10,12 @@ import { CardListSkeleton } from '@/components/ui/skeleton';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { sortAttendanceEntries, useAttendance } from '@/features/attendance';
 import { useAuth } from '@/features/auth';
-import { useLeave } from '@/features/leave';
+import {
+  LeaveAttachmentPreview,
+  resolveLeaveAttachment,
+  useLeave,
+  type LeaveAttachmentMeta,
+} from '@/features/leave';
 import { formatLeaveSentiment } from '@/features/leave/sentiment';
 import { formatSessionTime, usePracticum } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -29,6 +34,7 @@ type UnifiedHistoryItem = {
   hasUnreadDot?: boolean;
   sortOrder: number;
   sentimentAnalysis?: LeaveSentimentAnalysis;
+  attachment?: LeaveAttachmentMeta | null;
   reviewNote?: string;
 };
 
@@ -128,6 +134,7 @@ export default function AttendanceHistoryScreen() {
         hasUnreadDot: req.status === 'pending',
         sortOrder: req.createdAtMs ?? 0,
         sentimentAnalysis: req.sentimentAnalysis,
+        attachment: resolveLeaveAttachment(req),
         reviewNote: req.reviewNote,
       });
     });
@@ -341,6 +348,10 @@ export default function AttendanceHistoryScreen() {
                                 Sentimen AI: {formatLeaveSentiment(entry.sentimentAnalysis)}
                               </Text>
                             </View>
+
+                            {entry.attachment ? (
+                              <LeaveAttachmentPreview attachment={entry.attachment} compact />
+                            ) : null}
 
                             {entry.reviewNote ? (
                               <View

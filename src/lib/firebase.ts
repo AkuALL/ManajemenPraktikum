@@ -8,6 +8,7 @@ import {
 } from 'firebase/auth';
 import * as FirebaseAuth from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import { Platform } from 'react-native';
 
 type ReactNativeAuthExports = typeof FirebaseAuth & {
@@ -77,3 +78,4 @@ function createAuth(): Auth {
 
 export const auth = createAuth();
 export const db = getFirestore(firebaseApp);
+export const storage = getStorage(firebaseApp);

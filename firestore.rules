@@ -542,6 +542,24 @@ service cloud.firestore {
         && [null, 'positif', 'netral', 'negatif'].hasAny([analysis.label]);
     }
 
+    function validLeaveAttachment(attachment) {
+      return attachment is map
+        && attachment.keys().hasOnly(['name', 'sizeBytes', 'mimeType', 'url', 'storagePath'])
+        && attachment.keys().hasAll(['name', 'sizeBytes', 'mimeType', 'url'])
+        && validText(attachment.name, 1, 200)
+        && attachment.sizeBytes is number
+        && attachment.sizeBytes >= 0
+        && attachment.sizeBytes <= 2097152
+        && validText(attachment.mimeType, 3, 100)
+        && (attachment.mimeType.matches('^image/.*')
+            || attachment.mimeType == 'application/pdf')
+        && validText(attachment.url, 10, 950000)
+        && (attachment.url.matches('^https://.*')
+            || attachment.url.matches('^data:(image/.*|application/pdf);base64,.*'))
+        && (!('storagePath' in attachment)
+            || validText(attachment.storagePath, 1, 400));
+    }
+
     function validLeaveCreate(leaveId) {
       return request.resource.data.keys().hasOnly([
           'sessionId',
@@ -551,6 +569,7 @@ service cloud.firestore {
           'status',
           'aiStatus',
           'sentimentAnalysis',
+          'attachment',
           'createdAt',
           'updatedAt'
         ])
@@ -573,6 +592,8 @@ service cloud.firestore {
         && request.resource.data.aiStatus == 'pending'
         && (!('sentimentAnalysis' in request.resource.data)
           || validLeaveSentiment(request.resource.data.sentimentAnalysis))
+        && (!('attachment' in request.resource.data)
+          || validLeaveAttachment(request.resource.data.attachment))
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
         && isLeaveEligibleSession(

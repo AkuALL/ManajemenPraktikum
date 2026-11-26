@@ -5,6 +5,14 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { buildLeaveRequestDocId } from '../../../types/contracts.ts';
+import {
+  inferAttachmentMimeType,
+  isAllowedAttachmentMimeType,
+  MAX_ATTACHMENT_SIZE_BYTES,
+  parseLeaveAttachment,
+  resolveLeaveAttachment,
+  sanitizeAttachmentFileName,
+} from '../attachment-store.ts';
 import { parseGeminiClassificationPayload } from '../classify-leave-reason.ts';
 import {
   aiStatusLabel,
@@ -116,6 +124,76 @@ test('leave rules restrict decisions to class assistants and limit student updat
   assert.match(failureHelper, /function validLeaveClassificationSuccess\(\)/);
   assert.match(failureHelper, /request\.resource\.data\.aiStatus == 'success'/);
   assert.match(failureHelper, /request\.resource\.data\.aiConfidence >= 0/);
+
+  assert.match(rules, /function validLeaveAttachment\(attachment\)/);
+  assert.match(rules, /function validLeaveCreate\(leaveId\)[\s\S]*'attachment'/);
+  assert.match(rules, /validLeaveAttachment\(request\.resource\.data\.attachment\)/);
+
+  const storageRules = fs.readFileSync(path.resolve(process.cwd(), 'storage.rules'), 'utf8');
+  assert.match(storageRules, /match \/leaveAttachments\/\{studentId\}\/\{leaveId\}\/\{fileName\}/);
+  assert.match(storageRules, /request\.auth\.uid == studentId/);
+  assert.match(storageRules, /request\.resource\.size <= 2 \* 1024 \* 1024/);
+});
+
+test('leave attachment validation, MIME inference, and Firestore resolution work across devices', () => {
+  assert.equal(inferAttachmentMimeType('surat_dokter.jpg'), 'image/jpeg');
+  assert.equal(inferAttachmentMimeType('bukti.PNG', 'application/octet-stream'), 'image/png');
+  assert.equal(inferAttachmentMimeType('surat.pdf'), 'application/pdf');
+  assert.equal(isAllowedAttachmentMimeType('image/jpeg'), true);
+  assert.equal(isAllowedAttachmentMimeType('application/pdf'), true);
+  assert.equal(isAllowedAttachmentMimeType('application/zip'), false);
+  assert.equal(sanitizeAttachmentFileName('foto surat/izin?.jpg'), 'foto_surat_izin_.jpg');
+
+  const valid = parseLeaveAttachment({
+    name: 'bukti.jpg',
+    sizeBytes: 120000,
+    mimeType: 'image/jpeg',
+    url: 'https://firebasestorage.googleapis.com/v0/b/test/o/bukti.jpg',
+    storagePath: 'leaveAttachments/u1/s1_u1/bukti.jpg',
+  });
+  assert.deepEqual(valid, {
+    name: 'bukti.jpg',
+    sizeBytes: 120000,
+    mimeType: 'image/jpeg',
+    url: 'https://firebasestorage.googleapis.com/v0/b/test/o/bukti.jpg',
+    storagePath: 'leaveAttachments/u1/s1_u1/bukti.jpg',
+  });
+
+  const dataUrlAttachment = parseLeaveAttachment({
+    name: 'surat.png',
+    sizeBytes: 4096,
+    mimeType: 'image/png',
+    url: 'data:image/png;base64,iVBORw0KGgo=',
+  });
+  assert.ok(dataUrlAttachment);
+
+  assert.equal(
+    parseLeaveAttachment({
+      name: 'oversized.jpg',
+      sizeBytes: MAX_ATTACHMENT_SIZE_BYTES + 1,
+      mimeType: 'image/jpeg',
+      url: 'https://example.com/a.jpg',
+    }),
+    undefined,
+  );
+  assert.equal(
+    parseLeaveAttachment({
+      name: 'bad.exe',
+      sizeBytes: 100,
+      mimeType: 'application/x-msdownload',
+      url: 'https://example.com/bad.exe',
+    }),
+    undefined,
+  );
+
+  const resolved = resolveLeaveAttachment({
+    id: 's1_u1',
+    sessionId: 's1',
+    studentId: 'u1',
+    attachment: valid,
+  });
+  assert.equal(resolved?.uri, valid?.url);
+  assert.equal(resolved?.name, 'bukti.jpg');
 });
 
 test('parseGeminiClassificationPayload validates category, clamps confidence, and rejects bad JSON', () => {

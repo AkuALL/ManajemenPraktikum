@@ -29,6 +29,7 @@ import {
   type LeaveListenerMeta,
   type LeavePort,
 } from './port';
+import { parseLeaveAttachment } from './attachment-store';
 import { parseLeaveSentiment } from './sentiment';
 
 function timestampMs(value: unknown): number | null {
@@ -80,6 +81,7 @@ function parseLeaveRequest(
     aiConfidence: typeof data.aiConfidence === 'number' ? data.aiConfidence : undefined,
     aiClassifiedAtMs: timestampMs(data.aiClassifiedAt),
     sentimentAnalysis: parseLeaveSentiment(data.sentimentAnalysis),
+    attachment: parseLeaveAttachment(data.attachment),
     reviewedBy: typeof data.reviewedBy === 'string' ? data.reviewedBy : undefined,
     reviewedAtMs: timestampMs(data.reviewedAt),
     reviewNote: typeof data.reviewNote === 'string' ? data.reviewNote : undefined,
@@ -119,7 +121,7 @@ async function findExistingLeaveRequest(
 }
 
 export const firestoreLeaveAdapter: LeavePort = {
-  async createLeaveRequest({ session, user, reason, sentimentAnalysis }: CreateLeaveInput) {
+  async createLeaveRequest({ session, user, reason, sentimentAnalysis, attachment }: CreateLeaveInput) {
     const validationError = validateLeaveReason(reason);
     if (validationError) throw new LeavePortError('invalid-input', validationError);
     if (user.role !== 'student') {
@@ -143,6 +145,7 @@ export const firestoreLeaveAdapter: LeavePort = {
         status: 'pending',
         aiStatus: 'pending',
         ...(sentimentAnalysis ? { sentimentAnalysis } : {}),
+        ...(attachment ? { attachment } : {}),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -157,6 +160,7 @@ export const firestoreLeaveAdapter: LeavePort = {
         aiStatus: 'pending',
         aiClassifiedAtMs: null,
         sentimentAnalysis,
+        attachment,
         reviewedAtMs: null,
         createdAtMs: null,
         updatedAtMs: null,

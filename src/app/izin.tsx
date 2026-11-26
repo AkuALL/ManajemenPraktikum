@@ -1,6 +1,5 @@
-import * as DocumentPicker from 'expo-document-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Upload } from 'lucide-react-native';
+import { Upload, X } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import {
     ActivityIndicator,
@@ -17,8 +16,8 @@ import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
 import {
     formatAttachmentSize,
-    MAX_ATTACHMENT_SIZE_BYTES,
-    saveLeaveAttachment,
+    LeaveAttachmentPreview,
+    pickLeaveAttachment,
     useLeave,
     type LeaveAttachmentMeta,
 } from '@/features/leave';
@@ -26,7 +25,7 @@ import { validateLeaveReason } from '@/features/leave/port';
 import { APP_ROUTES } from '@/features/navigation';
 import { formatSessionTime, usePracticum } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { confirmAction, showAlert } from '@/lib/cross-platform-alert';
+import { confirmAction } from '@/lib/cross-platform-alert';
 
 export default function LeaveRequestScreen() {
   const router = useRouter();
@@ -60,32 +59,10 @@ export default function LeaveRequestScreen() {
 
   const handlePickAttachment = async () => {
     if (submitting) return;
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['image/*', 'application/pdf'],
-        multiple: false,
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled || !result.assets || result.assets.length === 0) return;
-      const asset = result.assets[0];
-      const sizeBytes = asset.size ?? 0;
-      if (sizeBytes > MAX_ATTACHMENT_SIZE_BYTES) {
-        showAlert(
-          'Ukuran berkas terlalu besar',
-          'Ukuran lampiran maksimal 2 MB (Image / PDF).',
-        );
-        return;
-      }
-
-      setAttachment({
-        name: asset.name,
-        sizeBytes,
-        mimeType: asset.mimeType ?? 'application/pdf',
-        uri: asset.uri,
-      });
-    } catch {
-      showAlert('Gagal memilih berkas', 'Silakan pilih berkas gambar atau PDF lain.');
+    const picked = await pickLeaveAttachment();
+    if (picked) {
+      setAttachment(picked);
+      setErrorMessage(null);
     }
   };
 
@@ -101,16 +78,11 @@ export default function LeaveRequestScreen() {
         status: targetSession.status,
       },
       reason,
+      attachment,
     );
     setSubmitting(false);
 
     if (result.ok) {
-      if (attachment) {
-        saveLeaveAttachment(
-          { sessionId: targetSession.id, userId: user?.uid, leaveId: result.request.id },
-          attachment,
-        );
-      }
       router.replace(APP_ROUTES.STUDENT_ATTENDANCE as never);
     } else {
       setErrorMessage(result.message);
@@ -280,6 +252,24 @@ export default function LeaveRequestScreen() {
                     {attachment ? 'Ganti' : 'Pilih'}
                   </Text>
                 </Pressable>
+
+                {attachment ? (
+                  <View style={styles.previewWrap}>
+                    <View style={styles.previewBox}>
+                      <LeaveAttachmentPreview attachment={attachment} compact />
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Hapus lampiran"
+                      disabled={submitting}
+                      onPress={() => setAttachment(null)}
+                      hitSlop={8}
+                      style={({ pressed }) => [styles.clearAttachBtn, pressed && styles.pressed]}
+                    >
+                      <X size={16} color={colors.textSecondary} />
+                    </Pressable>
+                  </View>
+                ) : null}
               </View>
 
               {errorMessage ? (
@@ -399,6 +389,17 @@ const styles = StyleSheet.create({
   attachAction: {
     fontFamily: FontFamily.sansBold,
     fontSize: 12.5,
+  },
+  previewWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  previewBox: {
+    flex: 1,
+  },
+  clearAttachBtn: {
+    padding: 6,
   },
   errorBox: {
     borderRadius: 12,

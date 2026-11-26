@@ -9,8 +9,10 @@ import {
 } from 'react';
 
 import { useAuth } from '@/features/auth';
-import type { LeaveRequest, SessionSummary } from '@/types';
+import { buildLeaveRequestDocId, type LeaveAttachment, type LeaveRequest, type SessionSummary } from '@/types';
 
+import { saveLeaveAttachment, type LeaveAttachmentMeta } from './attachment-store';
+import { uploadLeaveAttachment } from './attachment-upload';
 import { requestLeaveSentiment } from './classify-leave-reason';
 import { firestoreLeaveAdapter } from './firestore-adapter';
 import {
@@ -45,7 +47,11 @@ type LeaveContextValue = {
   loading: boolean;
   error: string | null;
   fromCache: boolean;
-  submitLeave: (session: SessionSummary, reason: string) => Promise<SubmitLeaveResult>;
+  submitLeave: (
+    session: SessionSummary,
+    reason: string,
+    attachment?: LeaveAttachmentMeta | null,
+  ) => Promise<SubmitLeaveResult>;
   analyzeLeave: (leaveRequestId: string) => Promise<void>;
   reviewLeave: (
     leaveRequestId: string,
@@ -110,7 +116,11 @@ export function LeaveProvider({
   }, [consumerCount, port, retryTick, studentId]);
 
   const submitLeave = useCallback(
-    async (session: SessionSummary, reason: string): Promise<SubmitLeaveResult> => {
+    async (
+      session: SessionSummary,
+      reason: string,
+      attachment?: LeaveAttachmentMeta | null,
+    ): Promise<SubmitLeaveResult> => {
       if (!user || user.role !== 'student') {
         return { ok: false, message: 'Hanya Praktikan yang dapat mengajukan izin.' };
       }
@@ -120,9 +130,52 @@ export function LeaveProvider({
       const validationError = validateLeaveReason(reason);
       if (validationError) return { ok: false, message: validationError };
 
+      if (
+        snapshot?.studentId === user.uid
+        && snapshot.requests.some((item) => item.sessionId === session.id)
+      ) {
+        return { ok: false, message: 'Izin untuk sesi ini sudah pernah diajukan.' };
+      }
+
+      let uploadedAttachment: LeaveAttachment | undefined;
+      if (attachment) {
+        try {
+          const leaveId = buildLeaveRequestDocId(session.id, user.uid);
+          uploadedAttachment = await uploadLeaveAttachment({
+            leaveId,
+            studentId: user.uid,
+            attachment,
+          });
+        } catch (error) {
+          return {
+            ok: false,
+            message:
+              error instanceof Error && error.message
+                ? error.message
+                : 'Lampiran izin gagal diunggah. Silakan coba lagi.',
+          };
+        }
+      }
+
       const sentimentAnalysis = tryAnalyzeLeaveWithEdom(reason);
       try {
-        const request = await port.createLeaveRequest({ session, user, reason, sentimentAnalysis });
+        const request = await port.createLeaveRequest({
+          session,
+          user,
+          reason,
+          sentimentAnalysis,
+          attachment: uploadedAttachment,
+        });
+        if (uploadedAttachment && attachment) {
+          saveLeaveAttachment(
+            { sessionId: session.id, userId: user.uid, leaveId: request.id },
+            {
+              ...attachment,
+              ...uploadedAttachment,
+              uri: uploadedAttachment.url,
+            },
+          );
+        }
         if (!sentimentAnalysis) {
           void requestLeaveSentiment(request.id).catch(() => undefined);
         }
@@ -137,7 +190,7 @@ export function LeaveProvider({
         };
       }
     },
-    [port, user],
+    [port, snapshot, user],
   );
 
   const analyzeLeave = useCallback(
