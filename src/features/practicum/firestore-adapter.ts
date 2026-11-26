@@ -1,4 +1,8 @@
-import { assertPreviousSessionsClosed } from './sequence';
+import {
+  assertNoScheduleConflict,
+  assertPreviousSessionsClosed,
+  assertSessionWithinStartWindow,
+} from './sequence';
 import {
   AddMemberInput,
   ClassMember,
@@ -624,6 +628,23 @@ export class FirestorePracticumAdapter implements PracticumPort {
     };
   }
 
+  private async getActiveSessionsForConflictCheck(db: Firestore): Promise<PracticumSession[]> {
+    const { collection, getDocs, query, where } = await import('firebase/firestore');
+    const sessionsRef = collection(db, 'sessions');
+    const [scheduledSnap, openSnap] = await Promise.all([
+      getDocs(query(sessionsRef, where('status', '==', 'scheduled'))),
+      getDocs(query(sessionsRef, where('status', '==', 'open'))),
+    ]);
+
+    const byId = new Map<string, PracticumSession>();
+    for (const docSnap of [...scheduledSnap.docs, ...openSnap.docs]) {
+      if (!byId.has(docSnap.id)) {
+        byId.set(docSnap.id, mapSessionDoc(docSnap.id, docSnap.data()));
+      }
+    }
+    return Array.from(byId.values());
+  }
+
   async createSession(input: CreateSessionInput, assistantId: string): Promise<PracticumSession> {
     const db = await this.getDb();
     const { addDoc, collection, serverTimestamp, Timestamp } = await import('firebase/firestore');
@@ -640,6 +661,16 @@ export class FirestorePracticumAdapter implements PracticumPort {
     if (startDate >= endDate) {
       throw new Error('Waktu selesai harus lebih lambat dari waktu mulai');
     }
+
+    assertNoScheduleConflict(await this.getActiveSessionsForConflictCheck(db), {
+      classId: input.classId,
+      labId: input.labId,
+      location: input.location,
+      locationName: input.locationName,
+      startsAt: startDate.toISOString(),
+      endsAt: endDate.toISOString(),
+      date: input.date,
+    });
 
     const payload = {
       classId: input.classId,
@@ -692,25 +723,35 @@ export class FirestorePracticumAdapter implements PracticumPort {
     if (input.location !== undefined) updatePayload.location = input.location;
     Object.assign(updatePayload, sessionLocationSnapshot(input));
 
-    if (input.startsAt !== undefined || input.endsAt !== undefined) {
-      const startDate =
-        input.startsAt !== undefined ? new Date(input.startsAt) : parseSessionDate(current.startsAt);
-      const endDate =
-        input.endsAt !== undefined ? new Date(input.endsAt) : parseSessionDate(current.endsAt);
+    const mergedStartDate =
+      input.startsAt !== undefined ? new Date(input.startsAt) : parseSessionDate(current.startsAt);
+    const mergedEndDate =
+      input.endsAt !== undefined ? new Date(input.endsAt) : parseSessionDate(current.endsAt);
 
-      if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
-        throw new Error('Format timestamp waktu mulai atau selesai tidak valid');
-      }
-      if (startDate.getDay() === 0 || startDate.getDay() === 6) {
-        throw new Error('Jadwal praktikum tidak dapat dipindahkan ke hari Sabtu atau Minggu');
-      }
-      if (startDate >= endDate) {
-        throw new Error('Waktu selesai harus lebih lambat dari waktu mulai');
-      }
-
-      if (input.startsAt !== undefined) updatePayload.startsAt = Timestamp.fromDate(startDate);
-      if (input.endsAt !== undefined) updatePayload.endsAt = Timestamp.fromDate(endDate);
+    if (Number.isNaN(mergedStartDate.getTime()) || Number.isNaN(mergedEndDate.getTime())) {
+      throw new Error('Format timestamp waktu mulai atau selesai tidak valid');
     }
+    if (mergedStartDate.getDay() === 0 || mergedStartDate.getDay() === 6) {
+      throw new Error('Jadwal praktikum tidak dapat dipindahkan ke hari Sabtu atau Minggu');
+    }
+    if (mergedStartDate >= mergedEndDate) {
+      throw new Error('Waktu selesai harus lebih lambat dari waktu mulai');
+    }
+
+    assertNoScheduleConflict(await this.getActiveSessionsForConflictCheck(db), {
+      classId: current.classId,
+      labId: input.labId ?? (typeof current.labId === 'string' ? current.labId : undefined),
+      location: input.location ?? (typeof current.location === 'string' ? current.location : undefined),
+      locationName:
+        input.locationName ??
+        (typeof current.locationName === 'string' ? current.locationName : undefined),
+      startsAt: mergedStartDate.toISOString(),
+      endsAt: mergedEndDate.toISOString(),
+      excludeSessionId: sessionId,
+    });
+
+    if (input.startsAt !== undefined) updatePayload.startsAt = Timestamp.fromDate(mergedStartDate);
+    if (input.endsAt !== undefined) updatePayload.endsAt = Timestamp.fromDate(mergedEndDate);
 
     await updateDoc(sessionRef, updatePayload);
 
@@ -771,6 +812,11 @@ export class FirestorePracticumAdapter implements PracticumPort {
     if (data.status !== 'scheduled') {
       throw new Error(`Sesi tidak dapat dibuka dari status "${data.status}".`);
     }
+
+    assertSessionWithinStartWindow({
+      startsAt: formatTimestamp(data.startsAt),
+      endsAt: formatTimestamp(data.endsAt),
+    });
 
     assertPreviousSessionsClosed(await this.getSessions(data.classId), sessionId);
 

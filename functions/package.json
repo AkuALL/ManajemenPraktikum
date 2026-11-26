@@ -7,7 +7,7 @@
     "node": "20"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "node ../scripts/sync-functions-env.mjs && tsc",
     "lint": "tsc --noEmit",
     "serve": "npm run build && npx firebase-tools emulators:start --only functions",
     "deploy": "npx firebase-tools deploy --only functions"

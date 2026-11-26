@@ -111,7 +111,7 @@ export function LeaveProvider({
   }, [consumerCount, port, retryTick, studentId]);
 
   const requestClassification = useCallback(
-    async (leaveRequestId: string, reason?: string) => {
+    async (leaveRequestId: string) => {
       if (!user) return;
 
       setClassificationErrors((current) => {
@@ -120,13 +120,7 @@ export function LeaveProvider({
       });
 
       try {
-        const result = await classifyLeaveReason(leaveRequestId, reason);
-        if (!result.persistedByServer) {
-          await port.saveClassificationResult(leaveRequestId, {
-            category: result.category,
-            confidence: result.confidence,
-          });
-        }
+        await classifyLeaveReason(leaveRequestId);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Klasifikasi AI tidak dapat diproses.';
@@ -148,7 +142,7 @@ export function LeaveProvider({
 
       try {
         const request = await port.createLeaveRequest({ session, user, reason });
-        void requestClassification(request.id, reason);
+        void requestClassification(request.id);
         return { ok: true, request };
       } catch (error) {
         return {
@@ -164,18 +158,17 @@ export function LeaveProvider({
   );
 
   const classifyLeave = useCallback(
-    async (leaveRequestId: string, reason: string) => {
-      await requestClassification(leaveRequestId, reason);
+    async (leaveRequestId: string, _reason: string) => {
+      await requestClassification(leaveRequestId);
     },
     [requestClassification],
   );
 
   const retryClassification = useCallback(
-    async (leaveRequestId: string, reason?: string) => {
-      const target = snapshot?.requests.find((item) => item.id === leaveRequestId);
-      await requestClassification(leaveRequestId, reason ?? target?.reason);
+    async (leaveRequestId: string, _reason?: string) => {
+      await requestClassification(leaveRequestId);
     },
-    [requestClassification, snapshot?.requests],
+    [requestClassification],
   );
 
   const reviewLeave = useCallback(

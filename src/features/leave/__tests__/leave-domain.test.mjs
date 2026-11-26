@@ -76,3 +76,12 @@ test('parseGeminiClassificationPayload validates category, clamps confidence, an
   assert.equal(parseGeminiClassificationPayload('{"category":"invalid","confidence":0.5}'), null);
   assert.equal(parseGeminiClassificationPayload('not-json'), null);
 });
+
+test('classifyLeaveReason runs strictly through Cloud Function without client-side Gemini API key', () => {
+  const serviceSource = fs.readFileSync(
+    path.resolve(process.cwd(), 'src/services/classify-leave-reason.ts'),
+    'utf8',
+  );
+  assert.doesNotMatch(serviceSource, /EXPO_PUBLIC_AI_API_KEY/);
+  assert.doesNotMatch(serviceSource, /generativelanguage\.googleapis\.com/);
+});

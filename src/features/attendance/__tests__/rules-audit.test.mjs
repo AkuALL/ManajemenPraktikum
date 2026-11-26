@@ -126,6 +126,10 @@ test('firestore.rules validates practicum text, session timestamps, and requires
   assert.match(sessionHelper, /validMasterLabSnapshot\(\)/);
   assert.match(
     sessionTransitionHelper,
+    /resource\.data\.status == 'scheduled'[\s\S]*request\.resource\.data\.status == 'open'[\s\S]*request\.time >= resource\.data\.startsAt[\s\S]*request\.time <= resource\.data\.endsAt/,
+  );
+  assert.match(
+    sessionTransitionHelper,
     /resource\.data\.status == 'scheduled'[\s\S]*request\.resource\.data\.status == 'cancelled'[\s\S]*request\.resource\.data\.cancelledBy == request\.auth\.uid[\s\S]*request\.resource\.data\.cancelledAt == request\.time/,
   );
   assert.match(sessionUpdateHelper, /resource\.data\.status != 'cancelled'/);
@@ -641,6 +645,8 @@ function evalSessionRule(op, ctx) {
       reqData.status === existingData.status ||
       (existingData.status === 'scheduled' &&
         reqData.status === 'open' &&
+        SERVER_TIME >= existingData.startsAt &&
+        SERVER_TIME <= existingData.endsAt &&
         reqData.openedBy === auth.uid &&
         reqData.openedAt === SERVER_TIME) ||
       (existingData.status === 'open' &&
@@ -812,6 +818,7 @@ test('session create/update rules enforce future startsAt, post-open lock, and M
     }),
     false,
   );
+  // Opening scheduled session before startsAt or after endsAt is rejected
   assert.equal(
     evalSessionRule('update', {
       auth: { uid: 'ast1' },
@@ -825,12 +832,54 @@ test('session create/update rules enforce future startsAt, post-open lock, and M
       },
       db,
     }),
+    false,
+  );
+  const expiredSession = {
+    ...baseSession,
+    startsAt: SERVER_TIME - 3 * 60 * 60 * 1000,
+    endsAt: SERVER_TIME - 10 * 60 * 1000,
+  };
+  assert.equal(
+    evalSessionRule('update', {
+      auth: { uid: 'ast1' },
+      existingData: expiredSession,
+      reqData: {
+        ...expiredSession,
+        status: 'open',
+        openedBy: 'ast1',
+        openedAt: SERVER_TIME,
+        updatedAt: SERVER_TIME,
+      },
+      db,
+    }),
+    false,
+  );
+
+  // Opening scheduled session within [startsAt, endsAt] is allowed
+  const activeWindowSession = {
+    ...baseSession,
+    startsAt: SERVER_TIME - 10 * 60 * 1000,
+    endsAt: SERVER_TIME + 2 * 60 * 60 * 1000,
+  };
+  assert.equal(
+    evalSessionRule('update', {
+      auth: { uid: 'ast1' },
+      existingData: activeWindowSession,
+      reqData: {
+        ...activeWindowSession,
+        status: 'open',
+        openedBy: 'ast1',
+        openedAt: SERVER_TIME,
+        updatedAt: SERVER_TIME,
+      },
+      db,
+    }),
     true,
   );
 
   // Lifecycle transition remains allowed even if Master Lab was later deactivated
   const sessionWithInactiveLab = {
-    ...baseSession,
+    ...activeWindowSession,
     labId: 'lab-off',
     location: 'Lab Nonaktif',
     locationName: 'Lab Nonaktif',
