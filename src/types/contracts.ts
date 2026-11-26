@@ -13,6 +13,13 @@ export type LeaveSentimentAnalysis = {
   model: 'edom-v1' | 'gemini';
   label: LeaveSentiment | null;
 };
+export type LeaveAttachment = {
+  name: string;
+  sizeBytes: number;
+  mimeType: string;
+  url: string;
+  storagePath?: string;
+};
 
 export type AuthUser = {
   uid: string;
@@ -60,6 +67,7 @@ export type LeaveRequest = {
   aiConfidence?: number;
   aiClassifiedAtMs: number | null;
   sentimentAnalysis?: LeaveSentimentAnalysis;
+  attachment?: LeaveAttachment;
   reviewedBy?: string;
   reviewedAtMs: number | null;
   reviewNote?: string;
