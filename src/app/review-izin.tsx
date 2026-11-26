@@ -31,7 +31,8 @@ import {
 } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { confirmAction, showAlert } from '@/lib/cross-platform-alert';
-import type { LeaveRequest } from '@/types';
+import { hasGeminiSentimentFallback } from '@/services/classify-leave-reason';
+import type { LeaveRequest, LeaveSentimentAnalysis } from '@/types';
 
 type ReviewFilterMode = 'pending' | 'all' | 'done';
 
@@ -39,6 +40,11 @@ const FILTER_OPTIONS: PickerOption[] = [
   { value: 'pending', label: 'Pending', subtitle: 'Pengajuan izin yang menunggu konfirmasi' },
   { value: 'done', label: 'Selesai', subtitle: 'Riwayat izin yang sudah disetujui / ditolak' },
 ];
+
+function needsSentimentAnalysis(analysis?: LeaveSentimentAnalysis): boolean {
+  return !analysis ||
+    (analysis.model === 'edom-v1' && analysis.label === null && hasGeminiSentimentFallback());
+}
 
 export default function LeaveReviewScreen() {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
@@ -161,7 +167,7 @@ export default function LeaveReviewScreen() {
       user?.role !== 'assistant' ||
       !spotlightId ||
       spotlightStatus !== 'pending' ||
-      spotlightSentiment ||
+      !needsSentimentAnalysis(spotlightSentiment) ||
       !spotlightReason ||
       attemptedSentimentIds.current.has(spotlightId)
     ) {
@@ -243,8 +249,9 @@ export default function LeaveReviewScreen() {
       .join(' · ');
 
     const sentimentState = sentimentStates[request.id];
-    const isAnalyzing = sentimentState === 'analyzing' && !request.sentimentAnalysis;
-    const canRetryAnalysis = request.status === 'pending' && !request.sentimentAnalysis &&
+    const needsAnalysis = needsSentimentAnalysis(request.sentimentAnalysis);
+    const isAnalyzing = sentimentState === 'analyzing' && needsAnalysis;
+    const canRetryAnalysis = request.status === 'pending' && needsAnalysis &&
       sentimentState === 'failed';
     const sentimentLabel = isAnalyzing
       ? 'Menganalisis…'

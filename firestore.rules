@@ -536,7 +536,7 @@ service cloud.firestore {
       return analysis is map
         && analysis.keys().hasOnly(['model', 'label'])
         && analysis.keys().hasAll(['model', 'label'])
-        && analysis.model == 'edom-v1'
+        && ['edom-v1', 'gemini'].hasAny([analysis.model])
         && [null, 'positif', 'netral', 'negatif'].hasAny([analysis.label]);
     }
 
@@ -599,7 +599,10 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sentimentAnalysis'])
         && validLeaveSentiment(request.resource.data.sentimentAnalysis)
         && (!('sentimentAnalysis' in resource.data)
-          || request.resource.data.sentimentAnalysis == resource.data.sentimentAnalysis);
+          || request.resource.data.sentimentAnalysis == resource.data.sentimentAnalysis
+          || (resource.data.sentimentAnalysis.model == 'edom-v1'
+            && resource.data.sentimentAnalysis.label == null
+            && request.resource.data.sentimentAnalysis.model == 'gemini'));
     }
 
     function validLeaveClassificationFailure() {

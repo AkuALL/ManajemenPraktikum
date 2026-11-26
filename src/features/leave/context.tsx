@@ -9,6 +9,7 @@ import {
 } from 'react';
 
 import { useAuth } from '@/features/auth';
+import { classifyLeaveSentimentWithGemini } from '@/services/classify-leave-reason';
 import type { LeaveRequest, SessionSummary } from '@/types';
 
 import { firestoreLeaveAdapter } from './firestore-adapter';
@@ -121,7 +122,7 @@ export function LeaveProvider({
 
       let sentimentAnalysis: LeaveRequest['sentimentAnalysis'];
       try {
-        sentimentAnalysis = analyzeLeaveSentiment(reason);
+        sentimentAnalysis = await analyzeLeaveSentiment(reason, classifyLeaveSentimentWithGemini);
       } catch {
         // Keep leave submission available so the result can be retried during review.
       }
@@ -147,7 +148,8 @@ export function LeaveProvider({
       if (user?.role !== 'assistant') {
         throw new LeavePortError('forbidden', 'Hanya Asisten yang dapat mengulang analisis izin.');
       }
-      await port.saveSentimentAnalysis(leaveRequestId, analyzeLeaveSentiment(reason));
+      const analysis = await analyzeLeaveSentiment(reason, classifyLeaveSentimentWithGemini);
+      await port.saveSentimentAnalysis(leaveRequestId, analysis);
     },
     [port, user?.role],
   );

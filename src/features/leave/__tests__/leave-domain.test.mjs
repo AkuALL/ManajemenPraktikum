@@ -38,8 +38,36 @@ test('leave requests sort newest first and AI labels remain informational', () =
 test('unrecognized leave sentiment stays distinct from neutral and legacy categories', () => {
   assert.equal(formatLeaveSentiment(parseLeaveSentiment({ model: 'edom-v1', label: 'netral' })), 'Netral');
   assert.equal(formatLeaveSentiment(parseLeaveSentiment({ model: 'edom-v1', label: null })), 'Tidak dapat ditentukan');
+  assert.deepEqual(parseLeaveSentiment({ model: 'gemini', label: 'netral' }), { model: 'gemini', label: 'netral' });
   assert.equal(formatLeaveSentiment(parseLeaveSentiment({ model: 'edom-v1', label: 'sakit' })), 'Belum dianalisis');
   assert.equal(parseLeaveSentiment({ model: 'unknown-model', label: 'netral' }), undefined);
+});
+
+test('Gemini fallback sends the reason as text and accepts only sentiment labels', async (t) => {
+  const originalKey = process.env.EXPO_PUBLIC_AI_API_KEY;
+  process.env.EXPO_PUBLIC_AI_API_KEY = 'fixture-key';
+  t.after(() => {
+    if (originalKey === undefined) delete process.env.EXPO_PUBLIC_AI_API_KEY;
+    else process.env.EXPO_PUBLIC_AI_API_KEY = originalKey;
+  });
+
+  const { classifyLeaveSentimentWithGemini } = await import('../../../services/classify-leave-reason.ts?sentiment-fixture');
+  let label = 'netral';
+  const fetch = t.mock.method(globalThis, 'fetch', async (url, request) => {
+    assert.match(url, /:generateContent$/);
+    assert.equal(request.headers['x-goog-api-key'], 'fixture-key');
+    assert.deepEqual(JSON.parse(request.body).contents, [
+      { role: 'user', parts: [{ text: 'Alasan contoh.' }] },
+    ]);
+    return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({ label }) }] } }] });
+  });
+
+  assert.deepEqual(await classifyLeaveSentimentWithGemini('  Alasan contoh.  '), { label: 'netral' });
+  label = 'tidak_dapat_ditentukan';
+  assert.deepEqual(await classifyLeaveSentimentWithGemini('Alasan contoh.'), { label: null });
+  label = 'sakit';
+  await assert.rejects(classifyLeaveSentimentWithGemini('Alasan contoh.'), /kontrak klasifikasi/);
+  assert.equal(fetch.mock.callCount(), 3);
 });
 
 test('leave rules restrict decisions to class assistants and limit student updates to AI classification', () => {
