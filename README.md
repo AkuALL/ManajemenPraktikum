@@ -23,7 +23,30 @@ In the output, you'll find options to open the app in a
 - [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
 - [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Struktur kode
+
+- `src/app/` berisi layar dan layout [Expo Router](https://docs.expo.dev/router/introduction).
+- `src/features/attendance/` berisi logika presensi, geofencing, dan komponen QR.
+- `src/features/labs/fsm-undip-labs.ts` menyimpan data referensi lab yang dipakai master lab dan presensi.
+- `src/features/leave/` menjalankan EDOM sekali per pengajuan izin dengan batas 1 detik. Jika EDOM tidak memberi hasil, aplikasi meminta Gemini lewat Cloud Function.
+- `src/features/notifications/` berisi pusat notifikasi, token perangkat, dan navigasi dari notifikasi.
+- `src/features/practicum/` mengelola kelas dan sesi, termasuk komponen aksi sesi untuk asisten.
+- `src/components/ui/` berisi komponen UI yang dipakai lintas fitur.
+- `functions/` berisi backend Firebase dalam satu paket. `src/classify-leave-reason.ts` menangani klasifikasi izin, `src/notifications.ts` menangani notifikasi, dan `src/index.ts` mengekspor fungsi yang dideploy.
+
+### Deploy Cloud Functions
+
+Jalankan dari root proyek untuk memperbarui kelima fungsi dalam satu codebase.
+
+```bash
+npx firebase-tools deploy --only functions --project manajemenpraktikum
+```
+
+Untuk deploy notifikasi saja, pilih empat fungsi berdasarkan namanya.
+
+```bash
+npx firebase-tools deploy --only "functions:notifySessionCreated,functions:notifySessionUpdated,functions:notifyLeaveCreated,functions:notifyLeaveDecision" --project manajemenpraktikum
+```
 
 ## Get a fresh project
 

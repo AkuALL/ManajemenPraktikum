@@ -1,25 +1,39 @@
 import type { LeaveSentiment, LeaveSentimentAnalysis } from '@/types';
 
-const SENTIMENT_MODEL = 'edom-v1';
+const EDOM_MODEL = 'edom-v1';
+const EDOM_TIMEOUT_MS = 1_000;
 const SENTIMENT_LABELS: Record<LeaveSentiment, string> = {
   positif: 'Positif',
   netral: 'Netral',
   negatif: 'Negatif',
 };
 
-type ClassifySentiment = (reason: string) => { label: LeaveSentiment | null };
-type SentimentModule = { createSentimentClassifier: (model: unknown) => ClassifySentiment };
+type EdomClassifier = (text: string, checkDeadline: () => void) => { label: unknown };
+type EdomModule = { createSentimentClassifier: (model: unknown) => EdomClassifier };
 
-let classifySentiment: ClassifySentiment | undefined;
+let classifyWithEdom: EdomClassifier | undefined;
 
-export function analyzeLeaveSentiment(reason: string): LeaveSentimentAnalysis {
-  if (!classifySentiment) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Load the model on first use.
-    const { createSentimentClassifier } = require('../../../ai/sentiment.js') as SentimentModule;
-    classifySentiment = createSentimentClassifier(require('../../../ai/model-edom.json'));
+export function tryAnalyzeLeaveWithEdom(reason: string): LeaveSentimentAnalysis | undefined {
+  try {
+    const deadline = performance.now() + EDOM_TIMEOUT_MS;
+    const checkDeadline = () => {
+      if (performance.now() >= deadline) throw new Error('Analisis EDOM melebihi batas waktu.');
+    };
+    if (!classifyWithEdom) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- Load EDOM only when it is needed.
+      const { createSentimentClassifier } = require('../../../ai/sentiment.js') as EdomModule;
+      classifyWithEdom = createSentimentClassifier(require('../../../ai/model-edom.json'));
+    }
+    checkDeadline();
+    const { label } = classifyWithEdom(reason.trim(), checkDeadline);
+    checkDeadline();
+
+    const analysis = parseLeaveSentiment({ model: EDOM_MODEL, label });
+    if (analysis?.label) return analysis;
+  } catch {
+    // An unavailable local result is handled by the Gemini fallback.
   }
-
-  return { model: SENTIMENT_MODEL, label: classifySentiment(reason.trim()).label };
+  return undefined;
 }
 
 export function parseLeaveSentiment(value: unknown): LeaveSentimentAnalysis | undefined {
@@ -27,17 +41,21 @@ export function parseLeaveSentiment(value: unknown): LeaveSentimentAnalysis | un
     typeof value !== 'object' ||
     value === null ||
     !('model' in value) ||
-    value.model !== SENTIMENT_MODEL ||
+    (value.model !== EDOM_MODEL && value.model !== 'gemini') ||
     !('label' in value)
   ) {
     return undefined;
   }
 
-  const { label } = value;
+  const { model, label } = value;
   if (label === null || label === 'positif' || label === 'netral' || label === 'negatif') {
-    return { model: SENTIMENT_MODEL, label };
+    return { model, label };
   }
   return undefined;
+}
+
+export function needsLeaveSentimentAnalysis(analysis?: LeaveSentimentAnalysis): boolean {
+  return !analysis || (analysis.model === EDOM_MODEL && analysis.label === null);
 }
 
 export function formatLeaveSentiment(analysis?: LeaveSentimentAnalysis): string {

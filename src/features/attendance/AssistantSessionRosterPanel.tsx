@@ -22,7 +22,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { confirmAction, showAlert } from '@/lib/cross-platform-alert';
 
 import { recordAssistantAttendance } from './firestore-adapter';
-import { resolveSessionLocationSummary } from './lab-location-fallback';
+import { resolveSessionLocationSummary } from '@/features/labs/fsm-undip-labs';
 import { useSessionAttendance } from './useSessionAttendance';
 
 const QUICK_REASONS = [

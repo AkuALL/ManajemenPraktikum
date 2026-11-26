@@ -5,7 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { CalendarClock, CheckCircle2, QrCode } from 'lucide-react-native';
 
 import { SubScreenHeader } from '@/components/ui/app-header';
-import { QrSessionBottomSheet } from '@/components/ui/qr-session-bottom-sheet';
+import { QrSessionBottomSheet } from '@/features/attendance/QrSessionBottomSheet';
 import { CardListSkeleton } from '@/components/ui/skeleton';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { AssistantSessionRosterPanel, useAttendance } from '@/features/attendance';

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { resolveNotificationTargetRoute } from '../../../services/notification/deep-linking-resolver.ts';
+import { resolveNotificationTargetRoute } from '../../notifications/deep-linking-resolver.ts';
 import {
   buildLeaveDecisionNotificationPayload,
   buildLeaveSubmittedNotificationPayload,

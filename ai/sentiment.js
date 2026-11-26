@@ -7,8 +7,9 @@ function createSentimentClassifier(model) {
     throw new Error('Unsupported sentiment model format');
   }
   const owns = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
-  return function classify(text) {
+  return function classify(text, checkDeadline) {
     if (typeof text !== 'string') throw new TypeError('text must be a string');
+    checkDeadline?.();
     const normalized = model.preprocessing.startsWith('unicode_')
       ? text.replace(/<[^>]*>/g, ' ').normalize('NFKD')
         .replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -18,6 +19,7 @@ function createSentimentClassifier(model) {
     const grams = words.concat(words.slice(1).map((w, i) => words[i] + ' ' + w));
     const counts = new Map();
     for (const gram of grams) {
+      checkDeadline?.();
       if (owns(model.vocabulary, gram)) {
         const index = model.vocabulary[gram];
         counts.set(index, (counts.get(index) || 0) + 1);
@@ -27,11 +29,17 @@ function createSentimentClassifier(model) {
       return {label: null, status: words.length ? 'unknown_vocabulary' : 'empty_input',
         scores: null, scoreType: 'none', experimental: true};
     }
-    const values = Array.from(counts, ([i, count]) =>
-      [i, (1 + Math.log(count)) * model.idf[i]]);
+    const values = Array.from(counts, ([i, count]) => {
+      checkDeadline?.();
+      return [i, (1 + Math.log(count)) * model.idf[i]];
+    });
     const norm = Math.sqrt(values.reduce((sum, pair) => sum + pair[1] ** 2, 0));
     const scores = model.weights.map((weights, c) =>
-      values.reduce((score, [i, value]) => score + weights[i] * value / norm, model.bias[c]));
+      values.reduce((score, [i, value]) => {
+        checkDeadline?.();
+        return score + weights[i] * value / norm;
+      }, model.bias[c]));
+    checkDeadline?.();
     const best = scores.indexOf(Math.max(...scores));
     return {label: model.labels[best], status: 'predicted',
       scores, scoreType: model.algorithm === 'LinearSVC' ? 'decision_margin' : 'log_score',

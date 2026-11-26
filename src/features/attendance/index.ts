@@ -16,10 +16,10 @@ export type {
 export { firestoreAttendanceAdapter } from './firestore-adapter';
 export {
   DEFAULT_FALLBACK_LAB,
-  FALLBACK_LAB_LOCATIONS,
+  FSM_UNDIP_LABS as FALLBACK_LAB_LOCATIONS,
   resolveSessionLocationSummary,
-} from './lab-location-fallback';
-export type { ResolvedSessionLocation } from './lab-location-fallback';
+  type ResolvedSessionLocation,
+} from '@/features/labs/fsm-undip-labs';
 export {
   AttendancePortError,
   MOCK_SESSION_SUMMARIES,

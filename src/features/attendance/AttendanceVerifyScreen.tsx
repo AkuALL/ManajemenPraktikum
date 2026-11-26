@@ -33,12 +33,12 @@ import {
   usePracticum,
 } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { evaluateGeofence } from '@/utils/haversine';
+import { evaluateGeofence } from './geofence';
 
 import { AttendanceEligibilityCard } from './AttendanceEligibilityCard';
 import { useAttendance } from './context';
 import { deriveAttendanceEligibility } from './eligibility';
-import { resolveSessionLocationSummary } from './lab-location-fallback';
+import { resolveSessionLocationSummary } from '@/features/labs/fsm-undip-labs';
 import { useAttendanceLocation } from './useAttendanceLocation';
 
 export function AttendanceVerifyScreen() {

@@ -23,7 +23,7 @@ import { Colors, FontFamily } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { showAlert } from '@/lib/cross-platform-alert';
 import type { GeofenceResult, SessionLocationSummary } from '@/types';
-import { formatDistanceMeters } from '@/utils/haversine';
+import { formatDistanceMeters } from './geofence';
 
 import type {
   AttendanceEligibility,

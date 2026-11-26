@@ -5,7 +5,7 @@ import {
   SessionStatus,
   UserRole,
 } from '@/types';
-import { ActionFeedbackMessage } from '@/components/assistant/assistant-action-feedback';
+import type { ActionFeedbackMessage } from './assistant-action-feedback';
 
 /**
  * Callback untuk perubahan status sesi.

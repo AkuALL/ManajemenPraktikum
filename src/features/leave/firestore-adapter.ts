@@ -135,25 +135,17 @@ export const firestoreLeaveAdapter: LeavePort = {
         throw new LeavePortError('duplicate', 'Izin untuk sesi ini sudah pernah diajukan.');
       }
 
-      const leaveData = {
+      await setDoc(reference, {
         sessionId: session.id,
         classId: session.classId,
         studentId: user.uid,
         reason: reason.trim(),
         status: 'pending',
         aiStatus: 'pending',
+        ...(sentimentAnalysis ? { sentimentAnalysis } : {}),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      };
-      let savedAnalysis = sentimentAnalysis;
-      try {
-        await setDoc(reference, sentimentAnalysis ? { ...leaveData, sentimentAnalysis } : leaveData);
-      } catch (error) {
-        if (!savedAnalysis || mapLeaveError(error).code !== 'forbidden') throw error;
-        // Older Firestore rules may still reject the new field during rollout.
-        await setDoc(reference, leaveData);
-        savedAnalysis = undefined;
-      }
+      });
 
       return (await findExistingLeaveRequest(session.id, user.uid)) ?? {
         id,
@@ -164,7 +156,7 @@ export const firestoreLeaveAdapter: LeavePort = {
         status: 'pending',
         aiStatus: 'pending',
         aiClassifiedAtMs: null,
-        sentimentAnalysis: savedAnalysis,
+        sentimentAnalysis,
         reviewedAtMs: null,
         createdAtMs: null,
         updatedAtMs: null,
@@ -179,16 +171,6 @@ export const firestoreLeaveAdapter: LeavePort = {
         }
       }
       throw mapped;
-    }
-  },
-
-  async saveSentimentAnalysis(leaveRequestId, analysis) {
-    try {
-      await updateDoc(doc(db, 'leaveRequests', leaveRequestId), {
-        sentimentAnalysis: analysis,
-      });
-    } catch (error) {
-      throw mapLeaveError(error);
     }
   },
 

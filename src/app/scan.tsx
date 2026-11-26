@@ -7,14 +7,14 @@ import { ChevronLeft, MapPin, RefreshCw, Zap } from 'lucide-react-native';
 import { parseQrPayload } from '@/features/attendance/qr-service';
 import { useAttendance } from '@/features/attendance';
 import { useAttendanceLocation } from '@/features/attendance/useAttendanceLocation';
-import { resolveSessionLocationSummary } from '@/features/attendance/lab-location-fallback';
+import { resolveSessionLocationSummary } from '@/features/labs/fsm-undip-labs';
 import { useAuth } from '@/features/auth';
 import { useLabs } from '@/features/labs/firestore-labs';
 import { APP_ROUTES } from '@/features/navigation';
 import { usePracticum } from '@/features/practicum';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { evaluateGeofence, formatDistanceMeters } from '@/utils/haversine';
+import { evaluateGeofence, formatDistanceMeters } from '@/features/attendance/geofence';
 
 export default function ScanQrScreen() {
   const router = useRouter();

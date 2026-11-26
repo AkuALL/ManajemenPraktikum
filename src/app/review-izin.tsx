@@ -23,7 +23,7 @@ import {
   useAssistantLeaveRequests,
   useLeave,
 } from '@/features/leave';
-import { formatLeaveSentiment } from '@/features/leave/sentiment';
+import { formatLeaveSentiment, needsLeaveSentimentAnalysis } from '@/features/leave/sentiment';
 import {
   formatSessionTime,
   type StudentCandidate,
@@ -143,9 +143,7 @@ export default function LeaveReviewScreen() {
   const spotlightId = spotlightRequest?.id;
   const spotlightStatus = spotlightRequest?.status;
   const spotlightSentiment = spotlightRequest?.sentimentAnalysis;
-  const spotlightReason = spotlightRequest?.reason;
-
-  const runSentimentAnalysis = useCallback((id: string, reason: string) => {
+  const runSentimentAnalysis = useCallback((id: string) => {
     attemptedSentimentIds.current.add(id);
     setSentimentStates((current) => ({ ...current, [id]: 'analyzing' }));
     const finish = (state: 'saved' | 'failed') => {
@@ -153,7 +151,7 @@ export default function LeaveReviewScreen() {
         setSentimentStates((current) => ({ ...current, [id]: state }));
       }
     };
-    void analyzeLeave(id, reason).then(() => finish('saved'), () => finish('failed'));
+    void analyzeLeave(id).then(() => finish('saved'), () => finish('failed'));
   }, [analyzeLeave]);
 
   useEffect(() => {
@@ -161,18 +159,16 @@ export default function LeaveReviewScreen() {
       user?.role !== 'assistant' ||
       !spotlightId ||
       spotlightStatus !== 'pending' ||
-      spotlightSentiment ||
-      !spotlightReason ||
+      !needsLeaveSentimentAnalysis(spotlightSentiment) ||
       attemptedSentimentIds.current.has(spotlightId)
     ) {
       return;
     }
 
-    runSentimentAnalysis(spotlightId, spotlightReason);
+    runSentimentAnalysis(spotlightId);
   }, [
     runSentimentAnalysis,
     spotlightId,
-    spotlightReason,
     spotlightSentiment,
     spotlightStatus,
     user?.role,
@@ -243,8 +239,9 @@ export default function LeaveReviewScreen() {
       .join(' · ');
 
     const sentimentState = sentimentStates[request.id];
-    const isAnalyzing = sentimentState === 'analyzing' && !request.sentimentAnalysis;
-    const canRetryAnalysis = request.status === 'pending' && !request.sentimentAnalysis &&
+    const needsAnalysis = needsLeaveSentimentAnalysis(request.sentimentAnalysis);
+    const isAnalyzing = sentimentState === 'analyzing' && needsAnalysis;
+    const canRetryAnalysis = request.status === 'pending' && needsAnalysis &&
       sentimentState === 'failed';
     const sentimentLabel = isAnalyzing
       ? 'Menganalisis…'
@@ -312,7 +309,7 @@ export default function LeaveReviewScreen() {
           ) : canRetryAnalysis ? (
             <Pressable
               accessibilityRole="button"
-              onPress={() => runSentimentAnalysis(request.id, request.reason)}
+              onPress={() => runSentimentAnalysis(request.id)}
               style={({ pressed }) => [
                 styles.aiRetryBtn,
                 { borderColor: colors.pacificDark },

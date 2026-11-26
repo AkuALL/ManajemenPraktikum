@@ -7,7 +7,7 @@ import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { confirmAction, showAlert } from '@/lib/cross-platform-alert';
-import { subscribeWebPush } from '@/services/notification/web-push';
+import { subscribeWebPush } from '@/features/notifications/web-push';
 
 export default function ProfilScreen() {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;

@@ -25,8 +25,9 @@ const VALID_CATEGORIES: readonly LeaveReasonCategory[] = [
 ];
 
 const AI_REQUEST_TIMEOUT_MS = 15_000;
+const CLASSIFIER_REGION = 'asia-southeast2';
 
-const classifierUrl =
+const classifierUrlOverride =
   process.env.EXPO_PUBLIC_AI_CLASSIFIER_URL?.trim() ||
   process.env.EXPO_PUBLIC_AI_API_URL?.trim();
 
@@ -87,14 +88,18 @@ export function parseGeminiClassificationPayload(
   };
 }
 
-async function classifyViaProxy(
+async function requestClassification(
   leaveRequestId: string,
-): Promise<LeaveReasonClassification> {
+  mode?: 'sentiment',
+): Promise<object> {
+  const { auth, firebaseApp } = await import('@/lib/firebase');
+  const { projectId } = firebaseApp.options;
+  const classifierUrl = classifierUrlOverride || (projectId &&
+    `https://${CLASSIFIER_REGION}-${projectId}.cloudfunctions.net/classifyLeaveReason`);
   if (!classifierUrl) {
-    throw new Error('URL Cloud Function klasifikasi AI (EXPO_PUBLIC_AI_API_URL) belum dikonfigurasi.');
+    throw new Error('Project ID Firebase diperlukan untuk menentukan URL klasifikasi AI.');
   }
 
-  const { auth } = await import('@/lib/firebase');
   if (!auth.currentUser) {
     throw new Error('Silakan login sebelum meminta klasifikasi AI.');
   }
@@ -106,7 +111,7 @@ async function classifyViaProxy(
       Authorization: `Bearer ${idToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ leaveRequestId }),
+    body: JSON.stringify({ leaveRequestId, mode }),
   });
 
   const payload: unknown = await response.json().catch(() => null);
@@ -120,7 +125,11 @@ async function classifyViaProxy(
   if (!payload || typeof payload !== 'object') {
     throw new Error('Respons klasifikasi AI tidak valid.');
   }
+  return payload;
+}
 
+export async function classifyLeaveReason(leaveRequestId: string): Promise<LeaveReasonClassification> {
+  const payload = await requestClassification(leaveRequestId);
   const result = payload as Partial<LeaveReasonClassification>;
   if (
     typeof result.category !== 'string'
@@ -140,8 +149,9 @@ async function classifyViaProxy(
   };
 }
 
-export async function classifyLeaveReason(
-  leaveRequestId: string,
-): Promise<LeaveReasonClassification> {
-  return classifyViaProxy(leaveRequestId);
+export async function requestLeaveSentiment(leaveRequestId: string): Promise<void> {
+  const payload = await requestClassification(leaveRequestId, 'sentiment');
+  if (!('sentimentAnalysis' in payload)) {
+    throw new Error('Respons analisis sentimen AI tidak valid.');
+  }
 }
