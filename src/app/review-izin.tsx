@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -18,12 +18,12 @@ import { CardListSkeleton } from '@/components/ui/skeleton';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
 import {
-  aiStatusLabel,
   formatAttachmentSize,
   getLeaveAttachment,
   useAssistantLeaveRequests,
   useLeave,
 } from '@/features/leave';
+import { formatLeaveSentiment } from '@/features/leave/sentiment';
 import {
   formatSessionTime,
   type StudentCandidate,
@@ -40,11 +40,6 @@ const FILTER_OPTIONS: PickerOption[] = [
   { value: 'done', label: 'Selesai', subtitle: 'Riwayat izin yang sudah disetujui / ditolak' },
 ];
 
-function capitalizeLabel(value?: string): string {
-  if (!value) return 'Lainnya';
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
 export default function LeaveReviewScreen() {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const { user } = useAuth();
@@ -58,7 +53,7 @@ export default function LeaveReviewScreen() {
     undefined,
     !loadingClasses,
   );
-  const { classifyLeave, reviewLeave } = useLeave();
+  const { analyzeLeave, reviewLeave } = useLeave();
 
   const [students, setStudents] = useState<StudentCandidate[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -67,9 +62,11 @@ export default function LeaveReviewScreen() {
   const [focusedRequestId, setFocusedRequestId] = useState<string | null>(null);
   const [doneExpanded, setDoneExpanded] = useState(false);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
-  const [classifyingId, setClassifyingId] = useState<string | null>(null);
+  const [sentimentStates, setSentimentStates] = useState<
+    Partial<Record<string, 'analyzing' | 'saved' | 'failed'>>
+  >({});
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
-  const attemptedAiIdsRef = useRef<Set<string>>(new Set());
+  const attemptedSentimentIds = useRef(new Set<string>());
   const isMountedRef = useRef(true);
 
   useEffect(() => {
@@ -145,47 +142,41 @@ export default function LeaveReviewScreen() {
 
   const spotlightId = spotlightRequest?.id;
   const spotlightStatus = spotlightRequest?.status;
-  const spotlightAiStatus = spotlightRequest?.aiStatus;
+  const spotlightSentiment = spotlightRequest?.sentimentAnalysis;
   const spotlightReason = spotlightRequest?.reason;
+
+  const runSentimentAnalysis = useCallback((id: string, reason: string) => {
+    attemptedSentimentIds.current.add(id);
+    setSentimentStates((current) => ({ ...current, [id]: 'analyzing' }));
+    const finish = (state: 'saved' | 'failed') => {
+      if (isMountedRef.current) {
+        setSentimentStates((current) => ({ ...current, [id]: state }));
+      }
+    };
+    void analyzeLeave(id, reason).then(() => finish('saved'), () => finish('failed'));
+  }, [analyzeLeave]);
 
   useEffect(() => {
     if (
       user?.role !== 'assistant' ||
       !spotlightId ||
       spotlightStatus !== 'pending' ||
-      spotlightAiStatus !== 'pending' ||
+      spotlightSentiment ||
       !spotlightReason ||
-      attemptedAiIdsRef.current.has(spotlightId)
+      attemptedSentimentIds.current.has(spotlightId)
     ) {
       return;
     }
 
-    attemptedAiIdsRef.current.add(spotlightId);
-    setClassifyingId(spotlightId);
-    void classifyLeave(spotlightId, spotlightReason).finally(() => {
-      if (isMountedRef.current) {
-        setClassifyingId((current) => (current === spotlightId ? null : current));
-      }
-    });
+    runSentimentAnalysis(spotlightId, spotlightReason);
   }, [
-    classifyLeave,
-    spotlightAiStatus,
+    runSentimentAnalysis,
     spotlightId,
     spotlightReason,
+    spotlightSentiment,
     spotlightStatus,
     user?.role,
   ]);
-
-  const handleRetryAi = (request: LeaveRequest) => {
-    if (classifyingId === request.id) return;
-    attemptedAiIdsRef.current.add(request.id);
-    setClassifyingId(request.id);
-    void classifyLeave(request.id, request.reason).finally(() => {
-      if (isMountedRef.current) {
-        setClassifyingId((current) => (current === request.id ? null : current));
-      }
-    });
-  };
 
   const remainingPending = filteredPending.filter((r) => r.id !== spotlightRequest?.id);
 
@@ -251,16 +242,15 @@ export default function LeaveReviewScreen() {
       .filter(Boolean)
       .join(' · ');
 
-    const isClassifying = classifyingId === request.id;
-    const aiCategory = isClassifying
-      ? 'Mengklasifikasi...'
-      : request.aiStatus === 'success'
-        ? capitalizeLabel(request.aiCategory)
-        : aiStatusLabel(request.aiStatus);
-    const aiConfidence =
-      !isClassifying && request.aiStatus === 'success' && typeof request.aiConfidence === 'number'
-        ? `${Math.round(request.aiConfidence * 100)}%`
-        : null;
+    const sentimentState = sentimentStates[request.id];
+    const isAnalyzing = sentimentState === 'analyzing' && !request.sentimentAnalysis;
+    const canRetryAnalysis = request.status === 'pending' && !request.sentimentAnalysis &&
+      sentimentState === 'failed';
+    const sentimentLabel = isAnalyzing
+      ? 'Menganalisis…'
+      : canRetryAnalysis
+        ? 'Analisis gagal'
+        : formatLeaveSentiment(request.sentimentAnalysis);
 
     return (
       <View
@@ -315,28 +305,29 @@ export default function LeaveReviewScreen() {
 
         <View style={[styles.aiBanner, { backgroundColor: colors.pacificSoft }]}>
           <Text style={[styles.aiBannerLeft, { color: colors.pacificDark }]}>
-            Klasifikasi: {aiCategory}
+            Sentimen AI: {sentimentLabel}
           </Text>
-          {isClassifying ? (
+          {isAnalyzing ? (
             <ActivityIndicator size="small" color={colors.pacificDark} />
-          ) : request.status === 'pending' && request.aiStatus === 'failed' ? (
+          ) : canRetryAnalysis ? (
             <Pressable
               accessibilityRole="button"
-              onPress={() => handleRetryAi(request)}
+              onPress={() => runSentimentAnalysis(request.id, request.reason)}
               style={({ pressed }) => [
                 styles.aiRetryBtn,
                 { borderColor: colors.pacificDark },
                 pressed && styles.pressed,
               ]}
             >
-              <Text style={[styles.aiRetryText, { color: colors.pacificDark }]}>Ulangi AI</Text>
+              <Text style={[styles.aiRetryText, { color: colors.pacificDark }]}>Coba lagi</Text>
             </Pressable>
-          ) : aiConfidence ? (
-            <Text style={[styles.aiBannerPct, { color: colors.pacificDark }]}>
-              {aiConfidence}
-            </Text>
           ) : null}
         </View>
+        {request.sentimentAnalysis?.label ? (
+          <Text style={[styles.spotlightMeta, { color: colors.textSecondary }]}>
+            Perkiraan nada tulisan. Baca alasan izin sebelum mengambil keputusan.
+          </Text>
+        ) : null}
 
         <View style={[styles.reasonBox, { backgroundColor: colors.background }]}>
           <Text style={[styles.reasonText, { color: colors.textPrimary }]}>
@@ -495,10 +486,6 @@ export default function LeaveReviewScreen() {
               {remainingPending.map((item) => {
                 const student = studentById.get(item.studentId);
                 const name = student?.displayName ?? item.studentId;
-                const cat =
-                  item.aiStatus === 'success'
-                    ? `${capitalizeLabel(item.aiCategory)}${typeof item.aiConfidence === 'number' ? ` · ${Math.round(item.aiConfidence * 100)}%` : ''}`
-                    : 'Menunggu';
 
                 return (
                   <Pressable
@@ -513,7 +500,10 @@ export default function LeaveReviewScreen() {
                   >
                     <View style={styles.queueLeft}>
                       <Text style={[styles.queueTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                        {name} · {cat}
+                        {name}
+                      </Text>
+                      <Text style={[styles.spotlightMeta, { color: colors.textSecondary }]}>
+                        Sentimen AI: {formatLeaveSentiment(item.sentimentAnalysis)}
                       </Text>
                       <View style={[styles.pendingPill, { backgroundColor: colors.rosySoft }]}>
                         <Text style={[styles.pendingPillText, { color: colors.rosyDark }]}>
@@ -678,11 +668,6 @@ const styles = StyleSheet.create({
   aiRetryText: {
     fontFamily: FontFamily.sansBold,
     fontSize: 11,
-  },
-  aiBannerPct: {
-    fontFamily: FontFamily.monoMedium,
-    fontSize: 12.5,
-    fontVariant: ['tabular-nums'],
   },
   reasonBox: {
     borderRadius: 14,

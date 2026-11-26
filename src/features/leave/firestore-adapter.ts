@@ -29,6 +29,7 @@ import {
   type LeaveListenerMeta,
   type LeavePort,
 } from './port';
+import { parseLeaveSentiment } from './sentiment';
 
 function timestampMs(value: unknown): number | null {
   if (value instanceof Timestamp) return value.toMillis();
@@ -78,6 +79,7 @@ function parseLeaveRequest(
     aiCategory: typeof data.aiCategory === 'string' ? data.aiCategory : undefined,
     aiConfidence: typeof data.aiConfidence === 'number' ? data.aiConfidence : undefined,
     aiClassifiedAtMs: timestampMs(data.aiClassifiedAt),
+    sentimentAnalysis: parseLeaveSentiment(data.sentimentAnalysis),
     reviewedBy: typeof data.reviewedBy === 'string' ? data.reviewedBy : undefined,
     reviewedAtMs: timestampMs(data.reviewedAt),
     reviewNote: typeof data.reviewNote === 'string' ? data.reviewNote : undefined,
@@ -117,7 +119,7 @@ async function findExistingLeaveRequest(
 }
 
 export const firestoreLeaveAdapter: LeavePort = {
-  async createLeaveRequest({ session, user, reason }: CreateLeaveInput) {
+  async createLeaveRequest({ session, user, reason, sentimentAnalysis }: CreateLeaveInput) {
     const validationError = validateLeaveReason(reason);
     if (validationError) throw new LeavePortError('invalid-input', validationError);
     if (user.role !== 'student') {
@@ -133,7 +135,7 @@ export const firestoreLeaveAdapter: LeavePort = {
         throw new LeavePortError('duplicate', 'Izin untuk sesi ini sudah pernah diajukan.');
       }
 
-      await setDoc(reference, {
+      const leaveData = {
         sessionId: session.id,
         classId: session.classId,
         studentId: user.uid,
@@ -142,7 +144,16 @@ export const firestoreLeaveAdapter: LeavePort = {
         aiStatus: 'pending',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      };
+      let savedAnalysis = sentimentAnalysis;
+      try {
+        await setDoc(reference, sentimentAnalysis ? { ...leaveData, sentimentAnalysis } : leaveData);
+      } catch (error) {
+        if (!savedAnalysis || mapLeaveError(error).code !== 'forbidden') throw error;
+        // Older Firestore rules may still reject the new field during rollout.
+        await setDoc(reference, leaveData);
+        savedAnalysis = undefined;
+      }
 
       return (await findExistingLeaveRequest(session.id, user.uid)) ?? {
         id,
@@ -153,6 +164,7 @@ export const firestoreLeaveAdapter: LeavePort = {
         status: 'pending',
         aiStatus: 'pending',
         aiClassifiedAtMs: null,
+        sentimentAnalysis: savedAnalysis,
         reviewedAtMs: null,
         createdAtMs: null,
         updatedAtMs: null,
@@ -170,25 +182,10 @@ export const firestoreLeaveAdapter: LeavePort = {
     }
   },
 
-  async markClassificationFailed(leaveRequestId) {
+  async saveSentimentAnalysis(leaveRequestId, analysis) {
     try {
       await updateDoc(doc(db, 'leaveRequests', leaveRequestId), {
-        aiStatus: 'failed',
-        updatedAt: serverTimestamp(),
-      });
-    } catch (error) {
-      throw mapLeaveError(error);
-    }
-  },
-
-  async saveClassificationResult(leaveRequestId, { category, confidence }) {
-    try {
-      await updateDoc(doc(db, 'leaveRequests', leaveRequestId), {
-        aiStatus: 'success',
-        aiCategory: category,
-        aiConfidence: confidence,
-        aiClassifiedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        sentimentAnalysis: analysis,
       });
     } catch (error) {
       throw mapLeaveError(error);

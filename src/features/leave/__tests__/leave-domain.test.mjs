@@ -11,6 +11,7 @@ import {
   sortLeaveRequests,
   validateLeaveReason,
 } from '../port.ts';
+import { formatLeaveSentiment, parseLeaveSentiment } from '../sentiment.ts';
 
 test('leave request uses deterministic {sessionId}_{studentId} IDs and validates reasons', () => {
   assert.equal(buildLeaveRequestDocId('sesi-01', 'student-01'), 'sesi-01_student-01');
@@ -32,6 +33,13 @@ test('leave requests sort newest first and AI labels remain informational', () =
   ];
   assert.deepEqual(sortLeaveRequests(entries).map((entry) => entry.id), ['new', 'old']);
   assert.equal(aiStatusLabel('success'), 'Klasifikasi AI tersedia');
+});
+
+test('unrecognized leave sentiment stays distinct from neutral and legacy categories', () => {
+  assert.equal(formatLeaveSentiment(parseLeaveSentiment({ model: 'edom-v1', label: 'netral' })), 'Netral');
+  assert.equal(formatLeaveSentiment(parseLeaveSentiment({ model: 'edom-v1', label: null })), 'Tidak dapat ditentukan');
+  assert.equal(formatLeaveSentiment(parseLeaveSentiment({ model: 'edom-v1', label: 'sakit' })), 'Belum dianalisis');
+  assert.equal(parseLeaveSentiment({ model: 'unknown-model', label: 'netral' }), undefined);
 });
 
 test('leave rules restrict decisions to class assistants and limit student updates to AI classification', () => {

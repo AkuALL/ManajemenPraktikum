@@ -2,6 +2,7 @@ import type {
   AiStatus,
   AuthUser,
   LeaveRequest,
+  LeaveSentimentAnalysis,
   LeaveStatus,
   SessionSummary,
 } from '@/types';
@@ -25,24 +26,19 @@ export class LeavePortError extends Error {
 
 export type LeaveListenerMeta = { fromCache: boolean };
 
-export type SaveClassificationInput = {
-  category: 'sakit' | 'keluarga' | 'akademik' | 'darurat' | 'lainnya';
-  confidence: number;
-};
-
 export type CreateLeaveInput = {
   session: SessionSummary;
   user: AuthUser;
   reason: string;
+  sentimentAnalysis?: LeaveSentimentAnalysis;
 };
 
 export interface LeavePort {
   createLeaveRequest(input: CreateLeaveInput): Promise<LeaveRequest>;
-  saveClassificationResult(
+  saveSentimentAnalysis(
     leaveRequestId: string,
-    input: SaveClassificationInput,
+    analysis: LeaveSentimentAnalysis,
   ): Promise<void>;
-  markClassificationFailed(leaveRequestId: string): Promise<void>;
   reviewLeaveRequest(
     leaveRequestId: string,
     reviewerId: string,
