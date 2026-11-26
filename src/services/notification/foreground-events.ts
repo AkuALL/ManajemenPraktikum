@@ -7,11 +7,14 @@ export function getSessionEvents(previous: PracticumSession[], current: Practicu
   const old = new Map(previous.map((session) => [session.id, session]));
   return current.flatMap((session) => {
     const prior = old.get(session.id);
-    if (!prior && session.status !== 'closed') {
+    if ((!prior || prior.status === 'scheduled') && session.status === 'open') {
+      return [{ id: `session-open-${session.id}`, title: 'Sesi Praktikum Dibuka', body: `${session.title} sudah dibuka. Silakan lakukan presensi.`, route: '/presensi', sessionId: session.id }];
+    }
+    if (!prior && session.status === 'scheduled') {
       return [{ id: `session-new-${session.id}`, title: 'Sesi Praktikum Baru', body: `${session.title} telah ditambahkan di ${session.location}.`, route: '/schedule' }];
     }
-    if (prior?.status === 'scheduled' && session.status === 'open') {
-      return [{ id: `session-open-${session.id}`, title: 'Sesi Praktikum Dibuka', body: `${session.title} sudah dibuka. Silakan lakukan presensi.`, route: '/presensi', sessionId: session.id }];
+    if (prior && session.status === 'scheduled' && (prior.startsAt !== session.startsAt || prior.endsAt !== session.endsAt || prior.location !== session.location || prior.labId !== session.labId)) {
+      return [{ id: `session-changed-${session.id}`, title: 'Jadwal Praktikum Diperbarui', body: `Jadwal atau lokasi ${session.title} telah diperbarui.`, route: '/schedule' }];
     }
     return [];
   });
