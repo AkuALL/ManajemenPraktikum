@@ -8,12 +8,10 @@ import {
 } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { onRequest } from 'firebase-functions/v2/https';
-import { defineSecret } from 'firebase-functions/params';
 
 initializeApp();
 
 const db = getFirestore();
-const geminiApiKey = defineSecret('GEMINI_API_KEY');
 const region = 'asia-southeast2';
 const maxReasonLength = 1000;
 
@@ -90,7 +88,6 @@ export const classifyLeaveReason = onRequest(
     cors: true,
     maxInstances: 10,
     timeoutSeconds: 60,
-    secrets: [geminiApiKey],
   },
   async (request, response) => {
     if (request.method !== 'POST') {
@@ -169,6 +166,15 @@ export const classifyLeaveReason = onRequest(
         return;
       }
 
+      const apiKey = process.env.GEMINI_API_KEY?.trim();
+      if (!apiKey) {
+        logger.error('GEMINI_API_KEY belum dikonfigurasi.');
+        response.status(500).json({
+          message: 'Konfigurasi GEMINI_API_KEY pada server belum tersedia.',
+        });
+        return;
+      }
+
       await leaveSnapshot.ref.set(
         {
           aiStatus: 'pending',
@@ -177,9 +183,9 @@ export const classifyLeaveReason = onRequest(
         { merge: true },
       );
 
-      const ai = new GoogleGenAI({ apiKey: geminiApiKey.value() });
+      const ai = new GoogleGenAI({ apiKey });
       const interaction = await ai.interactions.create({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-3.5-flash-lite',
         input: [
           {
             type: 'user_input',

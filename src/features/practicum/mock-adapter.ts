@@ -1,4 +1,8 @@
-import { assertPreviousSessionsClosed } from './sequence';
+import {
+  assertNoScheduleConflict,
+  assertPreviousSessionsClosed,
+  assertSessionWithinStartWindow,
+} from './sequence';
 import type {
   AddMemberInput,
   ClassMember,
@@ -33,6 +37,8 @@ const SEED_STUDENT_ACCOUNTS: StudentCandidate[] = [
 ];
 
 export class MockPracticumAdapter implements PracticumPort {
+  constructor(private readonly nowProvider: () => Date = () => new Date()) {}
+
   private classes: PracticumClass[] = SEED_PRACTICUM_COURSES.map((course, idx) => ({
     id: `class-${idx + 1}`,
     courseName: course.courseName,
@@ -446,6 +452,16 @@ export class MockPracticumAdapter implements PracticumPort {
       throw new Error('Waktu selesai harus lebih lambat dari waktu mulai');
     }
 
+    assertNoScheduleConflict(this.sessions, {
+      classId: input.classId,
+      labId: input.labId,
+      location: input.location,
+      locationName: input.locationName,
+      startsAt: startDate.toISOString(),
+      endsAt: endDate.toISOString(),
+      date: input.date,
+    });
+
     const newSession: PracticumSession = {
       id: `sess-${Date.now()}-${++mockIdSeq}`,
       classId: input.classId,
@@ -479,20 +495,29 @@ export class MockPracticumAdapter implements PracticumPort {
     const idx = this.sessions.findIndex((s) => s.id === sessionId);
     if (idx === -1) throw new Error('Sesi tidak ditemukan');
 
-    if (input.startsAt !== undefined || input.endsAt !== undefined) {
-      const current = this.sessions[idx];
-      const startDate = new Date(input.startsAt ?? current.startsAt);
-      const endDate = new Date(input.endsAt ?? current.endsAt);
-      if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
-        throw new Error('Format timestamp waktu mulai atau selesai tidak valid');
-      }
-      if (startDate.getDay() === 0 || startDate.getDay() === 6) {
-        throw new Error('Jadwal praktikum tidak dapat dipindahkan ke hari Sabtu atau Minggu');
-      }
-      if (startDate >= endDate) {
-        throw new Error('Waktu selesai harus lebih lambat dari waktu mulai');
-      }
+    const current = this.sessions[idx];
+    const mergedStartDate = new Date(input.startsAt ?? current.startsAt);
+    const mergedEndDate = new Date(input.endsAt ?? current.endsAt);
+    if (Number.isNaN(mergedStartDate.getTime()) || Number.isNaN(mergedEndDate.getTime())) {
+      throw new Error('Format timestamp waktu mulai atau selesai tidak valid');
     }
+    if (mergedStartDate.getDay() === 0 || mergedStartDate.getDay() === 6) {
+      throw new Error('Jadwal praktikum tidak dapat dipindahkan ke hari Sabtu atau Minggu');
+    }
+    if (mergedStartDate >= mergedEndDate) {
+      throw new Error('Waktu selesai harus lebih lambat dari waktu mulai');
+    }
+
+    assertNoScheduleConflict(this.sessions, {
+      classId: current.classId,
+      labId: input.labId ?? current.labId,
+      location: input.location ?? current.location,
+      locationName: input.locationName ?? current.locationName,
+      startsAt: mergedStartDate.toISOString(),
+      endsAt: mergedEndDate.toISOString(),
+      date: input.date ?? current.date,
+      excludeSessionId: sessionId,
+    });
 
     this.sessions[idx] = {
       ...this.sessions[idx],
@@ -543,6 +568,7 @@ export class MockPracticumAdapter implements PracticumPort {
       throw new Error(`Sesi tidak dapat dibuka dari status "${session.status}". Hanya sesi "scheduled" yang dapat dibuka.`);
     }
 
+    assertSessionWithinStartWindow(session, this.nowProvider());
     assertPreviousSessionsClosed(await this.getSessions(session.classId), sessionId);
 
     session.status = 'open';

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -12,6 +12,7 @@ import { FlyAwayBottomSheet } from '@/components/ui/fly-away-bottom-sheet';
 import { Colors, FontFamily } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
+import { checkSessionStartWindow } from '../sequence';
 import type { PracticumSession } from '../types';
 
 type LifecycleAction = 'open' | 'close' | 'delete';
@@ -37,10 +38,20 @@ export function SessionLifecycleButtons({
   const [loading, setLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<LifecycleAction | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (session.status !== 'scheduled') return;
+    const timer = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, [session.status, session.startsAt, session.endsAt]);
 
   if (!isAssistant) {
     return null;
   }
+
+  const startWindow = checkSessionStartWindow(session, new Date(nowMs));
+  const openDisabled = loading || !startWindow.canOpen;
 
   const openConfirmSheet = (action: LifecycleAction) => {
     if (loading) return;
@@ -106,23 +117,50 @@ export function SessionLifecycleButtons({
         <View style={styles.buttonGroup}>
           <Pressable
             accessibilityRole="button"
+            accessibilityState={{ disabled: openDisabled }}
             onPress={() => openConfirmSheet('open')}
-            disabled={loading}
+            disabled={openDisabled}
             style={({ pressed }) => [
               styles.primaryButton,
-              { backgroundColor: colors.pacific },
-              pressed && styles.pressed,
+              {
+                backgroundColor: startWindow.canOpen ? colors.pacific : colors.disabledSurface,
+              },
+              pressed && !openDisabled && styles.pressed,
             ]}
           >
             {loading && pendingAction === 'open' ? (
               <ActivityIndicator color="#FCFCFA" size="small" />
             ) : (
               <>
-                <Play size={14} color="#FCFCFA" strokeWidth={2.3} />
-                <Text style={styles.primaryButtonText}>Buka Sesi Praktikum</Text>
+                <Play
+                  size={14}
+                  color={startWindow.canOpen ? '#FCFCFA' : colors.disabledText}
+                  strokeWidth={2.3}
+                />
+                <Text
+                  style={[
+                    styles.primaryButtonText,
+                    !startWindow.canOpen && { color: colors.disabledText },
+                  ]}
+                >
+                  Buka Sesi Praktikum
+                </Text>
               </>
             )}
           </Pressable>
+
+          {!startWindow.canOpen && startWindow.reason ? (
+            <View
+              style={[
+                styles.windowInfoBox,
+                { backgroundColor: colors.balticSoft, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[styles.windowInfoText, { color: colors.textSecondary }]}>
+                {startWindow.reason}
+              </Text>
+            </View>
+          ) : null}
 
           {onDeleteSession ? (
             <Pressable
@@ -275,6 +313,17 @@ const styles = StyleSheet.create({
     color: '#FCFCFA',
     fontFamily: FontFamily.sansBold,
     fontSize: 13.5,
+  },
+  windowInfoBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  windowInfoText: {
+    fontFamily: FontFamily.sansMedium,
+    fontSize: 12,
+    lineHeight: 17,
   },
   closedNotice: {
     height: 42,
