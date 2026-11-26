@@ -31,6 +31,8 @@ import {
   useNotificationDeepLinking,
 } from '@/services/notification/deep-linking';
 import { ForegroundNotificationHost } from '@/services/notification/foreground-notification-host';
+import { registerDevicePushToken } from '@/services/notification/token-service';
+import { subscribeWebPush } from '@/services/notification/web-push';
 
 void SplashScreen.preventAutoHideAsync();
 configureForegroundNotificationHandler();
@@ -87,6 +89,16 @@ function RoleAwareApp({ backgroundColor }: { backgroundColor: string }) {
     enabled: isAuthenticated,
     role: user?.role,
   });
+
+  useEffect(() => {
+    if (!isAuthenticated || !user?.uid) return;
+    void subscribeWebPush(user.uid);
+    void registerDevicePushToken(user.uid).then((result) => {
+      if (!result.ok && result.reason !== 'unsupported') {
+        console.warn(`Registrasi notifikasi tidak berhasil: ${result.reason}`);
+      }
+    });
+  }, [isAuthenticated, user?.uid]);
 
   if (status === 'loading') {
     return (

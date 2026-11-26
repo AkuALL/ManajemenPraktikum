@@ -9,6 +9,8 @@ test('sesi baru dan sesi dibuka menghasilkan notifikasi satu kali per perubahan'
   assert.equal(getSessionEvents([], [session])[0].title, 'Sesi Praktikum Baru');
   assert.equal(getSessionEvents([session], [{ ...session, status: 'open' }])[0].title, 'Sesi Praktikum Dibuka');
   assert.deepEqual(getSessionEvents([session], [session]), []);
+  assert.equal(getSessionEvents([], [{ ...session, status: 'open' }])[0].title, 'Sesi Praktikum Dibuka');
+  assert.equal(getSessionEvents([session], [{ ...session, location: 'Lab C' }])[0].title, 'Jadwal Praktikum Diperbarui');
 });
 
 test('izin baru untuk asisten dan keputusan untuk praktikan', () => {
