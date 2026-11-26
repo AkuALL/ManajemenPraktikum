@@ -3,6 +3,12 @@ import type { LeaveRequest } from '../../types';
 
 export type ForegroundEvent = { id: string; title: string; body: string; route: string; sessionId?: string };
 
+export const FOREGROUND_NOTIFICATION_DURATION_MS = 3000;
+
+export function dismissForegroundEvent(queue: ForegroundEvent[], target: ForegroundEvent): ForegroundEvent[] {
+  return queue.filter((item) => item !== target);
+}
+
 export function getSessionEvents(previous: PracticumSession[], current: PracticumSession[]): ForegroundEvent[] {
   const old = new Map(previous.map((session) => [session.id, session]));
   return current.flatMap((session) => {

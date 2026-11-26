@@ -10,7 +10,13 @@ import { usePracticum } from '@/features/practicum';
 import type { PracticumSession } from '@/features/practicum/types';
 import type { LeaveRequest } from '@/types';
 
-import { getLeaveEvents, getSessionEvents, type ForegroundEvent } from './foreground-events';
+import {
+  dismissForegroundEvent,
+  FOREGROUND_NOTIFICATION_DURATION_MS,
+  getLeaveEvents,
+  getSessionEvents,
+  type ForegroundEvent,
+} from './foreground-events';
 
 export function ForegroundNotificationHost({ role }: { role: 'student' | 'assistant' }) {
   const router = useRouter();
@@ -50,8 +56,17 @@ export function ForegroundNotificationHost({ role }: { role: 'student' | 'assist
   }, [assistantLeaves.error, assistantLeaves.loading, assistantLeaves.requests, classKey, classesError, leaveError, loadingClasses, loadingLeaves, requests, role]);
 
   const event = queue[0];
+
+  useEffect(() => {
+    if (!event) return;
+    const timer = setTimeout(() => {
+      setQueue((current) => dismissForegroundEvent(current, event));
+    }, FOREGROUND_NOTIFICATION_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [event]);
+
   if (!event) return null;
-  const dismiss = () => setQueue((current) => current.slice(1));
+  const dismiss = () => setQueue((current) => dismissForegroundEvent(current, event));
   return (
     <View pointerEvents="box-none" style={[styles.container, { top: insets.top + 8 }]}>
       <View style={styles.card} accessibilityRole="alert">
