@@ -101,7 +101,7 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
       ? `${currentUserRole}:${currentUserRole === 'student' ? currentStudentNim : currentUserId}`
       : null;
   const classesKey = activeKey ? `${activeKey}:classes:${classesRetryTick}` : null;
-  const sessionsKey = activeKey ? `${activeKey}:sessions:${sessionsRetryTick}` : null;
+  const sessionsBaseKey = activeKey ? `${activeKey}:sessions:${sessionsRetryTick}` : null;
   const classesNeeded = classConsumers > 0 || sessionConsumers > 0;
   const sessionsNeeded = sessionConsumers > 0;
 
@@ -136,6 +136,9 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
     () => Array.from(new Set(classes.map((item) => item.id))).sort().join(','),
     [classes],
   );
+  const sessionsKey = sessionsBaseKey && classesResolved && !classesError
+    ? `${sessionsBaseKey}:classes:${knownClassIdsKey}`
+    : null;
 
   useEffect(() => {
     if (!sessionsKey || !currentUserRole || !sessionsNeeded) return;
@@ -177,9 +180,9 @@ export function PracticumProvider({ children }: { children: ReactNode }) {
   const loadingClasses = Boolean(classesKey) && (!classSnapshot || !classSnapshot.resolved);
   const sessionsError = sessionSnapshot?.error ?? classesError;
   const loadingSessions =
-    Boolean(sessionsKey) &&
+    Boolean(sessionsBaseKey) &&
     !classesError &&
-    (!sessionSnapshot || !sessionSnapshot.resolved);
+    (!classesResolved || !sessionSnapshot || !sessionSnapshot.resolved);
   const error = operationError ?? classesError ?? sessionsError;
 
   const retryClasses = useCallback(() => setClassesRetryTick((tick) => tick + 1), []);

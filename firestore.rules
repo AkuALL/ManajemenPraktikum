@@ -662,6 +662,15 @@ service cloud.firestore {
         && request.auth.uid == userId
         && validProfileUpdate();
       allow delete: if false;
+
+      match /webPushTokens/{tokenId} {
+        allow get, list, delete: if signedIn() && request.auth.uid == userId;
+        allow create, update: if signedIn() && request.auth.uid == userId
+          && tokenId.matches('^[a-f0-9]{64}$')
+          && request.resource.data.keys().hasOnly(['token', 'updatedAt'])
+          && validText(request.resource.data.token, 20, 4096)
+          && request.resource.data.updatedAt == request.time;
+      }
     }
 
     match /classes/{classId} {

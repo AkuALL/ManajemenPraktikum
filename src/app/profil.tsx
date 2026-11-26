@@ -1,19 +1,39 @@
-import { LogOut } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Bell, LogOut } from 'lucide-react-native';
+import { useState } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader, getFirstName } from '@/components/ui/app-header';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { confirmAction } from '@/lib/cross-platform-alert';
+import { confirmAction, showAlert } from '@/lib/cross-platform-alert';
+import { subscribeWebPush } from '@/services/notification/web-push';
 
 export default function ProfilScreen() {
   const colors = useColorScheme() === 'dark' ? Colors.dark : Colors.light;
   const { user, logout } = useAuth();
+  const [isEnablingPush, setIsEnablingPush] = useState(false);
 
   if (!user) return null;
 
   const isAssistant = user.role === 'assistant';
+  const enableNotifications = async () => {
+    setIsEnablingPush(true);
+    try {
+      const result = await subscribeWebPush(user.uid, true);
+      if (result === 'enabled') {
+        showAlert('Notifikasi aktif', 'Browser ini dapat menerima notifikasi praktikum.');
+      } else if (result === 'blocked') {
+        showAlert('Izin notifikasi belum diberikan', 'Izinkan notifikasi situs ini melalui pengaturan browser, lalu coba lagi.');
+      } else if (result === 'unsupported') {
+        showAlert('Browser belum mendukung push', 'Buka aplikasi ini di browser yang mendukung notifikasi web.');
+      } else if (result === 'failed') {
+        showAlert('Notifikasi belum aktif', 'Pendaftaran ke layanan notifikasi gagal. Coba lagi.');
+      }
+    } finally {
+      setIsEnablingPush(false);
+    }
+  };
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -46,6 +66,24 @@ export default function ProfilScreen() {
             />
             <ProfileRow label="Semester" value="Semester Genap 2026/2027" colors={colors} isLast />
           </View>
+
+          {Platform.OS === 'web' && (
+            <Pressable
+              accessibilityRole="button"
+              disabled={isEnablingPush}
+              onPress={() => void enableNotifications()}
+              style={({ pressed }) => [
+                styles.logoutBtn,
+                { backgroundColor: colors.balticSoft, borderColor: colors.border },
+                pressed && styles.pressed,
+              ]}
+            >
+              <Bell size={16} color={colors.baltic} />
+              <Text style={[styles.logoutText, { color: colors.baltic }]}>
+                {isEnablingPush ? 'Mengaktifkan...' : 'Aktifkan Notifikasi Browser'}
+              </Text>
+            </Pressable>
+          )}
 
           <Pressable
             accessibilityRole="button"
