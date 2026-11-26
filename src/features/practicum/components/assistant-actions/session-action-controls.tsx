@@ -9,7 +9,7 @@ import {
 import { LabSession, UserRole } from '@/types';
 import { ConfirmSessionModal } from './confirm-session-modal';
 import { AssistantActionFeedback } from './assistant-action-feedback';
-import { useSessionActions, StatusChangeCallback } from '@/hooks/use-session-actions';
+import { useSessionActions, type StatusChangeCallback } from './use-session-actions';
 
 export interface AssistantSessionActionControlsProps {
   role: UserRole;

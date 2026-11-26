@@ -11,7 +11,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import {
   NotificationsBottomSheet,
   useUnreadNotificationsCount,
-} from './notifications-bottom-sheet';
+} from '@/features/notifications/notifications-bottom-sheet';
 
 function getInitials(name?: string | null): string {
   if (!name) return 'MP';

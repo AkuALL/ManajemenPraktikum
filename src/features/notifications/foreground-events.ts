@@ -1,4 +1,4 @@
-import type { PracticumSession } from '../../features/practicum/types';
+import type { PracticumSession } from '../practicum/types';
 import type { LeaveRequest } from '../../types';
 
 export type ForegroundEvent = { id: string; title: string; body: string; route: string; sessionId?: string };

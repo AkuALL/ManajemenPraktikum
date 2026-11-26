@@ -10,6 +10,7 @@ import {
     View,
 } from 'react-native';
 
+import { FlyAwayBottomSheet } from '@/components/ui/fly-away-bottom-sheet';
 import { Colors, FontFamily } from '@/constants/theme';
 import { useAuth } from '@/features/auth';
 import { useAssistantLeaveRequests, useLeave } from '@/features/leave';
@@ -17,8 +18,6 @@ import { APP_ROUTES } from '@/features/navigation';
 import { formatSessionTime, usePracticum } from '@/features/practicum';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { confirmAction } from '@/lib/cross-platform-alert';
-
-import { FlyAwayBottomSheet } from './fly-away-bottom-sheet';
 
 type NotificationsBottomSheetProps = {
   visible: boolean;

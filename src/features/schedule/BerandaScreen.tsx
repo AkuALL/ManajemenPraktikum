@@ -14,7 +14,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader, getFirstName } from '@/components/ui/app-header';
-import { QrSessionBottomSheet } from '@/components/ui/qr-session-bottom-sheet';
+import { QrSessionBottomSheet } from '@/features/attendance/QrSessionBottomSheet';
 import { CardListSkeleton } from '@/components/ui/skeleton';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/features/auth';

@@ -1,13 +1,8 @@
-import { initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
 import { logger } from 'firebase-functions';
 import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 
-initializeApp();
-
-const db = getFirestore();
-const region = 'asia-southeast2';
+import { db, region } from './firebase-admin.js';
 
 type PushMessage = {
   title: string;

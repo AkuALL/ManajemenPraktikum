@@ -11,6 +11,7 @@ import {
 import { useAuth } from '@/features/auth';
 import type { LeaveRequest, SessionSummary } from '@/types';
 
+import { requestLeaveSentiment } from './classify-leave-reason';
 import { firestoreLeaveAdapter } from './firestore-adapter';
 import {
   isLeaveEligibleStatus,
@@ -18,7 +19,7 @@ import {
   validateLeaveReason,
   type LeavePort,
 } from './port';
-import { analyzeLeaveSentiment } from './sentiment';
+import { tryAnalyzeLeaveWithEdom } from './sentiment';
 
 type LeaveSnapshot = {
   studentId: string;
@@ -45,7 +46,7 @@ type LeaveContextValue = {
   error: string | null;
   fromCache: boolean;
   submitLeave: (session: SessionSummary, reason: string) => Promise<SubmitLeaveResult>;
-  analyzeLeave: (leaveRequestId: string, reason: string) => Promise<void>;
+  analyzeLeave: (leaveRequestId: string) => Promise<void>;
   reviewLeave: (
     leaveRequestId: string,
     decision: 'approved' | 'rejected',
@@ -108,27 +109,6 @@ export function LeaveProvider({
     );
   }, [consumerCount, port, retryTick, studentId]);
 
-  const requestClassification = useCallback(
-    async (leaveRequestId: string) => {
-      if (!user) return;
-
-      setClassificationErrors((current) => {
-        const { [leaveRequestId]: _discarded, ...rest } = current;
-        return rest;
-      });
-
-      try {
-        await classifyLeaveReason(leaveRequestId);
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'Klasifikasi AI tidak dapat diproses.';
-        setClassificationErrors((current) => ({ ...current, [leaveRequestId]: message }));
-        await port.markClassificationFailed(leaveRequestId).catch(() => undefined);
-      }
-    },
-    [port, user],
-  );
-
   const submitLeave = useCallback(
     async (session: SessionSummary, reason: string): Promise<SubmitLeaveResult> => {
       if (!user || user.role !== 'student') {
@@ -140,10 +120,12 @@ export function LeaveProvider({
       const validationError = validateLeaveReason(reason);
       if (validationError) return { ok: false, message: validationError };
 
-      let sentimentAnalysis: LeaveRequest['sentimentAnalysis'];
+      const sentimentAnalysis = tryAnalyzeLeaveWithEdom(reason);
       try {
-        const request = await port.createLeaveRequest({ session, user, reason });
-        void requestClassification(request.id);
+        const request = await port.createLeaveRequest({ session, user, reason, sentimentAnalysis });
+        if (!sentimentAnalysis) {
+          void requestLeaveSentiment(request.id).catch(() => undefined);
+        }
         return { ok: true, request };
       } catch (error) {
         return {
@@ -158,18 +140,14 @@ export function LeaveProvider({
     [port, user],
   );
 
-  const classifyLeave = useCallback(
-    async (leaveRequestId: string, _reason: string) => {
-      await requestClassification(leaveRequestId);
+  const analyzeLeave = useCallback(
+    async (leaveRequestId: string) => {
+      if (user?.role !== 'assistant') {
+        throw new LeavePortError('forbidden', 'Hanya Asisten yang dapat mengulang analisis izin.');
+      }
+      await requestLeaveSentiment(leaveRequestId);
     },
-    [requestClassification],
-  );
-
-  const retryClassification = useCallback(
-    async (leaveRequestId: string, _reason?: string) => {
-      await requestClassification(leaveRequestId);
-    },
-    [requestClassification],
+    [user?.role],
   );
 
   const reviewLeave = useCallback(

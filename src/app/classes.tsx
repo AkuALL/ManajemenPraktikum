@@ -4,7 +4,7 @@ import { Plus, SlidersHorizontal } from 'lucide-react-native';
 
 import { AppHeader, getFirstName } from '@/components/ui/app-header';
 import { PickerBottomSheet, type PickerOption } from '@/components/ui/picker-bottom-sheet';
-import { QrSessionBottomSheet } from '@/components/ui/qr-session-bottom-sheet';
+import { QrSessionBottomSheet } from '@/features/attendance/QrSessionBottomSheet';
 import { SearchFilterBar } from '@/components/ui/search-filter-bar';
 import { CardListSkeleton } from '@/components/ui/skeleton';
 import { Colors, FontFamily, MaxContentWidth } from '@/constants/theme';

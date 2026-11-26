@@ -35,10 +35,6 @@ export type CreateLeaveInput = {
 
 export interface LeavePort {
   createLeaveRequest(input: CreateLeaveInput): Promise<LeaveRequest>;
-  saveSentimentAnalysis(
-    leaveRequestId: string,
-    analysis: LeaveSentimentAnalysis,
-  ): Promise<void>;
   reviewLeaveRequest(
     leaveRequestId: string,
     reviewerId: string,

@@ -10,8 +10,8 @@ import React, {
 } from 'react';
 
 import type { AuthUser } from '@/types';
-import { unregisterDevicePushToken } from '@/services/notification/token-service';
-import { unsubscribeWebPush } from '@/services/notification/web-push';
+import { unregisterDevicePushToken } from '@/features/notifications/token-service';
+import { unsubscribeWebPush } from '@/features/notifications/web-push';
 
 import { firebaseAuthAdapter } from './firebase-adapter';
 import {

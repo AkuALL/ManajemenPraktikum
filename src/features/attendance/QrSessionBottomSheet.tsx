@@ -2,17 +2,18 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
+import { FlyAwayBottomSheet } from '@/components/ui/fly-away-bottom-sheet';
 import { Colors, FontFamily } from '@/constants/theme';
+import { useAuth } from '@/features/auth';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { confirmAction } from '@/lib/cross-platform-alert';
+
 import {
     buildQrPayload,
     createSessionQrChallenge,
     getSessionQrChallenge,
     type SessionQrChallenge,
-} from '@/features/attendance/qr-service';
-import { useAuth } from '@/features/auth';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { confirmAction } from '@/lib/cross-platform-alert';
-import { FlyAwayBottomSheet } from './fly-away-bottom-sheet';
+} from './qr-service';
 
 type QrSessionBottomSheetProps = {
   visible: boolean;

@@ -29,10 +29,10 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import {
   configureForegroundNotificationHandler,
   useNotificationDeepLinking,
-} from '@/services/notification/deep-linking';
-import { ForegroundNotificationHost } from '@/services/notification/foreground-notification-host';
-import { registerDevicePushToken } from '@/services/notification/token-service';
-import { subscribeWebPush } from '@/services/notification/web-push';
+} from '@/features/notifications/deep-linking';
+import { ForegroundNotificationHost } from '@/features/notifications/foreground-notification-host';
+import { registerDevicePushToken } from '@/features/notifications/token-service';
+import { subscribeWebPush } from '@/features/notifications/web-push';
 
 void SplashScreen.preventAutoHideAsync();
 configureForegroundNotificationHandler();

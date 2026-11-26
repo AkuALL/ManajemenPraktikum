@@ -1,20 +1,11 @@
 {
-  "functions": [
-    {
-      "source": "functions",
-      "predeploy": [
-        "npm --prefix functions run build"
-      ],
-      "codebase": "default"
-    },
-    {
-      "source": "functions-notifications",
-      "codebase": "notifications",
-      "predeploy": [
-        "npm --prefix functions-notifications run build"
-      ]
-    }
-  ],
+  "functions": {
+    "source": "functions",
+    "predeploy": [
+      "npm --prefix functions run build"
+    ],
+    "codebase": "default"
+  },
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"

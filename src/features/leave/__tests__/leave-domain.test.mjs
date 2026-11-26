@@ -1,17 +1,23 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
 
 import { buildLeaveRequestDocId } from '../../../types/contracts.ts';
-import { parseGeminiClassificationPayload } from '../../../services/classify-leave-reason.ts';
+import { parseGeminiClassificationPayload } from '../classify-leave-reason.ts';
 import {
   aiStatusLabel,
   isLeaveEligibleStatus,
   sortLeaveRequests,
   validateLeaveReason,
 } from '../port.ts';
-import { formatLeaveSentiment, parseLeaveSentiment } from '../sentiment.ts';
+import {
+  formatLeaveSentiment,
+  needsLeaveSentimentAnalysis,
+  parseLeaveSentiment,
+  tryAnalyzeLeaveWithEdom,
+} from '../sentiment.ts';
 
 test('leave request uses deterministic {sessionId}_{studentId} IDs and validates reasons', () => {
   assert.equal(buildLeaveRequestDocId('sesi-01', 'student-01'), 'sesi-01_student-01');
@@ -40,6 +46,46 @@ test('unrecognized leave sentiment stays distinct from neutral and legacy catego
   assert.equal(formatLeaveSentiment(parseLeaveSentiment({ model: 'edom-v1', label: null })), 'Tidak dapat ditentukan');
   assert.equal(formatLeaveSentiment(parseLeaveSentiment({ model: 'edom-v1', label: 'sakit' })), 'Belum dianalisis');
   assert.equal(parseLeaveSentiment({ model: 'unknown-model', label: 'netral' }), undefined);
+});
+
+test('EDOM returns a valid label within its budget and stops at one second', (t) => {
+  const originalRequire = Object.getOwnPropertyDescriptor(globalThis, 'require');
+  Object.defineProperty(globalThis, 'require', {
+    configurable: true,
+    value: createRequire(new URL('../sentiment.ts', import.meta.url)),
+  });
+  t.after(() => {
+    if (originalRequire) Object.defineProperty(globalThis, 'require', originalRequire);
+    else delete globalThis.require;
+  });
+
+  let reads = 0;
+  let timeAtCheck = 999;
+  t.mock.method(performance, 'now', () => ++reads < 5 ? 0 : timeAtCheck);
+
+  const reason = 'Saya izin karena sakit demam.';
+  assert.deepEqual(tryAnalyzeLeaveWithEdom(reason), { model: 'edom-v1', label: 'negatif' });
+
+  reads = 0;
+  timeAtCheck = 1_000;
+  assert.equal(tryAnalyzeLeaveWithEdom(reason), undefined);
+  assert.equal(reads, 5);
+
+  reads = 0;
+  timeAtCheck = 999;
+  assert.equal(tryAnalyzeLeaveWithEdom('qzxqz qwzxq'), undefined);
+});
+
+test('Gemini analysis is needed for missing or unresolved EDOM results', () => {
+  assert.equal(needsLeaveSentimentAnalysis(undefined), true);
+  assert.equal(needsLeaveSentimentAnalysis(parseLeaveSentiment({ model: 'edom-v1', label: null })), true);
+  assert.equal(needsLeaveSentimentAnalysis(parseLeaveSentiment({ model: 'edom-v1', label: 'netral' })), false);
+  const gemini = parseLeaveSentiment({ model: 'gemini', label: 'negatif' });
+  assert.deepEqual(gemini, { model: 'gemini', label: 'negatif' });
+  assert.equal(formatLeaveSentiment(gemini), 'Negatif');
+  const geminiUndetermined = parseLeaveSentiment({ model: 'gemini', label: null });
+  assert.equal(needsLeaveSentimentAnalysis(geminiUndetermined), false);
+  assert.equal(formatLeaveSentiment(geminiUndetermined), 'Tidak dapat ditentukan');
 });
 
 test('leave rules restrict decisions to class assistants and limit student updates to AI classification', () => {
@@ -87,7 +133,7 @@ test('parseGeminiClassificationPayload validates category, clamps confidence, an
 
 test('classifyLeaveReason runs strictly through Cloud Function without client-side Gemini API key', () => {
   const serviceSource = fs.readFileSync(
-    path.resolve(process.cwd(), 'src/services/classify-leave-reason.ts'),
+    path.resolve(process.cwd(), 'src/features/leave/classify-leave-reason.ts'),
     'utf8',
   );
   assert.doesNotMatch(serviceSource, /EXPO_PUBLIC_AI_API_KEY/);

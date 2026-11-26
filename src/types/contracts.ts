@@ -10,7 +10,7 @@ export type LeaveStatus = 'pending' | 'approved' | 'rejected';
 export type AiStatus = 'pending' | 'success' | 'failed';
 export type LeaveSentiment = 'positif' | 'netral' | 'negatif';
 export type LeaveSentimentAnalysis = {
-  model: 'edom-v1';
+  model: 'edom-v1' | 'gemini';
   label: LeaveSentiment | null;
 };
 

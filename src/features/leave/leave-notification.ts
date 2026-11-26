@@ -2,7 +2,7 @@ import type { PushNotificationPayload } from '@/types';
 import {
   dispatchLeaveSubmittedNotification,
   sendPushNotification,
-} from '@/services/notification/push-sender';
+} from '@/features/notifications/push-sender';
 
 import {
   buildLeaveDecisionNotificationPayload,

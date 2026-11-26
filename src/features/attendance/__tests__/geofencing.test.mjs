@@ -7,12 +7,12 @@ import {
   evaluateGeofence,
   formatDistanceMeters,
   isValidCoordinates,
-} from '../../../utils/haversine.ts';
+} from '../geofence.ts';
 import { deriveAttendanceEligibility } from '../eligibility.ts';
 import {
   DEFAULT_FALLBACK_LAB,
   resolveSessionLocationSummary,
-} from '../lab-location-fallback.ts';
+} from '../../labs/fsm-undip-labs.ts';
 
 const LAB_COORDS = {
   latitude: -7.765432,
