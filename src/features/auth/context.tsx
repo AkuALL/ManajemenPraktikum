@@ -10,6 +10,8 @@ import React, {
 } from 'react';
 
 import type { AuthUser } from '@/types';
+import { unregisterDevicePushToken } from '@/services/notification/token-service';
+import { unsubscribeWebPush } from '@/services/notification/web-push';
 
 import { firebaseAuthAdapter } from './firebase-adapter';
 import {
@@ -145,6 +147,15 @@ export function AuthProvider({
   );
 
   const logout = useCallback(async () => {
+    if (activeUidRef.current) {
+      await Promise.race([
+        Promise.all([
+          unregisterDevicePushToken(activeUidRef.current),
+          unsubscribeWebPush(activeUidRef.current),
+        ]),
+        new Promise<void>((resolve) => setTimeout(resolve, 2000)),
+      ]);
+    }
     await port.logout();
     activeUidRef.current = null;
     setUser(null);

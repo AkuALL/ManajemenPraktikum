@@ -26,7 +26,7 @@ export function configureForegroundNotificationHandler(): void {
     handleNotification: async () => ({
       shouldPlaySound: true,
       shouldSetBadge: false,
-      shouldShowBanner: true,
+      shouldShowBanner: false,
       shouldShowList: true,
     }),
   });
