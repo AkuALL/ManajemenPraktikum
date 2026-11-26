@@ -534,6 +534,14 @@ service cloud.firestore {
         && get(sessionPath(request.resource.data.sessionId)).data.status == 'open';
     }
 
+    function validLeaveSentiment(analysis) {
+      return analysis is map
+        && analysis.keys().hasOnly(['model', 'label'])
+        && analysis.keys().hasAll(['model', 'label'])
+        && analysis.model == 'edom-v1'
+        && [null, 'positif', 'netral', 'negatif'].hasAny([analysis.label]);
+    }
+
     function validLeaveCreate(leaveId) {
       return request.resource.data.keys().hasOnly([
           'sessionId',
@@ -542,6 +550,7 @@ service cloud.firestore {
           'reason',
           'status',
           'aiStatus',
+          'sentimentAnalysis',
           'createdAt',
           'updatedAt'
         ])
@@ -562,6 +571,8 @@ service cloud.firestore {
         && request.resource.data.reason.size() <= 1000
         && request.resource.data.status == 'pending'
         && request.resource.data.aiStatus == 'pending'
+        && (!('sentimentAnalysis' in request.resource.data)
+          || validLeaveSentiment(request.resource.data.sentimentAnalysis))
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
         && isLeaveEligibleSession(
@@ -583,6 +594,14 @@ service cloud.firestore {
         && request.resource.data.reviewedBy == request.auth.uid
         && request.resource.data.reviewedAt == request.time
         && request.resource.data.updatedAt == request.time;
+    }
+
+    function validLeaveSentimentUpdate() {
+      return resource.data.status == 'pending'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sentimentAnalysis'])
+        && validLeaveSentiment(request.resource.data.sentimentAnalysis)
+        && (!('sentimentAnalysis' in resource.data)
+          || request.resource.data.sentimentAnalysis == resource.data.sentimentAnalysis);
     }
 
     function validLeaveClassificationFailure() {
@@ -794,6 +813,7 @@ service cloud.firestore {
           isClassAssistant(resource.data.classId)
           && (
             validLeaveDecision()
+            || validLeaveSentimentUpdate()
             || validLeaveClassificationFailure()
             || validLeaveClassificationSuccess()
           )

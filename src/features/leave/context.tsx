@@ -9,15 +9,16 @@ import {
 } from 'react';
 
 import { useAuth } from '@/features/auth';
-import { classifyLeaveReason } from '@/services/classify-leave-reason';
 import type { LeaveRequest, SessionSummary } from '@/types';
 
 import { firestoreLeaveAdapter } from './firestore-adapter';
 import {
   isLeaveEligibleStatus,
   LeavePortError,
+  validateLeaveReason,
   type LeavePort,
 } from './port';
+import { analyzeLeaveSentiment } from './sentiment';
 
 type LeaveSnapshot = {
   studentId: string;
@@ -43,10 +44,8 @@ type LeaveContextValue = {
   loading: boolean;
   error: string | null;
   fromCache: boolean;
-  classificationErrors: Record<string, string>;
   submitLeave: (session: SessionSummary, reason: string) => Promise<SubmitLeaveResult>;
-  classifyLeave: (leaveRequestId: string, reason: string) => Promise<void>;
-  retryClassification: (leaveRequestId: string, reason?: string) => Promise<void>;
+  analyzeLeave: (leaveRequestId: string, reason: string) => Promise<void>;
   reviewLeave: (
     leaveRequestId: string,
     decision: 'approved' | 'rejected',
@@ -73,7 +72,6 @@ export function LeaveProvider({
   const [snapshot, setSnapshot] = useState<LeaveSnapshot | null>(null);
   const [retryTick, setRetryTick] = useState(0);
   const [consumerCount, setConsumerCount] = useState(0);
-  const [classificationErrors, setClassificationErrors] = useState<Record<string, string>>({});
 
   const registerConsumer = useCallback(() => {
     setConsumerCount((count) => count + 1);
@@ -139,7 +137,10 @@ export function LeaveProvider({
       if (!isLeaveEligibleStatus(session.status)) {
         return { ok: false, message: 'Izin hanya dapat diajukan sebelum sesi selesai.' };
       }
+      const validationError = validateLeaveReason(reason);
+      if (validationError) return { ok: false, message: validationError };
 
+      let sentimentAnalysis: LeaveRequest['sentimentAnalysis'];
       try {
         const request = await port.createLeaveRequest({ session, user, reason });
         void requestClassification(request.id);
@@ -154,7 +155,7 @@ export function LeaveProvider({
         };
       }
     },
-    [port, requestClassification, user],
+    [port, user],
   );
 
   const classifyLeave = useCallback(
@@ -197,21 +198,17 @@ export function LeaveProvider({
       loading: Boolean(studentId) && (!active || !active.resolved),
       error: active?.error ?? null,
       fromCache: active?.fromCache ?? false,
-      classificationErrors,
       submitLeave,
-      classifyLeave,
-      retryClassification,
+      analyzeLeave,
       reviewLeave,
       retry,
       registerConsumer,
     }),
     [
       active,
-      classificationErrors,
-      classifyLeave,
+      analyzeLeave,
       registerConsumer,
       retry,
-      retryClassification,
       reviewLeave,
       studentId,
       submitLeave,

@@ -8,6 +8,11 @@ import type { UserRole } from './session';
 export type SessionStatusV2 = 'scheduled' | 'open' | 'closed';
 export type LeaveStatus = 'pending' | 'approved' | 'rejected';
 export type AiStatus = 'pending' | 'success' | 'failed';
+export type LeaveSentiment = 'positif' | 'netral' | 'negatif';
+export type LeaveSentimentAnalysis = {
+  model: 'edom-v1';
+  label: LeaveSentiment | null;
+};
 
 export type AuthUser = {
   uid: string;
@@ -54,6 +59,7 @@ export type LeaveRequest = {
   aiCategory?: string;
   aiConfidence?: number;
   aiClassifiedAtMs: number | null;
+  sentimentAnalysis?: LeaveSentimentAnalysis;
   reviewedBy?: string;
   reviewedAtMs: number | null;
   reviewNote?: string;
